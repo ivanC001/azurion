@@ -456,7 +456,7 @@ public class CrmUseCaseService {
         if (request.probabilidad() != null) {
             oportunidad.setProbabilidad(clampProbability(request.probabilidad()));
         }
-        updateIfPresent(request.etapa(), value -> applyStage(oportunidad, resolveStageByCode(value), "Actualizacion manual de etapa", true));
+        updateIfPresent(request.etapa(), value -> moveStageWithValidation(oportunidad, resolveStageByCode(value), "Actualizacion manual de etapa"));
         if (request.fechaCierreEstimada() != null) {
             oportunidad.setFechaCierreEstimada(request.fechaCierreEstimada());
         }
@@ -474,10 +474,7 @@ public class CrmUseCaseService {
         CrmOportunidad oportunidad = findOportunidad(id);
         ensureCanWrite(oportunidad.getResponsableId());
         CrmEtapaPipeline destino = findEtapaActiva(request.etapaId());
-        if (destino.isPerdido() && !hasText(request.observacion())) {
-            throw new BusinessException("CRM_MOTIVO_PERDIDA_REQUERIDO", "Indica el motivo de perdida antes de cerrar la oportunidad");
-        }
-        applyStage(oportunidad, destino, request.observacion(), true);
+        moveStageWithValidation(oportunidad, destino, request.observacion());
         return CrmMapper.toOportunidadResponse(oportunidadRepository.save(oportunidad));
     }
 
@@ -485,7 +482,7 @@ public class CrmUseCaseService {
     public CrmOportunidadResponse marcarGanada(Long id) {
         CrmOportunidad oportunidad = findOportunidad(id);
         ensureCanWrite(oportunidad.getResponsableId());
-        applyStage(oportunidad, resolveStageByCode("GANADO"), "Oportunidad ganada", true);
+        moveStageWithValidation(oportunidad, resolveStageByCode("GANADO"), "Oportunidad ganada");
         oportunidad.setProbabilidad(100);
         oportunidad.setMotivoPerdida(null);
         oportunidad.setMontoReal(oportunidad.getMontoEstimado());
@@ -497,7 +494,7 @@ public class CrmUseCaseService {
         CrmOportunidad oportunidad = findOportunidad(id);
         ensureCanWrite(oportunidad.getResponsableId());
         String motivo = required(request.motivo(), "Indica el motivo de perdida");
-        applyStage(oportunidad, resolveStageByCode("PERDIDO"), motivo, true);
+        moveStageWithValidation(oportunidad, resolveStageByCode("PERDIDO"), motivo);
         oportunidad.setProbabilidad(0);
         oportunidad.setMotivoPerdida(motivo);
         return CrmMapper.toOportunidadResponse(oportunidadRepository.save(oportunidad));
@@ -524,8 +521,7 @@ public class CrmUseCaseService {
                 oportunidad.getId(),
                 request.detalles()
         ));
-        applyStage(oportunidad, resolveStageByCode("COTIZADO"), "Cotizacion generada desde CRM", true);
-        oportunidadRepository.save(oportunidad);
+        appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Cotizacion creada desde CRM");
         return cotizacion;
     }
 
@@ -571,7 +567,9 @@ public class CrmUseCaseService {
         actividad.setNivelInteres(nivelInteres);
         actividad.setEstadoProspectoResultado(estadoProspecto);
         applyActivityResultToProspect(actividad, resultadoContacto, nivelInteres, estadoProspecto);
-        return CrmMapper.toActividadResponse(actividadRepository.save(actividad));
+        CrmActividad saved = actividadRepository.save(actividad);
+        applyActivityResultToOpportunity(saved, resultadoContacto);
+        return CrmMapper.toActividadResponse(saved);
     }
 
     @Transactional
@@ -694,6 +692,119 @@ public class CrmUseCaseService {
         return response;
     }
 
+    private void moveStageWithValidation(CrmOportunidad oportunidad, CrmEtapaPipeline destino, String observacion) {
+        validateStageTransition(oportunidad, destino, observacion);
+        applyStage(oportunidad, destino, observacion, true);
+    }
+
+    private void validateStageTransition(CrmOportunidad oportunidad, CrmEtapaPipeline destino, String observacion) {
+        String code = destino.getCodigo();
+        if ("CONTACTADO".equals(code) && !hasCompletedContactActivity(oportunidad)) {
+            throw new BusinessException("CRM_CONTACTO_REQUERIDO", "Para pasar a contactado registra primero una llamada, WhatsApp, correo, reunion o visita realizada");
+        }
+        if ("INTERESADO".equals(code) && !hasConfirmedInterestActivity(oportunidad)) {
+            throw new BusinessException("CRM_INTERES_REQUERIDO", "Para pasar a interesado registra una actividad realizada con resultado de interes confirmado");
+        }
+        if ("COTIZADO".equals(code) && !hasSentQuote(oportunidad)) {
+            throw new BusinessException("CRM_COTIZACION_ENVIADA_REQUERIDA", "Para pasar a cotizado crea y envia una cotizacion al cliente");
+        }
+        if ("NEGOCIACION".equals(code) && !hasNegotiationQuote(oportunidad)) {
+            throw new BusinessException("CRM_NEGOCIACION_REQUERIDA", "Para pasar a negociacion registra que el cliente pidio ajuste o que la cotizacion entro a negociacion");
+        }
+        if ("GANADO".equals(code) && !hasAcceptedSaleQuote(oportunidad)) {
+            throw new BusinessException("CRM_CIERRE_REQUERIDO", "Para marcar como ganado debe existir una cotizacion aceptada para venta o convertida");
+        }
+        if ("PERDIDO".equals(code) && !hasText(observacion)) {
+            throw new BusinessException("CRM_MOTIVO_PERDIDA_REQUERIDO", "Indica el motivo de perdida antes de cerrar la oportunidad");
+        }
+    }
+
+    private boolean hasCompletedContactActivity(CrmOportunidad oportunidad) {
+        return oportunidadActivities(oportunidad).stream().anyMatch(this::isCompletedContactActivity);
+    }
+
+    private boolean hasConfirmedInterestActivity(CrmOportunidad oportunidad) {
+        return oportunidadActivities(oportunidad).stream().anyMatch(activity ->
+                "REALIZADA".equals(activity.getEstado())
+                        && ("INTERESADO".equals(activity.getResultadoContacto())
+                        || "COTIZACION_SOLICITADA".equals(activity.getResultadoContacto())
+                        || "CALIENTE".equals(activity.getNivelInteres())));
+    }
+
+    private boolean hasSentQuote(CrmOportunidad oportunidad) {
+        return oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
+                Set.of("ENVIADA", "EN_SEGUIMIENTO", "ACEPTADA", "NEGOCIACION", "CONVERTIDA").contains(quote.getEstado()));
+    }
+
+    private boolean hasNegotiationQuote(CrmOportunidad oportunidad) {
+        return oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
+                "NEGOCIACION".equals(quote.getEstado())
+                        || ("ACEPTADA".equals(quote.getEstado()) && "NEGOCIACION".equals(quote.getDecisionSiguiente())));
+    }
+
+    private boolean hasAcceptedSaleQuote(CrmOportunidad oportunidad) {
+        return oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
+                "CONVERTIDA".equals(quote.getEstado())
+                        || ("ACEPTADA".equals(quote.getEstado()) && "VENTA".equals(quote.getDecisionSiguiente())));
+    }
+
+    private List<CrmActividad> oportunidadActivities(CrmOportunidad oportunidad) {
+        return oportunidad.getId() == null
+                ? List.of()
+                : actividadRepository.findByOportunidadIdOrderByFechaProgramadaAscIdDesc(oportunidad.getId());
+    }
+
+    private List<Cotizacion> oportunidadQuotes(CrmOportunidad oportunidad) {
+        return oportunidad.getId() == null
+                ? List.of()
+                : cotizacionRepository.findByCrmOportunidadIdOrderByFechaEmisionDescIdDesc(oportunidad.getId());
+    }
+
+    private boolean isCompletedContactActivity(CrmActividad activity) {
+        return "REALIZADA".equals(activity.getEstado())
+                && Set.of("LLAMADA", "WHATSAPP", "CORREO", "REUNION", "VISITA").contains(activity.getTipoActividad());
+    }
+
+    private void applyActivityResultToOpportunity(CrmActividad actividad, String resultadoContacto) {
+        CrmOportunidad oportunidad = actividad.getOportunidad();
+        if (oportunidad == null && actividad.getProspecto() != null && actividad.getProspecto().getId() != null) {
+            oportunidad = oportunidadRepository
+                    .findFirstByProspectoIdAndEstadoOrderByIdDesc(actividad.getProspecto().getId(), "ABIERTA")
+                    .orElse(null);
+        }
+        if (oportunidad == null || !"ABIERTA".equals(oportunidad.getEstado())) {
+            return;
+        }
+        String targetStage = switch (resultadoContacto == null ? "" : resultadoContacto) {
+            case "CONTACTADO", "REPROGRAMADO" -> "CONTACTADO";
+            case "INTERESADO", "COTIZACION_SOLICITADA" -> "INTERESADO";
+            default -> null;
+        };
+        if (targetStage == null || !shouldAdvance(oportunidad, targetStage)) {
+            return;
+        }
+        CrmEtapaPipeline destino = resolveStageByCode(targetStage);
+        applyStage(oportunidad, destino, "Actividad cumplida: " + resultadoContacto, true);
+        oportunidadRepository.save(oportunidad);
+    }
+
+    private boolean shouldAdvance(CrmOportunidad oportunidad, String targetStageCode) {
+        int currentOrder = stageOrder(oportunidad.getEtapa());
+        int targetOrder = stageOrder(targetStageCode);
+        return targetOrder > currentOrder;
+    }
+
+    private int stageOrder(String stageCode) {
+        List<CrmEtapaPipeline> stages = activeStages();
+        String normalized = normalizeCode(firstNonBlank(stageCode, "NUEVO"));
+        for (int i = 0; i < stages.size(); i++) {
+            if (normalized.equals(stages.get(i).getCodigo())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private void applyStage(CrmOportunidad oportunidad, CrmEtapaPipeline destino, String observacion, boolean registrarHistorial) {
         CrmEtapaPipeline origen = oportunidad.getEtapaPipeline();
         if (origen != null && origen.getId().equals(destino.getId())) {
@@ -720,15 +831,22 @@ public class CrmUseCaseService {
             oportunidad.setFechaCierreReal(null);
         }
         if (registrarHistorial) {
-            CrmOportunidadHistorial historial = new CrmOportunidadHistorial();
-            historial.setOportunidad(oportunidad);
-            historial.setEtapaOrigen(origen);
-            historial.setEtapaDestino(destino);
-            historial.setUsuarioId(currentUserKey());
-            historial.setObservacion(trim(observacion));
-            historial.setFechaCambio(now);
-            historialRepository.save(historial);
+            appendHistory(oportunidad, origen, destino, observacion);
         }
+    }
+
+    private void appendHistory(CrmOportunidad oportunidad, CrmEtapaPipeline origen, CrmEtapaPipeline destino, String observacion) {
+        if (destino == null) {
+            return;
+        }
+        CrmOportunidadHistorial historial = new CrmOportunidadHistorial();
+        historial.setOportunidad(oportunidad);
+        historial.setEtapaOrigen(origen);
+        historial.setEtapaDestino(destino);
+        historial.setUsuarioId(currentUserKey());
+        historial.setObservacion(trim(observacion));
+        historial.setFechaCambio(OffsetDateTime.now());
+        historialRepository.save(historial);
     }
 
     private List<CrmEtapaPipeline> activeStages() {
