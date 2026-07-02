@@ -1,0 +1,215 @@
+package com.azurion.saascore.auth.application.usecases;
+
+import com.azurion.multitenancy.TenantContext;
+import com.azurion.saascore.auth.application.dto.AuthEmpresaResponse;
+import com.azurion.saascore.auth.application.dto.LoginRequest;
+import com.azurion.saascore.auth.application.dto.LoginResponse;
+import com.azurion.saascore.auth.application.dto.TenantLoginResponse;
+import com.azurion.saascore.auth.application.services.EffectivePermissionService;
+import com.azurion.saascore.auth.domain.entities.UsuarioGlobal;
+import com.azurion.saascore.auth.domain.repositories.UsuarioGlobalRepository;
+import com.azurion.saascore.empresas.domain.entities.Empresa;
+import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.modulos.application.services.ModuleAccessService;
+import com.azurion.saascore.usuarios.application.services.RoleCodeSupport;
+import com.azurion.saascore.usuarios.application.services.UsuarioSucursalScopeService;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioGlobalRolRepository;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
+import com.azurion.security.jwt.JwtProperties;
+import com.azurion.security.jwt.JwtTokenProvider;
+import com.azurion.shared.exception.BusinessException;
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class LoginUseCase {
+
+    private final UsuarioGlobalRepository userRepository;
+    private final UsuarioGlobalRolRepository usuarioGlobalRolRepository;
+    private final UsuarioTenantRepository usuarioTenantRepository;
+    private final EmpresaRepository empresaRepository;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final JwtProperties jwtProperties;
+    private final EffectivePermissionService effectivePermissionService;
+    private final UsuarioSucursalScopeService usuarioSucursalScopeService;
+    private final ModuleAccessService moduleAccessService;
+    private final PasswordEncoder passwordEncoder;
+
+    public LoginResponse execute(LoginRequest request) {
+        if (request.tenantId() != null && !request.tenantId().isBlank()
+                && !TenantContext.DEFAULT_TENANT.equalsIgnoreCase(request.tenantId())) {
+            TenantLoginResponse tenantLogin = executeTenant(request);
+            return new LoginResponse(
+                    tenantLogin.accessToken(),
+                    tenantLogin.tokenType(),
+                    tenantLogin.expiresInSeconds(),
+                    tenantLogin.username(),
+                    tenantLogin.tenantId(),
+                    tenantLogin.roles(),
+                    tenantLogin.permissions(),
+                    tenantLogin.modules(),
+                    false,
+                    tenantLogin.adminEmpresa(),
+                    tenantLogin.issuedAt()
+            );
+        }
+        return executePublic(request);
+    }
+
+    public LoginResponse executePublic(LoginRequest request) {
+        TenantContext.setTenantId(TenantContext.DEFAULT_TENANT);
+
+        UsuarioGlobal user = userRepository.findByUsernameAndActivoTrue(request.username())
+                .orElseThrow(this::badCredentials);
+        validatePassword(request.password(), user.getPasswordHash());
+
+        LinkedHashSet<String> roles = resolveGlobalRoles(user);
+        List<String> roleList = List.copyOf(roles);
+
+        String token = jwtTokenProvider.generateToken(
+                user.getUsername(),
+                user.getId(),
+                TenantContext.DEFAULT_TENANT,
+                roleList,
+                List.of(),
+                List.of()
+        );
+
+        return new LoginResponse(
+                token,
+                "Bearer",
+                jwtProperties.expiration().toSeconds(),
+                user.getUsername(),
+                TenantContext.DEFAULT_TENANT,
+                roleList,
+                List.of(),
+                List.of(),
+                roles.contains("ROLE_ADMIN_GENERAL"),
+                false,
+                OffsetDateTime.now()
+        );
+    }
+
+    public TenantLoginResponse executeTenant(LoginRequest request) {
+        String tenant = resolveTenantForTenantLogin(request.tenantId());
+
+        TenantContext.setTenantId(tenant);
+
+        if (!TenantContext.DEFAULT_TENANT.equalsIgnoreCase(tenant)) {
+            UsuarioTenant tenantUser = usuarioTenantRepository.findWithUsuarioRolesByUsernameIgnoreCase(request.username())
+                    .filter(UsuarioTenant::isActivo)
+                    .orElseThrow(this::badCredentials);
+            validatePassword(request.password(), tenantUser.getPasswordHash());
+
+            tenantUser.setUltimoAcceso(java.time.LocalDateTime.now());
+            usuarioTenantRepository.save(tenantUser);
+
+            LinkedHashSet<String> tenantRoles = tenantUser.getUsuarioRoles().stream()
+                    .map(usuarioRol -> RoleCodeSupport.toAuthority(usuarioRol.getRol().getCodigo()))
+                    .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+
+            if (tenantRoles.contains("ROLE_ADMIN_EMPRESA")) {
+                tenantRoles.add("ROLE_ADMIN");
+            }
+
+            List<String> roleList = List.copyOf(tenantRoles);
+            List<String> permissions = effectivePermissionService.findPermissionCodes(tenantUser.getId());
+            Empresa empresa = empresaRepository.findByTenantId(tenant)
+                    .orElseThrow(() -> new BusinessException("TENANT_NO_ENCONTRADO", "Empresa no encontrada para el tenant"));
+            List<String> modules = moduleAccessService.getActiveModules(empresa.getId());
+            String token = jwtTokenProvider.generateToken(
+                    tenantUser.getUsername(),
+                    tenantUser.getId(),
+                    tenant,
+                    roleList,
+                    permissions,
+                    modules
+            );
+
+            return new TenantLoginResponse(
+                    token,
+                    "Bearer",
+                    jwtProperties.expiration().toSeconds(),
+                    tenantUser.getUsername(),
+                    tenantUser.getId(),
+                    tenantUser.getNombres(),
+                    tenantUser.getEmail(),
+                    tenant,
+                    toEmpresaResponse(empresa),
+                    roleList,
+                    permissions,
+                    modules,
+                    usuarioSucursalScopeService.findByUsuarioId(tenantUser.getId()),
+                    tenantRoles.contains("ROLE_ADMIN_EMPRESA") || tenantRoles.contains("ROLE_ADMIN"),
+                    OffsetDateTime.now()
+            );
+        }
+
+        throw badCredentials();
+    }
+
+    private String resolveTenantForTenantLogin(String tenantOrRuc) {
+        String value = tenantOrRuc;
+        if (value == null || value.isBlank()) {
+            value = TenantContext.getTenantId();
+        }
+        if (value == null || value.isBlank() || TenantContext.DEFAULT_TENANT.equalsIgnoreCase(value)) {
+            throw new BusinessException("TENANT_INVALIDO", "RUC de empresa es obligatorio para login de empresa");
+        }
+
+        String normalized = value.trim();
+        if (normalized.matches("^[0-9]{11}$")) {
+            Empresa empresa = empresaRepository.findByRuc(normalized)
+                    .orElseThrow(() -> new BusinessException("TENANT_NO_ENCONTRADO", "Empresa no existe para el RUC indicado"));
+            return empresa.getTenantId();
+        }
+
+        return normalized;
+    }
+
+    private LinkedHashSet<String> resolveGlobalRoles(UsuarioGlobal user) {
+        LinkedHashSet<String> roles = Arrays.stream(user.getRoles().split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+
+        usuarioGlobalRolRepository.findByUsuarioGlobalIdAndActivoTrue(user.getId())
+                .forEach(role -> roles.add(RoleCodeSupport.toAuthority(role.getRolCodigo())));
+
+        if (roles.contains("ROLE_ADMIN_GENERAL")) {
+            roles.add("ROLE_PLATFORM_ADMIN");
+        }
+        return roles;
+    }
+
+    private void validatePassword(String rawPassword, String passwordHash) {
+        if (!passwordEncoder.matches(rawPassword, passwordHash)) {
+            throw badCredentials();
+        }
+    }
+
+    private BadCredentialsException badCredentials() {
+        return new BadCredentialsException("Invalid username or password");
+    }
+
+    private AuthEmpresaResponse toEmpresaResponse(Empresa empresa) {
+        return new AuthEmpresaResponse(
+                empresa.getId(),
+                empresa.getRuc(),
+                empresa.getRazonSocial(),
+                empresa.getTenantId(),
+                empresa.getSchemaName(),
+                empresa.getLogoPanelUrl(),
+                empresa.isActivo()
+        );
+    }
+}

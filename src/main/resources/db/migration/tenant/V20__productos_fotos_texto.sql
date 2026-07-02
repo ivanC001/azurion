@@ -1,0 +1,3 @@
+ALTER TABLE productos
+    ALTER COLUMN foto TYPE TEXT,
+    ALTER COLUMN imagen_url TYPE TEXT;

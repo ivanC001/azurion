@@ -1,0 +1,33 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: azurion-postgres
+    environment:
+      POSTGRES_DB: azurion
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - azurion_pg_data:/var/lib/postgresql/data
+
+  azurion-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: azurion-api
+    depends_on:
+      - postgres
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/azurion
+      DB_USER: postgres
+      DB_PASS: postgres
+      JWT_SECRET: replace_this_with_very_long_secure_secret_32_chars_minimum
+      JWT_ISSUER: azurion
+      JWT_EXP_MIN: 120
+    ports:
+      - "8080:8080"
+
+volumes:
+  azurion_pg_data:

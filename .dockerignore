@@ -1,0 +1,13 @@
+# Build
+/target
+
+# Git
+/.git
+
+# IDE
+/.idea
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

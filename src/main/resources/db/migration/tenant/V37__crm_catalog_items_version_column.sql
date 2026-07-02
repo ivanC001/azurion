@@ -1,0 +1,2 @@
+ALTER TABLE crm_catalogo_items
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;

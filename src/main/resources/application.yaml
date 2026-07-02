@@ -1,0 +1,89 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: azurion-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/azurion}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASS:postgres}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:30}
+      minimum-idle: ${DB_POOL_MIN:5}
+      connection-timeout: 30000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+        jdbc.time_zone: UTC
+        multiTenancy: SCHEMA
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration/public
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:replace_this_with_very_long_secure_secret_32_chars_minimum}
+    issuer: ${JWT_ISSUER:azurion}
+    expiration-minutes: ${JWT_EXP_MIN:120}
+
+azurion:
+  security:
+    disable-auth-for-dev: ${DISABLE_AUTH_FOR_DEV:false}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  multitenancy:
+    default-schema: public
+    tenant-header: X-Tenant-Id
+    public-endpoints: /v1/auth/register,/v1/auth/public/login,/v1/auth/tenant/login,/v1/auth/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/facturador/callback/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html,/actuator/health,/actuator/info,/files/**
+  storage:
+    public-files:
+      root-dir: ${AZURION_PUBLIC_FILES_DIR:${user.dir}/storage/public-files}
+  facturador:
+    base-url: ${FACTURADOR_BASE_URL:http://127.0.0.1:8000}
+    api-prefix: ${FACTURADOR_API_PREFIX:/api}
+    connect-timeout-millis: ${FACTURADOR_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-millis: ${FACTURADOR_READ_TIMEOUT_MS:20000}
+    wait-processed-enabled: ${FACTURADOR_WAIT_PROCESSED_ENABLED:true}
+    wait-processed-timeout-millis: ${FACTURADOR_WAIT_PROCESSED_TIMEOUT_MS:90000}
+    wait-processed-poll-interval-millis: ${FACTURADOR_WAIT_PROCESSED_POLL_INTERVAL_MS:1500}
+    default-api-key: ${FACTURADOR_API_KEY:}
+    tenant-api-keys: {}
+    callback:
+      enabled: ${FACTURADOR_CALLBACK_ENABLED:true}
+      api-key: ${FACTURADOR_CALLBACK_API_KEY:}
+      secret: ${FACTURADOR_CALLBACK_SECRET:}
+      header-api-key: ${FACTURADOR_CALLBACK_HEADER_API_KEY:X-API-Key}
+      header-signature: ${FACTURADOR_CALLBACK_HEADER_SIGNATURE:X-Signature}
+      header-timestamp: ${FACTURADOR_CALLBACK_HEADER_TIMESTAMP:X-Timestamp}
+      header-nonce: ${FACTURADOR_CALLBACK_HEADER_NONCE:X-Nonce}
+      timestamp-tolerance-seconds: ${FACTURADOR_CALLBACK_TOLERANCE_SECONDS:300}
+      nonce-ttl-seconds: ${FACTURADOR_CALLBACK_NONCE_TTL_SECONDS:600}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

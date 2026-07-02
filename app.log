@@ -1,0 +1,64 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.5)
+
+2026-05-25 23:35:24.294 [background-preinit] INFO  o.h.validator.internal.util.Version trace= span= tenant= user= - HV000001: Hibernate Validator 8.0.1.Final
+2026-05-25 23:35:24.367 [main] INFO  com.azurion.AzurionApplication trace= span= tenant= user= - Starting AzurionApplication v0.1.0-SNAPSHOT using Java 21.0.10 with PID 21908 (D:\ProyectosProgramacion\Azurion\target\azurion-backend-0.1.0-SNAPSHOT.jar started by IVAN_CALDERON in D:\ProyectosProgramacion\Azurion)
+2026-05-25 23:35:24.369 [main] INFO  com.azurion.AzurionApplication trace= span= tenant= user= - No active profile set, falling back to 1 default profile: "default"
+2026-05-25 23:35:26.736 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate trace= span= tenant= user= - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-25 23:35:26.876 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate trace= span= tenant= user= - Finished Spring Data repository scanning in 123 ms. Found 15 JPA repository interfaces.
+2026-05-25 23:35:28.715 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer trace= span= tenant= user= - Tomcat initialized with port 8080 (http)
+2026-05-25 23:35:28.740 [main] INFO  o.a.coyote.http11.Http11NioProtocol trace= span= tenant= user= - Initializing ProtocolHandler ["http-nio-8080"]
+2026-05-25 23:35:28.751 [main] INFO  o.a.catalina.core.StandardService trace= span= tenant= user= - Starting service [Tomcat]
+2026-05-25 23:35:28.756 [main] INFO  o.a.catalina.core.StandardEngine trace= span= tenant= user= - Starting Servlet engine: [Apache Tomcat/10.1.31]
+2026-05-25 23:35:28.838 [main] INFO  o.a.c.c.C.[.[localhost].[/api] trace= span= tenant= user= - Initializing Spring embedded WebApplicationContext
+2026-05-25 23:35:28.840 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext trace= span= tenant= user= - Root WebApplicationContext: initialization completed in 4390 ms
+2026-05-25 23:35:29.669 [main] INFO  com.zaxxer.hikari.HikariDataSource trace= span= tenant= user= - HikariPool-1 - Starting...
+2026-05-25 23:35:30.071 [main] INFO  com.zaxxer.hikari.pool.HikariPool trace= span= tenant= user= - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@1f3361e9
+2026-05-25 23:35:30.074 [main] INFO  com.zaxxer.hikari.HikariDataSource trace= span= tenant= user= - HikariPool-1 - Start completed.
+2026-05-25 23:35:30.141 [main] INFO  org.flywaydb.core.FlywayExecutor trace= span= tenant= user= - Database: jdbc:postgresql://localhost:5432/dbazurion (PostgreSQL 18.4)
+2026-05-25 23:35:30.169 [main] WARN  o.f.c.i.database.base.Database trace= span= tenant= user= - Flyway upgrade recommended: PostgreSQL 18.4 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-05-25 23:35:30.266 [main] INFO  o.f.core.internal.command.DbValidate trace= span= tenant= user= - Successfully validated 2 migrations (execution time 00:00.077s)
+2026-05-25 23:35:30.294 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Current version of schema "public": 2
+2026-05-25 23:35:30.302 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Schema "public" is up to date. No migration necessary.
+2026-05-25 23:35:30.599 [main] INFO  o.h.jpa.internal.util.LogHelper trace= span= tenant= user= - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-25 23:35:30.717 [main] INFO  org.hibernate.Version trace= span= tenant= user= - HHH000412: Hibernate ORM core version 6.5.3.Final
+2026-05-25 23:35:30.807 [main] INFO  o.h.c.i.RegionFactoryInitiator trace= span= tenant= user= - HHH000026: Second-level cache disabled
+2026-05-25 23:35:31.287 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo trace= span= tenant= user= - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-25 23:35:33.354 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator trace= span= tenant= user= - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-25 23:35:33.363 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean trace= span= tenant= user= - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-25 23:35:34.704 [main] INFO  c.a.m.TenantMigrationService trace= span= tenant= user= - Running tenant migrations for schema=tenant_gamma
+2026-05-25 23:35:34.720 [main] INFO  org.flywaydb.core.FlywayExecutor trace= span= tenant= user= - Database: jdbc:postgresql://localhost:5432/dbazurion (PostgreSQL 18.4)
+2026-05-25 23:35:34.723 [main] WARN  o.f.c.i.database.base.Database trace= span= tenant= user= - Flyway upgrade recommended: PostgreSQL 18.4 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-05-25 23:35:34.733 [main] INFO  o.f.core.internal.command.DbValidate trace= span= tenant= user= - Successfully validated 3 migrations (execution time 00:00.007s)
+2026-05-25 23:35:34.738 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Current version of schema "tenant_gamma": 3
+2026-05-25 23:35:34.739 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Schema "tenant_gamma" is up to date. No migration necessary.
+2026-05-25 23:35:34.740 [main] INFO  c.a.m.TenantMigrationService trace= span= tenant= user= - Running tenant migrations for schema=tenant_acme
+2026-05-25 23:35:34.754 [main] INFO  org.flywaydb.core.FlywayExecutor trace= span= tenant= user= - Database: jdbc:postgresql://localhost:5432/dbazurion (PostgreSQL 18.4)
+2026-05-25 23:35:34.756 [main] WARN  o.f.c.i.database.base.Database trace= span= tenant= user= - Flyway upgrade recommended: PostgreSQL 18.4 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-05-25 23:35:34.766 [main] INFO  o.f.core.internal.command.DbValidate trace= span= tenant= user= - Successfully validated 3 migrations (execution time 00:00.008s)
+2026-05-25 23:35:34.770 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Current version of schema "tenant_acme": 3
+2026-05-25 23:35:34.771 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Schema "tenant_acme" is up to date. No migration necessary.
+2026-05-25 23:35:34.772 [main] INFO  c.a.m.TenantMigrationService trace= span= tenant= user= - Running tenant migrations for schema=tenant_epsilon
+2026-05-25 23:35:34.785 [main] INFO  org.flywaydb.core.FlywayExecutor trace= span= tenant= user= - Database: jdbc:postgresql://localhost:5432/dbazurion (PostgreSQL 18.4)
+2026-05-25 23:35:34.787 [main] WARN  o.f.c.i.database.base.Database trace= span= tenant= user= - Flyway upgrade recommended: PostgreSQL 18.4 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 16.
+2026-05-25 23:35:34.796 [main] INFO  o.f.core.internal.command.DbValidate trace= span= tenant= user= - Successfully validated 3 migrations (execution time 00:00.007s)
+2026-05-25 23:35:34.804 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Current version of schema "tenant_epsilon": 3
+2026-05-25 23:35:34.834 [main] INFO  o.f.core.internal.command.DbMigrate trace= span= tenant= user= - Schema "tenant_epsilon" is up to date. No migration necessary.
+2026-05-25 23:35:34.971 [main] INFO  o.s.s.c.a.a.c.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer trace= span= tenant= user= - Global AuthenticationManager configured with UserDetailsService bean with name platformUserDetailsService
+2026-05-25 23:35:36.785 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver trace= span= tenant= user= - Exposing 3 endpoints beneath base path '/actuator'
+2026-05-25 23:35:37.904 [main] INFO  o.a.coyote.http11.Http11NioProtocol trace= span= tenant= user= - Starting ProtocolHandler ["http-nio-8080"]
+2026-05-25 23:35:37.941 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer trace= span= tenant= user= - Tomcat started on port 8080 (http) with context path '/api'
+2026-05-25 23:35:37.944 [main] INFO  com.azurion.AzurionApplication trace= span= tenant= user= - Started AzurionApplication in 14.403 seconds (process running for 15.193)
+2026-05-25 23:35:57.900 [http-nio-8080-exec-2] INFO  o.a.c.c.C.[.[localhost].[/api] trace= span= tenant= user= - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-25 23:35:57.901 [http-nio-8080-exec-2] INFO  o.s.web.servlet.DispatcherServlet trace= span= tenant= user= - Initializing Servlet 'dispatcherServlet'
+2026-05-25 23:35:57.904 [http-nio-8080-exec-2] INFO  o.s.web.servlet.DispatcherServlet trace= span= tenant= user= - Completed initialization in 1 ms
+2026-05-25 23:35:58.233 [http-nio-8080-exec-1] INFO  c.a.shared.audit.AuditTrailFilter trace= span= tenant=epsilon user= - audit method=GET uri=/api/v1/saas/clientes/1 status=200 durationMs=151 tenant=epsilon user=null
+2026-05-25 23:35:58.234 [http-nio-8080-exec-3] INFO  c.a.shared.audit.AuditTrailFilter trace= span= tenant=epsilon user= - audit method=GET uri=/api/v1/saas/clientes/999 status=400 durationMs=151 tenant=epsilon user=null
+2026-05-25 23:35:58.234 [http-nio-8080-exec-2] INFO  c.a.shared.audit.AuditTrailFilter trace= span= tenant=public user= - audit method=GET uri=/api/v1/saas/empresas/1 status=200 durationMs=152 tenant=public user=null
