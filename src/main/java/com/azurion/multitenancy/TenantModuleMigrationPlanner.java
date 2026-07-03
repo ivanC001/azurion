@@ -67,7 +67,11 @@ public class TenantModuleMigrationPlanner {
             "V41__cotizaciones_crm_free_items.sql",
             "V42__cotizaciones_flujo_promociones.sql",
             "V43__crm_default_branch_support.sql",
-            "V44__crm_quote_permissions.sql"
+            "V44__crm_quote_permissions.sql",
+            "V45__crm_followup_qualification.sql",
+            "V46__tenant_schema_drift_repair.sql",
+            "V47__crm_negotiation_process.sql",
+            "V48__crm_quote_product_warehouse_repair.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -163,7 +167,8 @@ public class TenantModuleMigrationPlanner {
                 "V21__effective_permissions_and_user_scopes.sql",
                 "V22__warehouses_require_branch.sql",
                 "V23__seed_product_categories.sql",
-                "V25__initialize_missing_product_stock.sql"
+                "V25__initialize_missing_product_stock.sql",
+                "V48__crm_quote_product_warehouse_repair.sql"
         ));
         mapping.put("COMPRAS", List.of(
                 "V17__compras_lotes_origen_inventario.sql"
@@ -207,7 +212,11 @@ public class TenantModuleMigrationPlanner {
                 "V41__cotizaciones_crm_free_items.sql",
                 "V42__cotizaciones_flujo_promociones.sql",
                 "V43__crm_default_branch_support.sql",
-                "V44__crm_quote_permissions.sql"
+                "V44__crm_quote_permissions.sql",
+                "V45__crm_followup_qualification.sql",
+                "V46__tenant_schema_drift_repair.sql",
+                "V47__crm_negotiation_process.sql",
+                "V48__crm_quote_product_warehouse_repair.sql"
         ));
         mapping.put("CRM", List.of(
                 "V1__tenant_erp_facturacion.sql",
@@ -228,7 +237,11 @@ public class TenantModuleMigrationPlanner {
                 "V41__cotizaciones_crm_free_items.sql",
                 "V42__cotizaciones_flujo_promociones.sql",
                 "V43__crm_default_branch_support.sql",
-                "V44__crm_quote_permissions.sql"
+                "V44__crm_quote_permissions.sql",
+                "V45__crm_followup_qualification.sql",
+                "V46__tenant_schema_drift_repair.sql",
+                "V47__crm_negotiation_process.sql",
+                "V48__crm_quote_product_warehouse_repair.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

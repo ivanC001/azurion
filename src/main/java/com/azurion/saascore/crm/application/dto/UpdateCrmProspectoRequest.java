@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 public record UpdateCrmProspectoRequest(
         String tipoPersona,
@@ -29,6 +30,15 @@ public record UpdateCrmProspectoRequest(
         String metadataJson,
         String estado,
         String nivelInteres,
+        Boolean necesidadIdentificada,
+        String interesReal,
+        String presupuestoDefinido,
+        String tomadorDecision,
+        String fechaEstimadaCompra,
+        String motivoEspera,
+        OffsetDateTime fechaProximoContacto,
+        String motivoPerdida,
+        @Size(max = 1000) String observacionPerdida,
         String responsableId,
         @Size(max = 1000) String observacion
 ) {

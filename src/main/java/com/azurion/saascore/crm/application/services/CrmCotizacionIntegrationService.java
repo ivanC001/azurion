@@ -34,7 +34,7 @@ public class CrmCotizacionIntegrationService {
         } else if ("NEGOCIACION".equals(estado)) {
             move(oportunidadId, "NEGOCIACION", "Cotizacion enviada a negociacion", monto);
         } else if ("RECHAZADA".equals(estado)) {
-            move(oportunidadId, "PERDIDO", "Cotizacion rechazada", null);
+            appendOnly(oportunidadId, "Cotizacion rechazada. La oportunidad queda abierta para nueva propuesta");
         }
     }
 
@@ -49,6 +49,23 @@ public class CrmCotizacionIntegrationService {
         oportunidadRepository.findById(oportunidadId).ifPresent(oportunidad -> etapaRepository.findByCodigo(etapaCodigo)
                 .filter(CrmEtapaPipeline::isActivo)
                 .ifPresent(etapa -> apply(oportunidad, etapa, observacion, montoReal)));
+    }
+
+    private void appendOnly(Long oportunidadId, String observacion) {
+        oportunidadRepository.findById(oportunidadId).ifPresent(oportunidad -> {
+            CrmEtapaPipeline etapaActual = oportunidad.getEtapaPipeline();
+            if (etapaActual == null) {
+                return;
+            }
+            CrmOportunidadHistorial historial = new CrmOportunidadHistorial();
+            historial.setOportunidad(oportunidad);
+            historial.setEtapaOrigen(etapaActual);
+            historial.setEtapaDestino(etapaActual);
+            historial.setUsuarioId("cotizaciones");
+            historial.setObservacion(observacion);
+            historial.setFechaCambio(OffsetDateTime.now());
+            historialRepository.save(historial);
+        });
     }
 
     private void apply(CrmOportunidad oportunidad, CrmEtapaPipeline destino, String observacion, BigDecimal montoReal) {

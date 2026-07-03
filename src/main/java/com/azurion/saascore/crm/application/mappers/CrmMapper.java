@@ -1,15 +1,18 @@
 package com.azurion.saascore.crm.application.mappers;
 
 import com.azurion.saascore.clientes.domain.entities.Cliente;
+import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
+import com.azurion.saascore.crm.application.dto.CrmNegociacionResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadHistorialResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoResponse;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
+import com.azurion.saascore.crm.domain.entities.CrmNegociacion;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidadHistorial;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
@@ -46,6 +49,18 @@ public final class CrmMapper {
                 prospecto.getMetadataJson(),
                 prospecto.getEstado(),
                 prospecto.getNivelInteres(),
+                prospecto.isNecesidadIdentificada(),
+                prospecto.getInteresReal(),
+                prospecto.getPresupuestoDefinido(),
+                prospecto.getTomadorDecision(),
+                prospecto.getFechaEstimadaCompra(),
+                prospecto.getScoreCalificacion(),
+                prospecto.getTemperatura(),
+                prospecto.getMotivoEspera(),
+                prospecto.getFechaProximoContacto(),
+                prospecto.getMotivoPerdida(),
+                prospecto.getObservacionPerdida(),
+                prospecto.getOportunidadId(),
                 prospecto.getResponsableId(),
                 prospecto.getObservacion(),
                 prospecto.getClienteId(),
@@ -127,6 +142,35 @@ public final class CrmMapper {
 
     public static List<CrmActividadResponse> toActividadResponses(List<CrmActividad> actividades) {
         return actividades.stream().map(CrmMapper::toActividadResponse).toList();
+    }
+
+    public static CrmNegociacionResponse toNegociacionResponse(CrmNegociacion negociacion) {
+        Cotizacion cotizacion = negociacion.getCotizacion();
+        return new CrmNegociacionResponse(
+                negociacion.getId(),
+                negociacion.getOportunidad().getId(),
+                cotizacion == null ? null : cotizacion.getId(),
+                cotizacion == null ? null : "COT-" + String.format("%04d", cotizacion.getId()),
+                negociacion.getEstado(),
+                negociacion.getSolicitudCliente(),
+                negociacion.getPrecioOriginal(),
+                negociacion.getDescuento(),
+                negociacion.getPrecioFinal(),
+                negociacion.getFormaPago(),
+                negociacion.getCuotas(),
+                negociacion.getFechaInicio(),
+                negociacion.getFechaEntrega(),
+                negociacion.getObservacion(),
+                negociacion.getResultado(),
+                negociacion.getUsuarioId(),
+                negociacion.getUsuarioNombre(),
+                negociacion.getCreatedAt(),
+                negociacion.getUpdatedAt()
+        );
+    }
+
+    public static List<CrmNegociacionResponse> toNegociacionResponses(List<CrmNegociacion> negociaciones) {
+        return negociaciones.stream().map(CrmMapper::toNegociacionResponse).toList();
     }
 
     public static CrmCatalogoItemResponse toCatalogoItemResponse(CrmCatalogoItem item) {

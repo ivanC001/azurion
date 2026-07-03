@@ -55,7 +55,7 @@ public class UpdateCotizacionEstadoUseCase {
             cotizacion.setProximoSeguimientoEn(request.proximoSeguimientoEn() == null ? now.plusDays(1) : request.proximoSeguimientoEn());
         } else if ("ACEPTADA".equals(estado)) {
             cotizacion.setFechaRespuesta(now);
-            cotizacion.setDecisionSiguiente(normalizeDecision(request.decisionSiguiente(), "NEGOCIACION"));
+            cotizacion.setDecisionSiguiente(normalizeDecision(request.decisionSiguiente(), "VENTA"));
             cotizacion.setMotivoRechazo(null);
         } else if ("RECHAZADA".equals(estado)) {
             cotizacion.setFechaRespuesta(now);

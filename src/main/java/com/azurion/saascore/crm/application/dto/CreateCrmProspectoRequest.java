@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 public record CreateCrmProspectoRequest(
         @NotBlank String tipoPersona,
@@ -29,6 +30,13 @@ public record CreateCrmProspectoRequest(
         Long catalogoItemId,
         String metadataJson,
         String estado,
+        Boolean necesidadIdentificada,
+        String interesReal,
+        String presupuestoDefinido,
+        String tomadorDecision,
+        String fechaEstimadaCompra,
+        String motivoEspera,
+        OffsetDateTime fechaProximoContacto,
         String responsableId,
         @Size(max = 1000) String observacion
 ) {

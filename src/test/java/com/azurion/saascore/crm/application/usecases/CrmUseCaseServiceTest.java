@@ -10,11 +10,13 @@ import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.clientes.application.usecases.CreateClienteUseCase;
 import com.azurion.saascore.clientes.domain.repositories.ClienteRepository;
 import com.azurion.saascore.cotizaciones.application.usecases.CreateCotizacionUseCase;
+import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
@@ -50,6 +52,9 @@ class CrmUseCaseServiceTest {
     CrmEtapaPipelineRepository etapaPipelineRepository;
 
     @Mock
+    CrmNegociacionRepository negociacionRepository;
+
+    @Mock
     CrmOportunidadHistorialRepository historialRepository;
 
     @Mock
@@ -60,6 +65,9 @@ class CrmUseCaseServiceTest {
 
     @Mock
     CreateCotizacionUseCase createCotizacionUseCase;
+
+    @Mock
+    CotizacionRepository cotizacionRepository;
 
     @Mock
     AuthorizationService authorizationService;
@@ -74,10 +82,12 @@ class CrmUseCaseServiceTest {
                 oportunidadRepository,
                 actividadRepository,
                 etapaPipelineRepository,
+                negociacionRepository,
                 historialRepository,
                 clienteRepository,
                 createClienteUseCase,
                 createCotizacionUseCase,
+                cotizacionRepository,
                 authorizationService
         );
     }
@@ -92,32 +102,7 @@ class CrmUseCaseServiceTest {
         authenticate("CRM_WRITE");
         when(authorizationService.currentUsuarioId()).thenReturn(10L);
 
-        CreateCrmProspectoRequest request = new CreateCrmProspectoRequest(
-                "NATURAL",
-                "1",
-                "12345678",
-                "Cliente interesado",
-                null,
-                null,
-                null,
-                "cliente@test.local",
-                null,
-                "WEB",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "20",
-                null
-        );
+        CreateCrmProspectoRequest request = prospectoRequestAsignadoA("20");
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.createProspecto(request));
 
@@ -132,7 +117,17 @@ class CrmUseCaseServiceTest {
         when(prospectoRepository.save(org.mockito.ArgumentMatchers.any(CrmProspecto.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        CreateCrmProspectoRequest request = new CreateCrmProspectoRequest(
+        CreateCrmProspectoRequest request = prospectoRequestAsignadoA("20");
+
+        service.createProspecto(request);
+
+        ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
+        verify(prospectoRepository).save(captor.capture());
+        assertEquals("20", captor.getValue().getResponsableId());
+    }
+
+    private CreateCrmProspectoRequest prospectoRequestAsignadoA(String responsableId) {
+        return new CreateCrmProspectoRequest(
                 "NATURAL",
                 "1",
                 "12345678",
@@ -155,15 +150,16 @@ class CrmUseCaseServiceTest {
                 null,
                 null,
                 null,
-                "20",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                responsableId,
                 null
         );
-
-        service.createProspecto(request);
-
-        ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
-        verify(prospectoRepository).save(captor.capture());
-        assertEquals("20", captor.getValue().getResponsableId());
     }
 
     private void authenticate(String... authorities) {

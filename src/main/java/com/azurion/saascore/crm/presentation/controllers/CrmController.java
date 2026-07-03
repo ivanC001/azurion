@@ -5,12 +5,14 @@ import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.saascore.crm.application.dto.CreateCrmActividadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmCatalogoItemRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmEtapaPipelineRequest;
+import com.azurion.saascore.crm.application.dto.CreateCrmNegociacionRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
+import com.azurion.saascore.crm.application.dto.CrmNegociacionResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadHistorialResponse;
 import com.azurion.saascore.crm.application.dto.CrmPipelineColumnResponse;
@@ -181,6 +183,19 @@ public class CrmController {
     public ApiResponse<CotizacionResponse> generarCotizacion(@PathVariable Long id,
                                                              @Valid @RequestBody GenerarCotizacionDesdeOportunidadRequest request) {
         return ApiResponse.ok(crmUseCaseService.generarCotizacion(id, request), "Cotizacion generada desde CRM");
+    }
+
+    @GetMapping("/oportunidades/{id}/negociaciones")
+    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_OPPORTUNITIES_READ')")
+    public ApiResponse<List<CrmNegociacionResponse>> listNegociaciones(@PathVariable Long id) {
+        return ApiResponse.ok(crmUseCaseService.listNegociaciones(id), "Negociaciones de la oportunidad");
+    }
+
+    @PostMapping("/oportunidades/{id}/negociaciones")
+    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_OPPORTUNITIES_WRITE','CRM_OPPORTUNITIES_STAGE')")
+    public ApiResponse<CrmNegociacionResponse> registrarNegociacion(@PathVariable Long id,
+                                                                    @Valid @RequestBody CreateCrmNegociacionRequest request) {
+        return ApiResponse.ok(crmUseCaseService.registrarNegociacion(id, request), "Negociacion registrada");
     }
 
     @PostMapping("/actividades")

@@ -14,6 +14,7 @@ import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepositor
 import com.azurion.saascore.crm.application.dto.CreateCrmActividadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmCatalogoItemRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmEtapaPipelineRequest;
+import com.azurion.saascore.crm.application.dto.CreateCrmNegociacionRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
@@ -21,6 +22,7 @@ import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaResumenResponse;
+import com.azurion.saascore.crm.application.dto.CrmNegociacionResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadHistorialResponse;
 import com.azurion.saascore.crm.application.dto.CrmPipelineColumnResponse;
@@ -41,12 +43,14 @@ import com.azurion.saascore.crm.application.mappers.CrmMapper;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
+import com.azurion.saascore.crm.domain.entities.CrmNegociacion;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidadHistorial;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
@@ -75,7 +79,9 @@ public class CrmUseCaseService {
 
     private static final Set<String> TIPOS_PERSONA = Set.of("NATURAL", "JURIDICA");
     private static final Set<String> ORIGENES = Set.of("WHATSAPP", "FACEBOOK", "INSTAGRAM", "WEB", "REFERIDO", "LLAMADA", "VISITA", "OTRO");
-    private static final Set<String> ESTADOS_PROSPECTO = Set.of("NUEVO", "CONTACTADO", "INTERESADO", "NO_INTERESADO", "CONVERTIDO", "DESCARTADO");
+    private static final Set<String> ESTADOS_PROSPECTO = Set.of(
+            "NUEVO", "CONTACTADO", "EN_ESPERA", "INTERESADO", "CALIFICADO", "PERDIDO", "CONVERTIDO", "NO_INTERESADO", "DESCARTADO"
+    );
     private static final Set<String> ESTADOS_OPORTUNIDAD = Set.of("ABIERTA", "GANADA", "PERDIDA");
     private static final Set<String> TIPOS_COMERCIALES = Set.of(
             "PRODUCTO", "SERVICIO", "VEHICULO", "INMUEBLE", "PROYECTO", "CURSO",
@@ -85,10 +91,22 @@ public class CrmUseCaseService {
     );
     private static final Set<String> ESTADOS_CATALOGO = Set.of("ACTIVO", "INACTIVO", "ARCHIVADO");
     private static final Set<String> TIPOS_ACTIVIDAD = Set.of("LLAMADA", "WHATSAPP", "CORREO", "REUNION", "VISITA", "TAREA", "NOTA");
-    private static final Set<String> RESULTADOS_CONTACTO = Set.of("CONTACTADO", "INTERESADO", "REPROGRAMADO", "SIN_RESPUESTA", "NO_INTERESADO", "DESCARTADO", "COTIZACION_SOLICITADA");
-    private static final Set<String> NIVELES_INTERES = Set.of("FRIO", "MEDIO", "CALIENTE");
+    private static final Set<String> RESULTADOS_CONTACTO = Set.of(
+            "CONTACTADO", "INTERESADO", "MUY_INTERESADO", "REPROGRAMADO", "LLAMAR_DESPUES", "EN_ESPERA",
+            "SIN_RESPUESTA", "NO_RESPONDE", "NO_INTERESADO", "PERDIDO", "DESCARTADO", "SOLICITA_PROPUESTA", "COTIZACION_SOLICITADA"
+    );
+    private static final Set<String> NIVELES_INTERES = Set.of("BAJO", "MEDIO", "ALTO", "FRIO", "TIBIO", "CALIENTE");
+    private static final Set<String> INTERESES_REALES = Set.of("BAJO", "MEDIO", "ALTO");
+    private static final Set<String> PRESUPUESTOS_DEFINIDOS = Set.of("SI", "NO", "DESCONOCIDO");
+    private static final Set<String> TOMADORES_DECISION = Set.of("SI", "NO", "DEBE_CONSULTAR", "DESCONOCIDO");
+    private static final Set<String> FECHAS_ESTIMADAS_COMPRA = Set.of("INMEDIATO", "TREINTA_DIAS", "TRES_MESES", "MAS_ADELANTE", "DESCONOCIDO");
     private static final Set<String> CANALES_INGRESO = Set.of("MANUAL", "LANDING", "WEBHOOK", "WHATSAPP", "FACEBOOK", "IMPORTADO");
     private static final Set<String> MODOS_VALIDACION_PIPELINE = Set.of("STRICT", "WARNING", "FREE");
+    private static final Set<String> ESTADOS_NEGOCIACION = Set.of(
+            "PENDIENTE", "AJUSTE_SOLICITADO", "PROPUESTA_ENVIADA", "CLIENTE_CONFORME", "RECHAZADA", "GANADA"
+    );
+    private static final Set<String> SOLICITUDES_NEGOCIACION = Set.of("MEJOR_PRECIO", "PROMOCION", "PLAZO", "FORMA_PAGO", "CONDICIONES", "OTRO");
+    private static final Set<String> RESULTADOS_NEGOCIACION = Set.of("PENDIENTE", "ACEPTA", "RECHAZA", "AJUSTE");
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
 
     private final CrmProspectoRepository prospectoRepository;
@@ -96,6 +114,7 @@ public class CrmUseCaseService {
     private final CrmOportunidadRepository oportunidadRepository;
     private final CrmActividadRepository actividadRepository;
     private final CrmEtapaPipelineRepository etapaPipelineRepository;
+    private final CrmNegociacionRepository negociacionRepository;
     private final CrmOportunidadHistorialRepository historialRepository;
     private final ClienteRepository clienteRepository;
     private final CreateClienteUseCase createClienteUseCase;
@@ -131,10 +150,21 @@ public class CrmUseCaseService {
         prospecto.setFechaInteres(request.fechaInteres());
         prospecto.setCatalogoItemId(catalogoItem == null ? null : catalogoItem.getId());
         prospecto.setMetadataJson(trim(firstNonBlank(request.metadataJson(), catalogoItem == null ? null : catalogoItem.getMetadataJson())));
-        prospecto.setEstado(defaultEnum(request.estado(), "NUEVO", ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO"));
+        prospecto.setEstado(normalizeProspectState(defaultEnum(request.estado(), "NUEVO", ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO")));
         prospecto.setNivelInteres(resolveInitialInterestLevel(prospecto.getEstado()));
+        applyQualificationFields(
+                prospecto,
+                request.necesidadIdentificada(),
+                request.interesReal(),
+                request.presupuestoDefinido(),
+                request.tomadorDecision(),
+                request.fechaEstimadaCompra()
+        );
+        prospecto.setMotivoEspera(trim(request.motivoEspera()));
+        prospecto.setFechaProximoContacto(request.fechaProximoContacto());
         prospecto.setResponsableId(responsableId);
         prospecto.setObservacion(trim(request.observacion()));
+        recalculateQualification(prospecto);
         return CrmMapper.toProspectoResponse(prospectoRepository.save(prospecto));
     }
 
@@ -168,6 +198,7 @@ public class CrmUseCaseService {
         prospecto.setMetadataJson(publicLeadMetadata(request, catalogoItem));
         prospecto.setEstado("NUEVO");
         prospecto.setNivelInteres("FRIO");
+        recalculateQualification(prospecto);
         prospecto.setResponsableId("crm-public");
         prospecto.setObservacion(trim(request.mensaje()));
         return CrmMapper.toProspectoResponse(prospectoRepository.save(prospecto));
@@ -333,12 +364,27 @@ public class CrmUseCaseService {
             prospecto.setCatalogoItemId(validateCatalogoItemId(request.catalogoItemId()));
         }
         updateIfPresent(request.metadataJson(), value -> prospecto.setMetadataJson(trim(value)));
-        updateIfPresent(request.estado(), value -> prospecto.setEstado(requireEnum(value, ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO")));
-        updateIfPresent(request.nivelInteres(), value -> prospecto.setNivelInteres(requireEnum(value, NIVELES_INTERES, "NIVEL_INTERES_CRM_INVALIDO")));
+        updateIfPresent(request.estado(), value -> prospecto.setEstado(normalizeProspectState(requireEnum(value, ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO"))));
+        updateIfPresent(request.nivelInteres(), value -> prospecto.setNivelInteres(normalizeProspectInterest(requireEnum(value, NIVELES_INTERES, "NIVEL_INTERES_CRM_INVALIDO"))));
+        applyQualificationFields(
+                prospecto,
+                request.necesidadIdentificada(),
+                request.interesReal(),
+                request.presupuestoDefinido(),
+                request.tomadorDecision(),
+                request.fechaEstimadaCompra()
+        );
+        updateIfPresent(request.motivoEspera(), value -> prospecto.setMotivoEspera(trim(value)));
+        if (request.fechaProximoContacto() != null) {
+            prospecto.setFechaProximoContacto(request.fechaProximoContacto());
+        }
+        updateIfPresent(request.motivoPerdida(), value -> prospecto.setMotivoPerdida(trim(value)));
+        updateIfPresent(request.observacionPerdida(), value -> prospecto.setObservacionPerdida(trim(value)));
         updateIfPresent(request.observacion(), value -> prospecto.setObservacion(trim(value)));
         if (request.responsableId() != null) {
             prospecto.setResponsableId(resolveResponsable(request.responsableId()));
         }
+        recalculateQualification(prospecto);
         return CrmMapper.toProspectoResponse(prospectoRepository.save(prospecto));
     }
 
@@ -379,6 +425,9 @@ public class CrmUseCaseService {
         String responsableId = resolveResponsable(request.responsableId());
         CrmOportunidad oportunidad = new CrmOportunidad();
         applyOportunidadLinks(oportunidad, request.prospectoId(), request.clienteId());
+        if (oportunidad.getProspecto() != null) {
+            validateProspectReadyForOpportunity(oportunidad.getProspecto());
+        }
         String tipoBase = oportunidad.getProspecto() == null ? null : oportunidad.getProspecto().getTipoInteres();
         oportunidad.setTipoOportunidad(resolveTipoOportunidad(firstNonBlank(request.tipoOportunidad(), tipoBase)));
         oportunidad.setCatalogoItemId(resolveCatalogoItemForOpportunity(request.catalogoItemId(), oportunidad.getProspecto()));
@@ -391,7 +440,15 @@ public class CrmUseCaseService {
         oportunidad.setResponsableId(responsableId);
         oportunidad.setEstado("ABIERTA");
         ensureNoActiveOpportunityDuplicate(oportunidad);
-        return CrmMapper.toOportunidadResponse(oportunidadRepository.save(oportunidad));
+        CrmOportunidad saved = oportunidadRepository.save(oportunidad);
+        if (saved.getProspecto() != null) {
+            CrmProspecto prospecto = saved.getProspecto();
+            prospecto.setEstado("CONVERTIDO");
+            prospecto.setOportunidadId(saved.getId());
+            prospecto.setFechaConversion(OffsetDateTime.now());
+            prospectoRepository.save(prospecto);
+        }
+        return CrmMapper.toOportunidadResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -525,6 +582,66 @@ public class CrmUseCaseService {
         return cotizacion;
     }
 
+    @Transactional(readOnly = true)
+    public List<CrmNegociacionResponse> listNegociaciones(Long oportunidadId) {
+        CrmOportunidad oportunidad = findOportunidad(oportunidadId);
+        ensureCanRead(oportunidad.getResponsableId());
+        return CrmMapper.toNegociacionResponses(negociacionRepository.findByOportunidadIdOrderByCreatedAtDescIdDesc(oportunidadId));
+    }
+
+    @Transactional
+    public CrmNegociacionResponse registrarNegociacion(Long oportunidadId, CreateCrmNegociacionRequest request) {
+        CrmOportunidad oportunidad = findOportunidad(oportunidadId);
+        ensureCanWrite(oportunidad.getResponsableId());
+        if ("PERDIDA".equals(oportunidad.getEstado())) {
+            throw new BusinessException("CRM_NEGOCIACION_OPORTUNIDAD_PERDIDA", "No se puede negociar una oportunidad perdida");
+        }
+        Cotizacion cotizacion = resolveNegotiationQuote(oportunidad, request.cotizacionId());
+        BigDecimal precioOriginal = money(request.precioOriginal() != null ? nonNegative(request.precioOriginal()) : quoteOrOpportunityAmount(cotizacion, oportunidad));
+        BigDecimal descuento = money(nonNegative(request.descuento()));
+        BigDecimal precioFinal = request.precioFinal() != null
+                ? money(nonNegative(request.precioFinal()))
+                : money(precioOriginal.subtract(descuento).max(BigDecimal.ZERO));
+        String resultado = optionalEnum(request.resultado(), RESULTADOS_NEGOCIACION, "CRM_RESULTADO_NEGOCIACION_INVALIDO");
+        if (!hasText(resultado)) {
+            resultado = "PENDIENTE";
+        }
+        String estado = resolveNegotiationState(request.estado(), resultado);
+
+        CrmNegociacion negociacion = new CrmNegociacion();
+        negociacion.setOportunidad(oportunidad);
+        negociacion.setCotizacion(cotizacion);
+        negociacion.setEstado(estado);
+        negociacion.setSolicitudCliente(firstNonBlank(
+                optionalEnum(request.solicitudCliente(), SOLICITUDES_NEGOCIACION, "CRM_SOLICITUD_NEGOCIACION_INVALIDA"),
+                "MEJOR_PRECIO"
+        ));
+        negociacion.setPrecioOriginal(precioOriginal);
+        negociacion.setDescuento(descuento);
+        negociacion.setPrecioFinal(precioFinal);
+        negociacion.setFormaPago(trim(request.formaPago()));
+        negociacion.setCuotas(Math.max(1, request.cuotas() == null ? 1 : request.cuotas()));
+        negociacion.setFechaInicio(request.fechaInicio());
+        negociacion.setFechaEntrega(request.fechaEntrega());
+        negociacion.setObservacion(trim(request.observacion()));
+        negociacion.setResultado(resultado);
+        negociacion.setUsuarioId(currentUserKey());
+        negociacion.setUsuarioNombre(currentUserKey());
+        CrmNegociacion saved = negociacionRepository.save(negociacion);
+
+        if ("CLIENTE_CONFORME".equals(estado) || "GANADA".equals(estado)) {
+            applyStage(oportunidad, resolveStageByCode("GANADO"), "Cliente conforme en negociacion", true);
+            oportunidad.setMontoReal(precioFinal);
+            oportunidadRepository.save(oportunidad);
+        } else if (shouldAdvance(oportunidad, "NEGOCIACION")) {
+            applyStage(oportunidad, resolveStageByCode("NEGOCIACION"), "Negociacion registrada: " + saved.getSolicitudCliente(), true);
+            oportunidadRepository.save(oportunidad);
+        } else {
+            appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Negociacion registrada: " + saved.getSolicitudCliente());
+        }
+        return CrmMapper.toNegociacionResponse(saved);
+    }
+
     @Transactional
     public CrmActividadResponse createActividad(CreateCrmActividadRequest request) {
         String usuarioId = resolveResponsibleForActivity(request.usuarioId());
@@ -559,7 +676,7 @@ public class CrmUseCaseService {
         ensureCanWrite(actividad.getUsuarioId());
         String resultadoContacto = optionalEnum(request.resultadoContacto(), RESULTADOS_CONTACTO, "RESULTADO_CONTACTO_CRM_INVALIDO");
         String nivelInteres = optionalEnum(request.nivelInteres(), NIVELES_INTERES, "NIVEL_INTERES_CRM_INVALIDO");
-        String estadoProspecto = optionalEnum(request.estadoProspecto(), ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO");
+        String estadoProspecto = normalizeOptionalProspectState(optionalEnum(request.estadoProspecto(), ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO"));
         actividad.setEstado("REALIZADA");
         actividad.setFechaRealizada(OffsetDateTime.now());
         actividad.setResultado(trim(request.resultado()));
@@ -581,7 +698,7 @@ public class CrmUseCaseService {
         actividad.setResultado(trim(request.resultado()));
         actividad.setResultadoContacto(optionalEnum(request.resultadoContacto(), RESULTADOS_CONTACTO, "RESULTADO_CONTACTO_CRM_INVALIDO"));
         actividad.setNivelInteres(optionalEnum(request.nivelInteres(), NIVELES_INTERES, "NIVEL_INTERES_CRM_INVALIDO"));
-        actividad.setEstadoProspectoResultado(optionalEnum(request.estadoProspecto(), ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO"));
+        actividad.setEstadoProspectoResultado(normalizeOptionalProspectState(optionalEnum(request.estadoProspecto(), ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO")));
         return CrmMapper.toActividadResponse(actividadRepository.save(actividad));
     }
 
@@ -616,7 +733,7 @@ public class CrmUseCaseService {
                 viewAll ? actividadRepository.countByEstado("PENDIENTE") : actividadRepository.countByUsuarioIdAndEstado(current, "PENDIENTE"),
                 viewAll ? actividadRepository.countByEstado("REALIZADA") : actividadRepository.countByUsuarioIdAndEstado(current, "REALIZADA"),
                 viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO"),
-                viewAll ? prospectoRepository.countByEstado("DESCARTADO") : prospectoRepository.countByResponsableIdAndEstado(current, "DESCARTADO")
+                viewAll ? prospectoRepository.countByEstado("PERDIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "PERDIDO")
         );
     }
 
@@ -711,8 +828,8 @@ public class CrmUseCaseService {
         if ("NEGOCIACION".equals(code) && !hasNegotiationQuote(oportunidad)) {
             throw new BusinessException("CRM_NEGOCIACION_REQUERIDA", "Para pasar a negociacion registra que el cliente pidio ajuste o que la cotizacion entro a negociacion");
         }
-        if ("GANADO".equals(code) && !hasAcceptedSaleQuote(oportunidad)) {
-            throw new BusinessException("CRM_CIERRE_REQUERIDO", "Para marcar como ganado debe existir una cotizacion aceptada para venta o convertida");
+        if ("GANADO".equals(code) && !hasAcceptedSaleQuote(oportunidad) && !hasClienteConformeNegotiation(oportunidad)) {
+            throw new BusinessException("CRM_CIERRE_REQUERIDO", "Para marcar como ganado debe existir una cotizacion aceptada para venta o una negociacion con cliente conforme");
         }
         if ("PERDIDO".equals(code) && !hasText(observacion)) {
             throw new BusinessException("CRM_MOTIVO_PERDIDA_REQUERIDO", "Indica el motivo de perdida antes de cerrar la oportunidad");
@@ -727,7 +844,10 @@ public class CrmUseCaseService {
         return oportunidadActivities(oportunidad).stream().anyMatch(activity ->
                 "REALIZADA".equals(activity.getEstado())
                         && ("INTERESADO".equals(activity.getResultadoContacto())
+                        || "MUY_INTERESADO".equals(activity.getResultadoContacto())
+                        || "SOLICITA_PROPUESTA".equals(activity.getResultadoContacto())
                         || "COTIZACION_SOLICITADA".equals(activity.getResultadoContacto())
+                        || "ALTO".equals(activity.getNivelInteres())
                         || "CALIENTE".equals(activity.getNivelInteres())));
     }
 
@@ -737,7 +857,7 @@ public class CrmUseCaseService {
     }
 
     private boolean hasNegotiationQuote(CrmOportunidad oportunidad) {
-        return oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
+        return hasAnyNegotiation(oportunidad) || oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
                 "NEGOCIACION".equals(quote.getEstado())
                         || ("ACEPTADA".equals(quote.getEstado()) && "NEGOCIACION".equals(quote.getDecisionSiguiente())));
     }
@@ -746,6 +866,54 @@ public class CrmUseCaseService {
         return oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
                 "CONVERTIDA".equals(quote.getEstado())
                         || ("ACEPTADA".equals(quote.getEstado()) && "VENTA".equals(quote.getDecisionSiguiente())));
+    }
+
+    private boolean hasAnyNegotiation(CrmOportunidad oportunidad) {
+        return oportunidad.getId() != null
+                && negociacionRepository.findFirstByOportunidadIdOrderByCreatedAtDescIdDesc(oportunidad.getId()).isPresent();
+    }
+
+    private boolean hasClienteConformeNegotiation(CrmOportunidad oportunidad) {
+        return oportunidad.getId() != null
+                && negociacionRepository.existsByOportunidadIdAndEstadoIn(oportunidad.getId(), Set.of("CLIENTE_CONFORME", "GANADA"));
+    }
+
+    private Cotizacion resolveNegotiationQuote(CrmOportunidad oportunidad, Long cotizacionId) {
+        if (cotizacionId != null) {
+            Cotizacion cotizacion = cotizacionRepository.findById(cotizacionId)
+                    .orElseThrow(() -> new BusinessException("CRM_COTIZACION_NO_ENCONTRADA", "Cotizacion no encontrada para negociar"));
+            if (cotizacion.getCrmOportunidadId() == null || !cotizacion.getCrmOportunidadId().equals(oportunidad.getId())) {
+                throw new BusinessException("CRM_COTIZACION_NO_PERTENECE", "La cotizacion no pertenece a esta oportunidad");
+            }
+            return cotizacion;
+        }
+        return oportunidadQuotes(oportunidad).stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_COTIZACION_NEGOCIACION_REQUERIDA",
+                        "Primero crea o envia una cotizacion para iniciar negociacion"
+                ));
+    }
+
+    private BigDecimal quoteOrOpportunityAmount(Cotizacion cotizacion, CrmOportunidad oportunidad) {
+        if (cotizacion != null && cotizacion.getTotal() != null) {
+            return cotizacion.getTotal();
+        }
+        return moneyOrZero(oportunidad.getMontoEstimado());
+    }
+
+    private String resolveNegotiationState(String requestedState, String resultado) {
+        String requested = optionalEnum(requestedState, ESTADOS_NEGOCIACION, "CRM_ESTADO_NEGOCIACION_INVALIDO");
+        if ("ACEPTA".equals(resultado)) {
+            return "CLIENTE_CONFORME";
+        }
+        if ("RECHAZA".equals(resultado)) {
+            return "RECHAZADA";
+        }
+        if (hasText(requested)) {
+            return requested;
+        }
+        return "PROPUESTA_ENVIADA".equals(resultado) ? "PROPUESTA_ENVIADA" : "AJUSTE_SOLICITADO";
     }
 
     private List<CrmActividad> oportunidadActivities(CrmOportunidad oportunidad) {
@@ -881,7 +1049,7 @@ public class CrmUseCaseService {
 
     private BigDecimal sumAmount(List<CrmOportunidad> oportunidades) {
         return oportunidades.stream()
-                .map(oportunidad -> oportunidad.getMontoReal() != null ? oportunidad.getMontoReal() : oportunidad.getMontoEstimado())
+                .map(oportunidad -> moneyOrZero(oportunidad.getMontoReal() != null ? oportunidad.getMontoReal() : oportunidad.getMontoEstimado()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
     }
@@ -955,7 +1123,7 @@ public class CrmUseCaseService {
     private BigDecimal sumPipeline(List<CrmOportunidad> oportunidades) {
         return oportunidades.stream()
                 .filter(oportunidad -> "ABIERTA".equals(oportunidad.getEstado()))
-                .map(CrmOportunidad::getMontoEstimado)
+                .map(oportunidad -> moneyOrZero(oportunidad.getMontoEstimado()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
     }
@@ -968,12 +1136,16 @@ public class CrmUseCaseService {
                                     && etapa.getId().equals(oportunidad.getEtapaPipeline().getId()))
                             .toList();
                     BigDecimal monto = matches.stream()
-                            .map(CrmOportunidad::getMontoEstimado)
+                            .map(oportunidad -> moneyOrZero(oportunidad.getMontoEstimado()))
                             .reduce(BigDecimal.ZERO, BigDecimal::add)
                             .setScale(2, RoundingMode.HALF_UP);
                     return new CrmEtapaResumenResponse(etapa.getCodigo(), matches.size(), monto);
                 })
                 .toList();
+    }
+
+    private BigDecimal moneyOrZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private CrmProspecto findProspecto(Long id) {
@@ -1088,8 +1260,9 @@ public class CrmUseCaseService {
             return;
         }
         ensureCanWrite(prospecto.getResponsableId());
-        String resolvedEstado = firstNonBlank(estadoProspecto, prospectStatusByResult(resultadoContacto));
-        String resolvedNivel = firstNonBlank(nivelInteres, interestLevelByResult(resultadoContacto), resolveInitialInterestLevel(resolvedEstado));
+        applyQualificationFromResult(prospecto, resultadoContacto, nivelInteres);
+        String resolvedEstado = normalizeOptionalProspectState(firstNonBlank(estadoProspecto, prospectStatusByResult(resultadoContacto)));
+        String resolvedNivel = normalizeProspectInterest(firstNonBlank(nivelInteres, interestLevelByResult(resultadoContacto), resolveInitialInterestLevel(resolvedEstado)));
         if (hasText(resolvedEstado)) {
             prospecto.setEstado(requireEnum(resolvedEstado, ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO"));
             actividad.setEstadoProspectoResultado(prospecto.getEstado());
@@ -1101,33 +1274,190 @@ public class CrmUseCaseService {
         if (hasText(actividad.getResultado())) {
             prospecto.setObservacion(actividad.getResultado());
         }
+        recalculateQualification(prospecto);
         prospectoRepository.save(prospecto);
     }
 
     private String prospectStatusByResult(String resultadoContacto) {
         return switch (resultadoContacto == null ? "" : resultadoContacto) {
-            case "CONTACTADO", "REPROGRAMADO" -> "CONTACTADO";
-            case "INTERESADO", "COTIZACION_SOLICITADA" -> "INTERESADO";
-            case "NO_INTERESADO" -> "NO_INTERESADO";
-            case "DESCARTADO" -> "DESCARTADO";
+            case "CONTACTADO" -> "CONTACTADO";
+            case "INTERESADO", "MUY_INTERESADO", "SOLICITA_PROPUESTA", "COTIZACION_SOLICITADA" -> "CALIFICADO";
+            case "REPROGRAMADO", "LLAMAR_DESPUES", "EN_ESPERA" -> "EN_ESPERA";
+            case "NO_INTERESADO", "PERDIDO", "DESCARTADO" -> "PERDIDO";
             default -> null;
         };
     }
 
     private String interestLevelByResult(String resultadoContacto) {
         return switch (resultadoContacto == null ? "" : resultadoContacto) {
-            case "INTERESADO", "COTIZACION_SOLICITADA" -> "CALIENTE";
-            case "CONTACTADO", "REPROGRAMADO" -> "MEDIO";
-            case "SIN_RESPUESTA", "NO_INTERESADO", "DESCARTADO" -> "FRIO";
+            case "MUY_INTERESADO", "SOLICITA_PROPUESTA", "COTIZACION_SOLICITADA" -> "CALIENTE";
+            case "INTERESADO" -> "TIBIO";
+            case "CONTACTADO", "REPROGRAMADO", "LLAMAR_DESPUES", "EN_ESPERA" -> "TIBIO";
+            case "SIN_RESPUESTA", "NO_RESPONDE", "NO_INTERESADO", "PERDIDO", "DESCARTADO" -> "FRIO";
             default -> null;
         };
     }
 
     private String resolveInitialInterestLevel(String estado) {
         return switch (firstNonBlank(estado, "NUEVO")) {
-            case "INTERESADO" -> "CALIENTE";
-            case "CONTACTADO" -> "MEDIO";
+            case "CALIFICADO", "INTERESADO" -> "CALIENTE";
+            case "CONTACTADO", "EN_ESPERA" -> "TIBIO";
             default -> "FRIO";
+        };
+    }
+
+    private void validateProspectReadyForOpportunity(CrmProspecto prospecto) {
+        ensureCanWrite(prospecto.getResponsableId());
+        recalculateQualification(prospecto);
+        if (!isQualifiedForOpportunity(prospecto)) {
+            throw new BusinessException(
+                    "PROSPECTO_NO_CALIFICADO",
+                    "El prospecto debe tener necesidad identificada e interes medio o alto para crear una oportunidad"
+            );
+        }
+        if ("PERDIDO".equals(prospecto.getEstado()) || "DESCARTADO".equals(prospecto.getEstado()) || "NO_INTERESADO".equals(prospecto.getEstado())) {
+            throw new BusinessException("PROSPECTO_PERDIDO", "No se puede crear oportunidad desde un prospecto perdido");
+        }
+        if ("CONVERTIDO".equals(prospecto.getEstado()) || prospecto.getOportunidadId() != null) {
+            throw new BusinessException("PROSPECTO_YA_TIENE_OPORTUNIDAD", "Este prospecto ya fue convertido a oportunidad");
+        }
+    }
+
+    private void applyQualificationFields(
+            CrmProspecto prospecto,
+            Boolean necesidadIdentificada,
+            String interesReal,
+            String presupuestoDefinido,
+            String tomadorDecision,
+            String fechaEstimadaCompra
+    ) {
+        if (necesidadIdentificada != null) {
+            prospecto.setNecesidadIdentificada(necesidadIdentificada);
+        }
+        updateIfPresent(interesReal, value -> prospecto.setInteresReal(requireEnum(value, INTERESES_REALES, "INTERES_REAL_CRM_INVALIDO")));
+        updateIfPresent(presupuestoDefinido, value -> prospecto.setPresupuestoDefinido(requireEnum(value, PRESUPUESTOS_DEFINIDOS, "PRESUPUESTO_CRM_INVALIDO")));
+        updateIfPresent(tomadorDecision, value -> prospecto.setTomadorDecision(requireEnum(value, TOMADORES_DECISION, "DECISOR_CRM_INVALIDO")));
+        updateIfPresent(fechaEstimadaCompra, value -> prospecto.setFechaEstimadaCompra(requireEnum(value, FECHAS_ESTIMADAS_COMPRA, "FECHA_COMPRA_CRM_INVALIDA")));
+    }
+
+    private void applyQualificationFromResult(CrmProspecto prospecto, String resultadoContacto, String nivelInteres) {
+        String resultado = normalizeOptional(resultadoContacto);
+        if (resultado == null) {
+            // Sin resultado explicito: se conserva el estado actual del prospecto.
+        } else if ("CONTACTADO".equals(resultado)) {
+            prospecto.setEstado("CONTACTADO");
+        } else if ("INTERESADO".equals(resultado)) {
+            prospecto.setNecesidadIdentificada(true);
+            prospecto.setInteresReal("MEDIO");
+        } else if (Set.of("MUY_INTERESADO", "SOLICITA_PROPUESTA", "COTIZACION_SOLICITADA").contains(resultado)) {
+            prospecto.setNecesidadIdentificada(true);
+            prospecto.setInteresReal("ALTO");
+        } else if (Set.of("REPROGRAMADO", "LLAMAR_DESPUES", "EN_ESPERA").contains(resultado)) {
+            prospecto.setEstado("EN_ESPERA");
+        } else if (Set.of("NO_INTERESADO", "PERDIDO", "DESCARTADO").contains(resultado)) {
+            prospecto.setEstado("PERDIDO");
+            prospecto.setInteresReal("BAJO");
+            prospecto.setMotivoPerdida(firstNonBlank(prospecto.getMotivoPerdida(), lossReasonByResult(resultado)));
+        }
+
+        String normalizedInterest = normalizeOptional(nivelInteres);
+        if (normalizedInterest == null) {
+            return;
+        }
+        if (Set.of("ALTO", "CALIENTE").contains(normalizedInterest)) {
+            prospecto.setInteresReal("ALTO");
+        } else if (Set.of("MEDIO", "TIBIO").contains(normalizedInterest)) {
+            prospecto.setInteresReal("MEDIO");
+        } else if (Set.of("BAJO", "FRIO").contains(normalizedInterest)) {
+            prospecto.setInteresReal("BAJO");
+        }
+    }
+
+    private void recalculateQualification(CrmProspecto prospecto) {
+        int score = 0;
+        if (prospecto.isNecesidadIdentificada()) {
+            score += 30;
+        }
+        score += switch (firstNonBlank(prospecto.getInteresReal(), "BAJO")) {
+            case "ALTO" -> 30;
+            case "MEDIO" -> 20;
+            default -> 0;
+        };
+        score += "SI".equals(prospecto.getPresupuestoDefinido()) ? 20 : 0;
+        score += switch (firstNonBlank(prospecto.getTomadorDecision(), "DESCONOCIDO")) {
+            case "SI" -> 10;
+            case "DEBE_CONSULTAR" -> 5;
+            default -> 0;
+        };
+        score += switch (firstNonBlank(prospecto.getFechaEstimadaCompra(), "DESCONOCIDO")) {
+            case "INMEDIATO" -> 10;
+            case "TREINTA_DIAS" -> 8;
+            case "TRES_MESES" -> 5;
+            case "MAS_ADELANTE" -> 2;
+            default -> 0;
+        };
+        prospecto.setScoreCalificacion(Math.min(100, score));
+        prospecto.setTemperatura(temperatureForScore(prospecto.getScoreCalificacion()));
+        prospecto.setNivelInteres(prospecto.getTemperatura());
+        if (isQualifiedForOpportunity(prospecto) && !isTerminalProspectState(prospecto.getEstado()) && !"EN_ESPERA".equals(prospecto.getEstado())) {
+            prospecto.setEstado("CALIFICADO");
+        }
+    }
+
+    private boolean isQualifiedForOpportunity(CrmProspecto prospecto) {
+        return prospecto.isNecesidadIdentificada() && Set.of("MEDIO", "ALTO").contains(firstNonBlank(prospecto.getInteresReal(), "BAJO"));
+    }
+
+    private boolean isTerminalProspectState(String estado) {
+        return Set.of("CONVERTIDO", "PERDIDO", "NO_INTERESADO", "DESCARTADO").contains(firstNonBlank(estado, ""));
+    }
+
+    private String temperatureForScore(Integer score) {
+        int resolved = score == null ? 0 : score;
+        if (resolved >= 70) {
+            return "CALIENTE";
+        }
+        if (resolved >= 40) {
+            return "TIBIO";
+        }
+        return "FRIO";
+    }
+
+    private String normalizeOptionalProspectState(String estado) {
+        return estado == null ? null : normalizeProspectState(estado);
+    }
+
+    private String normalizeProspectState(String estado) {
+        String normalized = normalize(estado);
+        return switch (normalized) {
+            case "NO_INTERESADO", "DESCARTADO" -> "PERDIDO";
+            case "INTERESADO" -> "CALIFICADO";
+            default -> normalized;
+        };
+    }
+
+    private String normalizeProspectInterest(String value) {
+        String normalized = normalizeOptional(value);
+        if (normalized == null) {
+            return null;
+        }
+        return switch (normalized) {
+            case "ALTO" -> "CALIENTE";
+            case "BAJO" -> "FRIO";
+            case "MEDIO" -> "TIBIO";
+            default -> normalized;
+        };
+    }
+
+    private String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String lossReasonByResult(String resultado) {
+        return switch (resultado) {
+            case "NO_INTERESADO" -> "Sin interes";
+            case "DESCARTADO" -> "Descartado";
+            default -> "Perdido";
         };
     }
 

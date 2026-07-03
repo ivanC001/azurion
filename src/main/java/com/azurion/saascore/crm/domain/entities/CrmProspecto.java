@@ -85,6 +85,42 @@ public class CrmProspecto extends BaseEntity {
     @Column(name = "nivel_interes", length = 20)
     private String nivelInteres = "FRIO";
 
+    @Column(name = "necesidad_identificada", nullable = false)
+    private boolean necesidadIdentificada = false;
+
+    @Column(name = "interes_real", nullable = false, length = 20)
+    private String interesReal = "BAJO";
+
+    @Column(name = "presupuesto_definido", nullable = false, length = 20)
+    private String presupuestoDefinido = "DESCONOCIDO";
+
+    @Column(name = "tomador_decision", nullable = false, length = 20)
+    private String tomadorDecision = "DESCONOCIDO";
+
+    @Column(name = "fecha_estimada_compra", nullable = false, length = 30)
+    private String fechaEstimadaCompra = "DESCONOCIDO";
+
+    @Column(name = "score_calificacion", nullable = false)
+    private Integer scoreCalificacion = 0;
+
+    @Column(name = "temperatura", nullable = false, length = 20)
+    private String temperatura = "FRIO";
+
+    @Column(name = "motivo_espera", length = 120)
+    private String motivoEspera;
+
+    @Column(name = "fecha_proximo_contacto")
+    private OffsetDateTime fechaProximoContacto;
+
+    @Column(name = "motivo_perdida", length = 120)
+    private String motivoPerdida;
+
+    @Column(name = "observacion_perdida", length = 1000)
+    private String observacionPerdida;
+
+    @Column(name = "oportunidad_id")
+    private Long oportunidadId;
+
     @Column(name = "responsable_id", nullable = false, length = 80)
     private String responsableId;
 
