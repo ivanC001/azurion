@@ -27,7 +27,7 @@ public class CrmCotizacionIntegrationService {
             move(oportunidadId, "COTIZADO", "Cotizacion enviada a seguimiento", null);
         } else if ("ACEPTADA".equals(estado)) {
             if ("VENTA".equals(decisionSiguiente)) {
-                move(oportunidadId, "GANADO", "Cotizacion aceptada para venta", monto);
+                move(oportunidadId, "NEGOCIACION", "Cliente acepto condiciones de cotizacion. Pendiente confirmar cierre", monto);
             } else {
                 move(oportunidadId, "NEGOCIACION", "Cotizacion aceptada para negociacion", monto);
             }

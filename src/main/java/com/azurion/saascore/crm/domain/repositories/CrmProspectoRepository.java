@@ -10,6 +10,8 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
 
     List<CrmProspecto> findByResponsableIdOrderByIdDesc(String responsableId);
 
+    List<CrmProspecto> findByResponsableIdInOrderByIdDesc(List<String> responsableIds);
+
     long countByEstado(String estado);
 
     long countByResponsableIdAndEstado(String responsableId, String estado);

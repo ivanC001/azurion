@@ -15,6 +15,9 @@ public interface CrmActividadRepository extends JpaRepository<CrmActividad, Long
     List<CrmActividad> findByUsuarioIdOrderByFechaProgramadaAscIdDesc(String usuarioId);
 
     @EntityGraph(attributePaths = {"prospecto", "oportunidad", "cliente"})
+    List<CrmActividad> findByUsuarioIdInOrderByFechaProgramadaAscIdDesc(List<String> usuarioIds);
+
+    @EntityGraph(attributePaths = {"prospecto", "oportunidad", "cliente"})
     List<CrmActividad> findByOportunidadIdOrderByFechaProgramadaAscIdDesc(Long oportunidadId);
 
     long countByEstado(String estado);

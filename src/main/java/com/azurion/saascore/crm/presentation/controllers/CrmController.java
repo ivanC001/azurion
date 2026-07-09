@@ -9,6 +9,7 @@ import com.azurion.saascore.crm.application.dto.CreateCrmNegociacionRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
+import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
@@ -22,6 +23,9 @@ import com.azurion.saascore.crm.application.dto.CrmReportesResponse;
 import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.MarcarPerdidaRequest;
 import com.azurion.saascore.crm.application.dto.RealizarCrmActividadRequest;
+import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
+import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
+import com.azurion.saascore.crm.application.dto.UpdateCrmCanalTokenConfigRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmEtapaPipelineRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmCatalogoItemRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
@@ -51,6 +55,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrmController {
 
     private final CrmUseCaseService crmUseCaseService;
+
+    @GetMapping("/integraciones")
+    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_CONFIG_MANAGE')")
+    public ApiResponse<List<CrmCanalTokenConfigResponse>> listIntegraciones() {
+        return ApiResponse.ok(crmUseCaseService.listCanalTokenConfig(), "Integraciones CRM");
+    }
+
+    @PutMapping("/integraciones")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<CrmCanalTokenConfigResponse> saveIntegracion(@Valid @RequestBody UpdateCrmCanalTokenConfigRequest request) {
+        return ApiResponse.ok(crmUseCaseService.saveCanalTokenConfig(request), "Integracion CRM guardada");
+    }
 
     @GetMapping("/catalogo")
     @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_CATALOG_MANAGE')")
@@ -119,6 +135,12 @@ public class CrmController {
     public ApiResponse<CrmProspectoResponse> updateProspecto(@PathVariable Long id,
                                                              @Valid @RequestBody UpdateCrmProspectoRequest request) {
         return ApiResponse.ok(crmUseCaseService.updateProspecto(id, request), "Prospecto CRM actualizado");
+    }
+
+    @PostMapping("/prospectos/repartir")
+    @PreAuthorize("hasAnyAuthority('CRM_ASSIGN','CRM_VIEW_ALL','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN','ROLE_ADMIN_EMPRESA','ROLE_ADMIN')")
+    public ApiResponse<RepartirCrmProspectosResponse> repartirProspectos(@Valid @RequestBody RepartirCrmProspectosRequest request) {
+        return ApiResponse.ok(crmUseCaseService.repartirProspectos(request), "Prospectos CRM repartidos");
     }
 
     @PostMapping("/prospectos/{id}/convertir-cliente")

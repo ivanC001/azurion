@@ -3,6 +3,7 @@ package com.azurion.saascore.crm.application.usecases;
 import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.clientes.application.dto.ClienteResponse;
 import com.azurion.saascore.clientes.application.dto.CreateClienteRequest;
+import com.azurion.saascore.clientes.application.mappers.ClienteMapper;
 import com.azurion.saascore.clientes.application.usecases.CreateClienteUseCase;
 import com.azurion.saascore.clientes.domain.entities.Cliente;
 import com.azurion.saascore.clientes.domain.repositories.ClienteRepository;
@@ -18,6 +19,7 @@ import com.azurion.saascore.crm.application.dto.CreateCrmNegociacionRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
+import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
@@ -34,13 +36,17 @@ import com.azurion.saascore.crm.application.dto.MarcarPerdidaRequest;
 import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
 import com.azurion.saascore.crm.application.dto.PublicCrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.RealizarCrmActividadRequest;
+import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
+import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
 import com.azurion.saascore.crm.application.dto.UpdateCrmEtapaPipelineRequest;
+import com.azurion.saascore.crm.application.dto.UpdateCrmCanalTokenConfigRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmCatalogoItemRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
+import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmNegociacion;
@@ -48,6 +54,7 @@ import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidadHistorial;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
@@ -77,6 +84,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CrmUseCaseService {
 
+    private static final String PUBLIC_LEAD_OWNER = "crm-public";
     private static final Set<String> TIPOS_PERSONA = Set.of("NATURAL", "JURIDICA");
     private static final Set<String> ORIGENES = Set.of("WHATSAPP", "FACEBOOK", "INSTAGRAM", "WEB", "REFERIDO", "LLAMADA", "VISITA", "OTRO");
     private static final Set<String> ESTADOS_PROSPECTO = Set.of(
@@ -121,6 +129,41 @@ public class CrmUseCaseService {
     private final CreateCotizacionUseCase createCotizacionUseCase;
     private final CotizacionRepository cotizacionRepository;
     private final AuthorizationService authorizationService;
+    private final CrmCanalTokenConfigRepository canalTokenConfigRepository;
+
+    @Transactional(readOnly = true)
+    public List<CrmCanalTokenConfigResponse> listCanalTokenConfig() {
+        Map<String, CrmCanalTokenConfig> existing = new LinkedHashMap<>();
+        for (CrmCanalTokenConfig item : canalTokenConfigRepository.findAllByOrderByCanalAsc()) {
+            existing.put(item.getCanal(), item);
+        }
+        return List.of("WEB", "WHATSAPP", "INSTAGRAM", "FACEBOOK").stream()
+                .map((canal) -> toCanalTokenConfigResponse(existing.getOrDefault(canal, defaultCanalConfig(canal))))
+                .toList();
+    }
+
+    @Transactional
+    public CrmCanalTokenConfigResponse saveCanalTokenConfig(UpdateCrmCanalTokenConfigRequest request) {
+        String canal = requireEnum(request.canal(), Set.of("WEB", "WHATSAPP", "INSTAGRAM", "FACEBOOK"), "CRM_CANAL_INVALIDO");
+        CrmCanalTokenConfig config = canalTokenConfigRepository.findByCanal(canal)
+                .orElseGet(() -> {
+                    CrmCanalTokenConfig item = new CrmCanalTokenConfig();
+                    item.setCanal(canal);
+                    item.setNombre(defaultCanalName(canal));
+                    return item;
+                });
+        updateIfPresent(request.nombre(), value -> config.setNombre(trim(value)));
+        updateIfPresent(request.accessToken(), value -> config.setAccessToken(trim(value)));
+        updateIfPresent(request.verifyToken(), value -> config.setVerifyToken(trim(value)));
+        updateIfPresent(request.webhookUrl(), value -> config.setWebhookUrl(trim(value)));
+        updateIfPresent(request.appId(), value -> config.setAppId(trim(value)));
+        updateIfPresent(request.phoneNumberId(), value -> config.setPhoneNumberId(trim(value)));
+        updateIfPresent(request.metadataJson(), value -> config.setMetadataJson(trim(value)));
+        if (request.activo() != null) {
+            config.setActivo(request.activo());
+        }
+        return toCanalTokenConfigResponse(canalTokenConfigRepository.save(config));
+    }
 
     @Transactional
     public CrmProspectoResponse createProspecto(CreateCrmProspectoRequest request) {
@@ -184,7 +227,7 @@ public class CrmUseCaseService {
         prospecto.setTelefono(trim(request.telefono()));
         prospecto.setCorreo(trim(request.correo()));
         prospecto.setDireccion(trim(request.direccion()));
-        prospecto.setOrigen(defaultEnum(request.origen(), "WEB", ORIGENES, "ORIGEN_CRM_INVALIDO"));
+        prospecto.setOrigen("WEB");
         prospecto.setCanalIngreso(defaultEnum(request.canalIngreso(), "LANDING", CANALES_INGRESO, "CANAL_CRM_INVALIDO"));
         prospecto.setCampania(trim(request.campania()));
         prospecto.setLandingUrl(trim(request.landingUrl()));
@@ -193,15 +236,17 @@ public class CrmUseCaseService {
         prospecto.setInteresPrincipal(trim(catalogoItem.getNombre()));
         prospecto.setInteresDetalle(trim(firstNonBlank(catalogoItem.getDescripcion(), request.interesDetalle())));
         prospecto.setPresupuestoEstimado(catalogoItem.getPrecioReferencial() == null ? null : money(nonNegative(catalogoItem.getPrecioReferencial())));
-        prospecto.setFechaInteres(request.fechaInteres());
+        prospecto.setFechaInteres(request.fechaInteres() == null ? java.time.LocalDate.now() : request.fechaInteres());
         prospecto.setCatalogoItemId(catalogoItem.getId());
         prospecto.setMetadataJson(publicLeadMetadata(request, catalogoItem));
         prospecto.setEstado("NUEVO");
         prospecto.setNivelInteres("FRIO");
         recalculateQualification(prospecto);
-        prospecto.setResponsableId("crm-public");
+        prospecto.setResponsableId(PUBLIC_LEAD_OWNER);
         prospecto.setObservacion(trim(request.mensaje()));
-        return CrmMapper.toProspectoResponse(prospectoRepository.save(prospecto));
+        CrmProspecto saved = prospectoRepository.save(prospecto);
+        createInitialPublicLeadActivity(saved, catalogoItem, request);
+        return CrmMapper.toProspectoResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -323,7 +368,7 @@ public class CrmUseCaseService {
     public List<CrmProspectoResponse> listProspectos() {
         return CrmMapper.toProspectoResponses(canViewAll()
                 ? prospectoRepository.findAllByOrderByIdDesc()
-                : prospectoRepository.findByResponsableIdOrderByIdDesc(currentUserKey()));
+                : prospectoRepository.findByResponsableIdInOrderByIdDesc(List.of(currentUserKey(), PUBLIC_LEAD_OWNER)));
     }
 
     @Transactional(readOnly = true)
@@ -389,10 +434,69 @@ public class CrmUseCaseService {
     }
 
     @Transactional
+    public RepartirCrmProspectosResponse repartirProspectos(RepartirCrmProspectosRequest request) {
+        if (!hasAuthority("CRM_ASSIGN") && !canViewAll()) {
+            throw new BusinessException("CRM_ASIGNACION_NO_PERMITIDA", "No puedes repartir prospectos entre vendedores");
+        }
+        List<String> responsableIds = request.responsableIds().stream()
+                .map(this::trim)
+                .filter(this::hasText)
+                .distinct()
+                .toList();
+        if (responsableIds.isEmpty()) {
+            throw new BusinessException("CRM_VENDEDORES_REQUERIDOS", "Selecciona vendedores para repartir los prospectos");
+        }
+        List<Long> prospectoIds = request.prospectoIds().stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (prospectoIds.isEmpty()) {
+            throw new BusinessException("CRM_PROSPECTOS_REQUERIDOS", "Selecciona prospectos para repartir");
+        }
+
+        Map<Long, Integer> order = new LinkedHashMap<>();
+        for (int i = 0; i < prospectoIds.size(); i++) {
+            order.put(prospectoIds.get(i), i);
+        }
+        boolean soloNuevos = request.soloNuevos() == null || request.soloNuevos();
+        List<CrmProspecto> candidates = prospectoRepository.findAllById(prospectoIds).stream()
+                .filter(prospecto -> !soloNuevos || "NUEVO".equals(prospecto.getEstado()))
+                .filter(prospecto -> prospecto.getClienteId() == null && prospecto.getOportunidadId() == null)
+                .sorted(Comparator.comparingInt(prospecto -> order.getOrDefault(prospecto.getId(), Integer.MAX_VALUE)))
+                .toList();
+        if (candidates.isEmpty()) {
+            return new RepartirCrmProspectosResponse(0, Map.of(), List.of());
+        }
+
+        Map<String, Long> cargas = new LinkedHashMap<>();
+        for (String responsableId : responsableIds) {
+            cargas.put(responsableId, prospectoRepository.countByResponsableIdAndEstado(responsableId, "NUEVO"));
+        }
+        Map<String, Long> asignados = new LinkedHashMap<>();
+        for (CrmProspecto prospecto : candidates) {
+            String responsableId = cargas.entrySet().stream()
+                    .min(Map.Entry.<String, Long>comparingByValue()
+                            .thenComparing(entry -> responsableIds.indexOf(entry.getKey())))
+                    .map(Map.Entry::getKey)
+                    .orElse(responsableIds.get(0));
+            prospecto.setResponsableId(responsableId);
+            cargas.put(responsableId, cargas.getOrDefault(responsableId, 0L) + 1);
+            asignados.merge(responsableId, 1L, Long::sum);
+        }
+
+        List<CrmProspecto> saved = prospectoRepository.saveAll(candidates);
+        return new RepartirCrmProspectosResponse(
+                saved.size(),
+                asignados,
+                CrmMapper.toProspectoResponses(saved)
+        );
+    }
+
+    @Transactional
     public ClienteResponse convertirProspectoCliente(Long id) {
         CrmProspecto prospecto = findProspecto(id);
         ensureCanWrite(prospecto.getResponsableId());
-        if (prospecto.getClienteId() != null || "CONVERTIDO".equals(prospecto.getEstado())) {
+        if (prospecto.getClienteId() != null) {
             throw new BusinessException("PROSPECTO_YA_CONVERTIDO", "El prospecto ya fue convertido a cliente");
         }
         String tipoDocumento = required(prospecto.getTipoDocumento(), "El prospecto necesita tipo de documento para convertirse en cliente");
@@ -400,6 +504,15 @@ public class CrmUseCaseService {
         String nombre = "JURIDICA".equals(prospecto.getTipoPersona())
                 ? firstNonBlank(prospecto.getRazonSocial(), prospecto.getNombreComercial(), prospecto.getNombre())
                 : prospecto.getNombre();
+
+        Cliente existing = clienteRepository.findByTipoDocumentoAndNumeroDocumento(tipoDocumento, numeroDocumento).orElse(null);
+        if (existing != null) {
+            prospecto.setClienteId(existing.getId());
+            prospecto.setEstado("CONVERTIDO");
+            prospecto.setFechaConversion(OffsetDateTime.now());
+            prospectoRepository.save(prospecto);
+            return ClienteMapper.toResponse(existing);
+        }
 
         ClienteResponse cliente = createClienteUseCase.execute(new CreateClienteRequest(
                 tipoDocumento,
@@ -435,7 +548,7 @@ public class CrmUseCaseService {
         oportunidad.setDescripcion(trim(request.descripcion()));
         oportunidad.setMontoEstimado(money(nonNegative(request.montoEstimado())));
         oportunidad.setProbabilidad(clampProbability(request.probabilidad()));
-        applyStage(oportunidad, resolveStageByCode(firstNonBlank(request.etapa(), "NUEVO")), "Creacion de oportunidad", false);
+        applyStage(oportunidad, resolveStageByCode(firstNonBlank(request.etapa(), "INTERESADO")), "Creacion de oportunidad", false);
         oportunidad.setFechaCierreEstimada(request.fechaCierreEstimada());
         oportunidad.setResponsableId(responsableId);
         oportunidad.setEstado("ABIERTA");
@@ -539,7 +652,7 @@ public class CrmUseCaseService {
     public CrmOportunidadResponse marcarGanada(Long id) {
         CrmOportunidad oportunidad = findOportunidad(id);
         ensureCanWrite(oportunidad.getResponsableId());
-        moveStageWithValidation(oportunidad, resolveStageByCode("GANADO"), "Oportunidad ganada");
+        moveStageWithValidation(oportunidad, resolveStageByCode("GANADO"), "Confirmacion de cierre registrada");
         oportunidad.setProbabilidad(100);
         oportunidad.setMotivoPerdida(null);
         oportunidad.setMontoReal(oportunidad.getMontoEstimado());
@@ -578,7 +691,7 @@ public class CrmUseCaseService {
                 oportunidad.getId(),
                 request.detalles()
         ));
-        appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Cotizacion creada desde CRM");
+        appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Cotizacion creada desde CRM. Pendiente de envio al cliente");
         return cotizacion;
     }
 
@@ -630,9 +743,13 @@ public class CrmUseCaseService {
         CrmNegociacion saved = negociacionRepository.save(negociacion);
 
         if ("CLIENTE_CONFORME".equals(estado) || "GANADA".equals(estado)) {
-            applyStage(oportunidad, resolveStageByCode("GANADO"), "Cliente conforme en negociacion", true);
-            oportunidad.setMontoReal(precioFinal);
-            oportunidadRepository.save(oportunidad);
+            String observacion = "Acuerdo final registrado en negociacion: " + saved.getSolicitudCliente();
+            if (shouldAdvance(oportunidad, "NEGOCIACION")) {
+                applyStage(oportunidad, resolveStageByCode("NEGOCIACION"), observacion, true);
+                oportunidadRepository.save(oportunidad);
+            } else {
+                appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), observacion);
+            }
         } else if (shouldAdvance(oportunidad, "NEGOCIACION")) {
             applyStage(oportunidad, resolveStageByCode("NEGOCIACION"), "Negociacion registrada: " + saved.getSolicitudCliente(), true);
             oportunidadRepository.save(oportunidad);
@@ -660,7 +777,7 @@ public class CrmUseCaseService {
     public List<CrmActividadResponse> listActividades() {
         return CrmMapper.toActividadResponses(canViewAll()
                 ? actividadRepository.findAllByOrderByFechaProgramadaAscIdDesc()
-                : actividadRepository.findByUsuarioIdOrderByFechaProgramadaAscIdDesc(currentUserKey()));
+                : actividadRepository.findByUsuarioIdInOrderByFechaProgramadaAscIdDesc(List.of(currentUserKey(), PUBLIC_LEAD_OWNER)));
     }
 
     @Transactional(readOnly = true)
@@ -828,8 +945,8 @@ public class CrmUseCaseService {
         if ("NEGOCIACION".equals(code) && !hasNegotiationQuote(oportunidad)) {
             throw new BusinessException("CRM_NEGOCIACION_REQUERIDA", "Para pasar a negociacion registra que el cliente pidio ajuste o que la cotizacion entro a negociacion");
         }
-        if ("GANADO".equals(code) && !hasAcceptedSaleQuote(oportunidad) && !hasClienteConformeNegotiation(oportunidad)) {
-            throw new BusinessException("CRM_CIERRE_REQUERIDO", "Para marcar como ganado debe existir una cotizacion aceptada para venta o una negociacion con cliente conforme");
+        if ("GANADO".equals(code) && !hasClienteConformeNegotiation(oportunidad)) {
+            throw new BusinessException("CRM_ACUERDO_FINAL_REQUERIDO", "Para marcar como ganado registra primero el acuerdo final de la negociacion");
         }
         if ("PERDIDO".equals(code) && !hasText(observacion)) {
             throw new BusinessException("CRM_MOTIVO_PERDIDA_REQUERIDO", "Indica el motivo de perdida antes de cerrar la oportunidad");
@@ -859,7 +976,7 @@ public class CrmUseCaseService {
     private boolean hasNegotiationQuote(CrmOportunidad oportunidad) {
         return hasAnyNegotiation(oportunidad) || oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
                 "NEGOCIACION".equals(quote.getEstado())
-                        || ("ACEPTADA".equals(quote.getEstado()) && "NEGOCIACION".equals(quote.getDecisionSiguiente())));
+                        || "ACEPTADA".equals(quote.getEstado()));
     }
 
     private boolean hasAcceptedSaleQuote(CrmOportunidad oportunidad) {
@@ -944,8 +1061,7 @@ public class CrmUseCaseService {
             return;
         }
         String targetStage = switch (resultadoContacto == null ? "" : resultadoContacto) {
-            case "CONTACTADO", "REPROGRAMADO" -> "CONTACTADO";
-            case "INTERESADO", "COTIZACION_SOLICITADA" -> "INTERESADO";
+            case "INTERESADO", "MUY_INTERESADO", "SOLICITA_PROPUESTA", "COTIZACION_SOLICITADA" -> "INTERESADO";
             default -> null;
         };
         if (targetStage == null || !shouldAdvance(oportunidad, targetStage)) {
@@ -964,7 +1080,7 @@ public class CrmUseCaseService {
 
     private int stageOrder(String stageCode) {
         List<CrmEtapaPipeline> stages = activeStages();
-        String normalized = normalizeCode(firstNonBlank(stageCode, "NUEVO"));
+        String normalized = normalizeCode(firstNonBlank(stageCode, "INTERESADO"));
         for (int i = 0; i < stages.size(); i++) {
             if (normalized.equals(stages.get(i).getCodigo())) {
                 return i;
@@ -1199,12 +1315,18 @@ public class CrmUseCaseService {
     }
 
     private void ensureCanRead(String owner) {
+        if (PUBLIC_LEAD_OWNER.equals(owner) && canReadPublicLeadQueue()) {
+            return;
+        }
         if (!canViewAll() && !currentUserKey().equals(owner)) {
             throw new BusinessException("CRM_SIN_ACCESO", "No tienes acceso a este registro CRM");
         }
     }
 
     private void ensureCanWrite(String owner) {
+        if (PUBLIC_LEAD_OWNER.equals(owner) && canWritePublicLeadQueue()) {
+            return;
+        }
         ensureCanRead(owner);
     }
 
@@ -1220,6 +1342,20 @@ public class CrmUseCaseService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(granted -> authority.equals(granted.getAuthority()));
+    }
+
+    private boolean canReadPublicLeadQueue() {
+        return canViewAll()
+                || hasAuthority("CRM_READ")
+                || hasAuthority("CRM_LEADS_READ")
+                || hasAuthority("CRM_ACTIVITIES_READ");
+    }
+
+    private boolean canWritePublicLeadQueue() {
+        return canViewAll()
+                || hasAuthority("CRM_WRITE")
+                || hasAuthority("CRM_LEADS_WRITE")
+                || hasAuthority("CRM_ACTIVITIES_WRITE");
     }
 
     private String currentUserKey() {
@@ -1548,6 +1684,58 @@ public class CrmUseCaseService {
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("(^-|-$)", "");
         return normalized.isBlank() ? "oferta-crm" : normalized.substring(0, Math.min(140, normalized.length()));
+    }
+
+    private void createInitialPublicLeadActivity(CrmProspecto prospecto,
+                                                 CrmCatalogoItem catalogoItem,
+                                                 PublicCrmLeadRequest request) {
+        CrmActividad actividad = new CrmActividad();
+        actividad.setProspecto(prospecto);
+        actividad.setTipoActividad("LLAMADA");
+        actividad.setAsunto("Contactar lead web: " + prospecto.getNombre());
+        actividad.setDescripcion(trim(firstNonBlank(
+                request.mensaje(),
+                "Lead captado desde landing para " + catalogoItem.getNombre()
+        )));
+        actividad.setFechaProgramada(OffsetDateTime.now().plusMinutes(15));
+        actividad.setEstado("PENDIENTE");
+        actividad.setUsuarioId(PUBLIC_LEAD_OWNER);
+        actividad.setEstadoProspectoResultado("NUEVO");
+        actividad.setNivelInteres("FRIO");
+        actividadRepository.save(actividad);
+    }
+
+    private CrmCanalTokenConfig defaultCanalConfig(String canal) {
+        CrmCanalTokenConfig config = new CrmCanalTokenConfig();
+        config.setCanal(canal);
+        config.setNombre(defaultCanalName(canal));
+        config.setActivo(false);
+        return config;
+    }
+
+    private String defaultCanalName(String canal) {
+        return switch (canal) {
+            case "WEB" -> "Landing web";
+            case "WHATSAPP" -> "WhatsApp Business";
+            case "INSTAGRAM" -> "Instagram";
+            case "FACEBOOK" -> "Facebook Lead Ads";
+            default -> canal;
+        };
+    }
+
+    private CrmCanalTokenConfigResponse toCanalTokenConfigResponse(CrmCanalTokenConfig config) {
+        return new CrmCanalTokenConfigResponse(
+                config.getId(),
+                config.getCanal(),
+                config.getNombre(),
+                config.getAccessToken(),
+                config.getVerifyToken(),
+                config.getWebhookUrl(),
+                config.getAppId(),
+                config.getPhoneNumberId(),
+                config.isActivo(),
+                config.getMetadataJson()
+        );
     }
 
     private String publicLeadMetadata(PublicCrmLeadRequest request, CrmCatalogoItem catalogoItem) {

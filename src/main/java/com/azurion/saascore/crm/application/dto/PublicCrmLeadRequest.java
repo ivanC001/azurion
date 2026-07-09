@@ -1,5 +1,6 @@
 package com.azurion.saascore.crm.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -7,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record PublicCrmLeadRequest(
+        @JsonAlias({"Ruc_tenant", "rucTenant", "tenantId"}) String rucTenant,
         String tipoPersona,
         String tipoDocumento,
         String numeroDocumento,
