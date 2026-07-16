@@ -21,6 +21,7 @@ import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
 import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
+import com.azurion.saascore.crm.application.dto.CrmCurrencyConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaResumenResponse;
@@ -28,6 +29,7 @@ import com.azurion.saascore.crm.application.dto.CrmNegociacionResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadHistorialResponse;
 import com.azurion.saascore.crm.application.dto.CrmPipelineColumnResponse;
+import com.azurion.saascore.crm.application.dto.CrmProspectoInteresResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoResponse;
 import com.azurion.saascore.crm.application.dto.CrmReporteBucketResponse;
 import com.azurion.saascore.crm.application.dto.CrmReportesResponse;
@@ -41,40 +43,60 @@ import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
 import com.azurion.saascore.crm.application.dto.UpdateCrmEtapaPipelineRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmCanalTokenConfigRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmCatalogoItemRequest;
+import com.azurion.saascore.crm.application.dto.UpdateCrmCurrencyConfigRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
+import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
+import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
+import com.azurion.saascore.crm.domain.entities.CrmCurrencyConfig;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmNegociacion;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidadHistorial;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
+import com.azurion.saascore.crm.domain.entities.CrmProspectoInteres;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmCurrencyConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
+import com.azurion.shared.api.PageResponse;
 import com.azurion.shared.exception.BusinessException;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -91,6 +113,7 @@ public class CrmUseCaseService {
             "NUEVO", "CONTACTADO", "EN_ESPERA", "INTERESADO", "CALIFICADO", "PERDIDO", "CONVERTIDO", "NO_INTERESADO", "DESCARTADO"
     );
     private static final Set<String> ESTADOS_OPORTUNIDAD = Set.of("ABIERTA", "GANADA", "PERDIDA");
+    private static final Set<String> ETAPAS_PIPELINE_ACTIVO = Set.of("INTERESADO", "COTIZADO", "NEGOCIACION");
     private static final Set<String> TIPOS_COMERCIALES = Set.of(
             "PRODUCTO", "SERVICIO", "VEHICULO", "INMUEBLE", "PROYECTO", "CURSO",
             "SEGURO", "SOFTWARE", "MARKETING", "CLINICA", "JURIDICO", "TURISMO",
@@ -130,6 +153,46 @@ public class CrmUseCaseService {
     private final CotizacionRepository cotizacionRepository;
     private final AuthorizationService authorizationService;
     private final CrmCanalTokenConfigRepository canalTokenConfigRepository;
+    private final CrmCurrencyConfigRepository currencyConfigRepository;
+    private final LandingLeadValidationService landingLeadValidationService;
+    private final CrmProspectoInteresRepository prospectoInteresRepository;
+
+    @Transactional(readOnly = true)
+    public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
+        Map<String, CrmCurrencyConfig> existing = new LinkedHashMap<>();
+        for (CrmCurrencyConfig item : currencyConfigRepository.findAllByOrderByMonedaAsc()) {
+            existing.put(item.getMoneda(), item);
+        }
+        return List.of("USD", "EUR").stream()
+                .map((moneda) -> toCurrencyConfigResponse(existing.getOrDefault(moneda, defaultCurrencyConfig(moneda))))
+                .toList();
+    }
+
+    @Transactional
+    public CrmCurrencyConfigResponse saveCurrencyConfig(UpdateCrmCurrencyConfigRequest request) {
+        String moneda = requireEnum(request.moneda(), Set.of("USD", "EUR"), "CRM_MONEDA_INVALIDA");
+        CrmCurrencyConfig config = currencyConfigRepository.findByMoneda(moneda)
+                .orElseGet(() -> defaultCurrencyConfig(moneda));
+        config.setMoneda(moneda);
+        updateIfPresent(request.nombre(), (value) -> config.setNombre(required(value, "El nombre de la moneda es obligatorio")));
+        updateIfPresent(request.simbolo(), (value) -> config.setSimbolo(required(value, "El simbolo de la moneda es obligatorio")));
+        if (request.tipoCambioBase() != null) {
+            if (request.tipoCambioBase().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("CRM_TIPO_CAMBIO_INVALIDO", "El tipo de cambio debe ser mayor a cero");
+            }
+            config.setTipoCambioBase(request.tipoCambioBase().setScale(6, RoundingMode.HALF_UP));
+        }
+        if (request.margenConversionPorcentaje() != null) {
+            if (request.margenConversionPorcentaje().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("CRM_MARGEN_CONVERSION_INVALIDO", "El margen de conversion no puede ser negativo");
+            }
+            config.setMargenConversionPorcentaje(request.margenConversionPorcentaje().setScale(4, RoundingMode.HALF_UP));
+        }
+        if (request.activo() != null) {
+            config.setActivo(request.activo());
+        }
+        return toCurrencyConfigResponse(currencyConfigRepository.save(config));
+    }
 
     @Transactional(readOnly = true)
     public List<CrmCanalTokenConfigResponse> listCanalTokenConfig() {
@@ -213,11 +276,10 @@ public class CrmUseCaseService {
 
     @Transactional
     public CrmProspectoResponse capturePublicLead(PublicCrmLeadRequest request) {
-        CrmCatalogoItem catalogoItem = findPublicCatalogoItem(request.catalogoItemId(), request.catalogoToken());
-        if (hasText(request.website())) {
-            throw new BusinessException("CRM_LEAD_PUBLICO_RECHAZADO", "El lead no pudo ser validado");
-        }
-        CrmProspecto prospecto = new CrmProspecto();
+        LandingLeadContext leadContext = landingLeadValidationService.validate(request);
+        CrmCatalogoItem catalogoItem = leadContext.catalogoItem();
+        CrmProspecto prospecto = findDuplicatePublicLead(request).orElseGet(CrmProspecto::new);
+        boolean isNew = prospecto.getId() == null;
         prospecto.setTipoPersona(defaultEnum(request.tipoPersona(), "NATURAL", TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
         prospecto.setTipoDocumento(trim(request.tipoDocumento()));
         prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
@@ -228,24 +290,38 @@ public class CrmUseCaseService {
         prospecto.setCorreo(trim(request.correo()));
         prospecto.setDireccion(trim(request.direccion()));
         prospecto.setOrigen("WEB");
-        prospecto.setCanalIngreso(defaultEnum(request.canalIngreso(), "LANDING", CANALES_INGRESO, "CANAL_CRM_INVALIDO"));
-        prospecto.setCampania(trim(request.campania()));
+        prospecto.setCanalIngreso(defaultEnum(leadContext.canalIngreso(), "LANDING", CANALES_INGRESO, "CANAL_CRM_INVALIDO"));
+        prospecto.setCampania(trim(leadContext.campania()));
         prospecto.setLandingUrl(trim(request.landingUrl()));
+        prospecto.setLandingKey(trim(request.landingKey()));
         prospecto.setMensaje(trim(request.mensaje()));
-        prospecto.setTipoInteres(resolveTipoComercial(catalogoItem.getTipoItem()));
-        prospecto.setInteresPrincipal(trim(catalogoItem.getNombre()));
-        prospecto.setInteresDetalle(trim(firstNonBlank(catalogoItem.getDescripcion(), request.interesDetalle())));
-        prospecto.setPresupuestoEstimado(catalogoItem.getPrecioReferencial() == null ? null : money(nonNegative(catalogoItem.getPrecioReferencial())));
+        boolean preserveExistingCatalog = !isNew && catalogoItem == null && prospecto.getCatalogoItemId() != null;
+        if (!preserveExistingCatalog) {
+            prospecto.setTipoInteres(catalogoItem == null ? "PRODUCTO" : resolveTipoComercial(catalogoItem.getTipoItem()));
+            prospecto.setInteresPrincipal(trim(catalogoItem == null
+                    ? firstNonBlank(request.interesPrincipal(), request.mensaje(), "Interes general")
+                    : catalogoItem.getNombre()));
+            prospecto.setInteresDetalle(trim(catalogoItem == null
+                    ? firstNonBlank(request.interesDetalle(), request.mensaje())
+                    : firstNonBlank(catalogoItem.getDescripcion(), request.interesDetalle())));
+            prospecto.setPresupuestoEstimado(catalogoItem == null || catalogoItem.getPrecioReferencial() == null ? null : money(nonNegative(catalogoItem.getPrecioReferencial())));
+            prospecto.setCatalogoItemId(catalogoItem == null ? null : catalogoItem.getId());
+            prospecto.setProductoPendiente(leadContext.productoPendiente());
+            prospecto.setMetadataJson(publicLeadMetadata(request, catalogoItem, leadContext));
+        }
         prospecto.setFechaInteres(request.fechaInteres() == null ? java.time.LocalDate.now() : request.fechaInteres());
-        prospecto.setCatalogoItemId(catalogoItem.getId());
-        prospecto.setMetadataJson(publicLeadMetadata(request, catalogoItem));
-        prospecto.setEstado("NUEVO");
+        if (isNew || prospecto.getEstado() == null) {
+            prospecto.setEstado("NUEVO");
+        }
         prospecto.setNivelInteres("FRIO");
         recalculateQualification(prospecto);
-        prospecto.setResponsableId(PUBLIC_LEAD_OWNER);
+        prospecto.setResponsableId(firstNonBlank(leadContext.responsableId(), prospecto.getResponsableId(), PUBLIC_LEAD_OWNER));
         prospecto.setObservacion(trim(request.mensaje()));
         CrmProspecto saved = prospectoRepository.save(prospecto);
-        createInitialPublicLeadActivity(saved, catalogoItem, request);
+        boolean nuevoInteres = upsertPublicLeadInterest(saved, catalogoItem, request, leadContext);
+        if (leadContext.crearActividadInicial() && (isNew || nuevoInteres)) {
+            createInitialPublicLeadActivity(saved, catalogoItem, request);
+        }
         return CrmMapper.toProspectoResponse(saved);
     }
 
@@ -372,10 +448,51 @@ public class CrmUseCaseService {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<CrmProspectoResponse> pageProspectos(String query,
+                                                             String estado,
+                                                             String origen,
+                                                             String canalIngreso,
+                                                             String campania,
+                                                             String responsableId,
+                                                             LocalDate fechaDesde,
+                                                             LocalDate fechaHasta,
+                                                             int page,
+                                                             int size) {
+        boolean viewAll = canViewAll();
+        List<String> scope = viewAll ? List.of(PUBLIC_LEAD_OWNER) : List.of(currentUserKey(), PUBLIC_LEAD_OWNER);
+        Page<CrmProspecto> result = prospectoRepository.findAll(
+                prospectoPageSpec(
+                        viewAll,
+                        scope,
+                        normalizeSearch(query),
+                        normalizeFilter(estado),
+                        normalizeFilter(origen),
+                        normalizeFilter(canalIngreso),
+                        normalizeSearch(campania),
+                        normalizeFilter(responsableId),
+                        fechaDesde,
+                        fechaHasta
+                ),
+                safePageable(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")))
+        );
+        return PageResponse.from(result, CrmMapper.toProspectoResponses(result.getContent()));
+    }
+
+    @Transactional(readOnly = true)
     public CrmProspectoResponse getProspecto(Long id) {
         CrmProspecto prospecto = findProspecto(id);
         ensureCanRead(prospecto.getResponsableId());
         return CrmMapper.toProspectoResponse(prospecto);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CrmProspectoInteresResponse> listProspectoIntereses(Long id) {
+        CrmProspecto prospecto = findProspecto(id);
+        ensureCanRead(prospecto.getResponsableId());
+        return prospectoInteresRepository.findByProspectoIdOrderByUltimoEnvioEnDescIdDesc(id)
+                .stream()
+                .map(this::toProspectoInteresResponse)
+                .toList();
     }
 
     @Transactional
@@ -499,38 +616,7 @@ public class CrmUseCaseService {
         if (prospecto.getClienteId() != null) {
             throw new BusinessException("PROSPECTO_YA_CONVERTIDO", "El prospecto ya fue convertido a cliente");
         }
-        String tipoDocumento = required(prospecto.getTipoDocumento(), "El prospecto necesita tipo de documento para convertirse en cliente");
-        String numeroDocumento = required(prospecto.getNumeroDocumento(), "El prospecto necesita numero de documento para convertirse en cliente");
-        String nombre = "JURIDICA".equals(prospecto.getTipoPersona())
-                ? firstNonBlank(prospecto.getRazonSocial(), prospecto.getNombreComercial(), prospecto.getNombre())
-                : prospecto.getNombre();
-
-        Cliente existing = clienteRepository.findByTipoDocumentoAndNumeroDocumento(tipoDocumento, numeroDocumento).orElse(null);
-        if (existing != null) {
-            prospecto.setClienteId(existing.getId());
-            prospecto.setEstado("CONVERTIDO");
-            prospecto.setFechaConversion(OffsetDateTime.now());
-            prospectoRepository.save(prospecto);
-            return ClienteMapper.toResponse(existing);
-        }
-
-        ClienteResponse cliente = createClienteUseCase.execute(new CreateClienteRequest(
-                tipoDocumento,
-                numeroDocumento,
-                nombre,
-                prospecto.getCorreo(),
-                prospecto.getDireccion(),
-                null,
-                prospecto.getTelefono(),
-                BigDecimal.ZERO,
-                0,
-                true
-        ));
-        prospecto.setClienteId(cliente.id());
-        prospecto.setEstado("CONVERTIDO");
-        prospecto.setFechaConversion(OffsetDateTime.now());
-        prospectoRepository.save(prospecto);
-        return cliente;
+        return ClienteMapper.toResponse(createOrLinkClienteFromProspecto(prospecto));
     }
 
     @Transactional
@@ -572,9 +658,34 @@ public class CrmUseCaseService {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<CrmOportunidadResponse> pageOportunidades(String query,
+                                                                  Long etapaId,
+                                                                  String etapa,
+                                                                  String estado,
+                                                                  String responsableId,
+                                                                  LocalDate cierreDesde,
+                                                                  LocalDate cierreHasta,
+                                                                  int page,
+                                                                  int size) {
+        return pageOportunidades(query, etapaId, etapa, estado, responsableId, cierreDesde, cierreHasta, false, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CrmOportunidadResponse> pageSeguimientoPagos(String query,
+                                                                     String responsableId,
+                                                                     LocalDate cierreDesde,
+                                                                     LocalDate cierreHasta,
+                                                                     int page,
+                                                                     int size) {
+        return pageOportunidades(query, null, null, "GANADA", responsableId, cierreDesde, cierreHasta, true, page, size);
+    }
+
+    @Transactional(readOnly = true)
     public List<CrmPipelineColumnResponse> pipeline() {
-        List<CrmOportunidad> oportunidades = scopedOportunidades();
-        return activeStages().stream()
+        List<CrmOportunidad> oportunidades = scopedOportunidades().stream()
+                .filter(oportunidad -> "ABIERTA".equals(oportunidad.getEstado()))
+                .toList();
+        return activePipelineStages().stream()
                 .map(etapa -> {
                     List<CrmOportunidad> matches = oportunidades.stream()
                             .filter(oportunidad -> oportunidad.getEtapaPipeline() != null
@@ -652,7 +763,12 @@ public class CrmUseCaseService {
     public CrmOportunidadResponse marcarGanada(Long id) {
         CrmOportunidad oportunidad = findOportunidad(id);
         ensureCanWrite(oportunidad.getResponsableId());
+        if ("GANADA".equals(oportunidad.getEstado())) {
+            return CrmMapper.toOportunidadResponse(oportunidad);
+        }
+        ensureOpenOpportunity(oportunidad);
         moveStageWithValidation(oportunidad, resolveStageByCode("GANADO"), "Confirmacion de cierre registrada");
+        linkClienteOnWonOpportunity(oportunidad);
         oportunidad.setProbabilidad(100);
         oportunidad.setMotivoPerdida(null);
         oportunidad.setMontoReal(oportunidad.getMontoEstimado());
@@ -663,6 +779,10 @@ public class CrmUseCaseService {
     public CrmOportunidadResponse marcarPerdida(Long id, MarcarPerdidaRequest request) {
         CrmOportunidad oportunidad = findOportunidad(id);
         ensureCanWrite(oportunidad.getResponsableId());
+        if ("PERDIDA".equals(oportunidad.getEstado())) {
+            return CrmMapper.toOportunidadResponse(oportunidad);
+        }
+        ensureOpenOpportunity(oportunidad);
         String motivo = required(request.motivo(), "Indica el motivo de perdida");
         moveStageWithValidation(oportunidad, resolveStageByCode("PERDIDO"), motivo);
         oportunidad.setProbabilidad(0);
@@ -778,6 +898,37 @@ public class CrmUseCaseService {
         return CrmMapper.toActividadResponses(canViewAll()
                 ? actividadRepository.findAllByOrderByFechaProgramadaAscIdDesc()
                 : actividadRepository.findByUsuarioIdInOrderByFechaProgramadaAscIdDesc(List.of(currentUserKey(), PUBLIC_LEAD_OWNER)));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CrmActividadResponse> pageActividades(String query,
+                                                              String estado,
+                                                              String tipoActividad,
+                                                              String usuarioId,
+                                                              Long prospectoId,
+                                                              Long oportunidadId,
+                                                              OffsetDateTime fechaDesde,
+                                                              OffsetDateTime fechaHasta,
+                                                              int page,
+                                                              int size) {
+        boolean viewAll = canViewAll();
+        List<String> scope = viewAll ? List.of(PUBLIC_LEAD_OWNER) : List.of(currentUserKey(), PUBLIC_LEAD_OWNER);
+        Page<CrmActividad> result = actividadRepository.findAll(
+                actividadPageSpec(
+                        viewAll,
+                        scope,
+                        normalizeSearch(query),
+                        normalizeFilter(estado),
+                        normalizeFilter(tipoActividad),
+                        normalizeFilter(usuarioId),
+                        prospectoId,
+                        oportunidadId,
+                        fechaDesde,
+                        fechaHasta
+                ),
+                safePageable(page, size, Sort.by(Sort.Order.asc("fechaProgramada"), Sort.Order.desc("id")))
+        );
+        return PageResponse.from(result, CrmMapper.toActividadResponses(result.getContent()));
     }
 
     @Transactional(readOnly = true)
@@ -933,6 +1084,12 @@ public class CrmUseCaseService {
 
     private void validateStageTransition(CrmOportunidad oportunidad, CrmEtapaPipeline destino, String observacion) {
         String code = destino.getCodigo();
+        if ("GANADO".equals(code) && !"NEGOCIACION".equals(oportunidad.getEtapa())) {
+            throw new BusinessException(
+                    "CRM_NEGOCIACION_CIERRE_REQUERIDA",
+                    "La oportunidad debe estar en negociacion antes de marcarse como ganada"
+            );
+        }
         if ("CONTACTADO".equals(code) && !hasCompletedContactActivity(oportunidad)) {
             throw new BusinessException("CRM_CONTACTO_REQUERIDO", "Para pasar a contactado registra primero una llamada, WhatsApp, correo, reunion o visita realizada");
         }
@@ -1031,6 +1188,68 @@ public class CrmUseCaseService {
             return requested;
         }
         return "PROPUESTA_ENVIADA".equals(resultado) ? "PROPUESTA_ENVIADA" : "AJUSTE_SOLICITADO";
+    }
+
+    private void linkClienteOnWonOpportunity(CrmOportunidad oportunidad) {
+        if (oportunidad.getCliente() != null) {
+            return;
+        }
+        CrmProspecto prospecto = oportunidad.getProspecto();
+        if (prospecto == null) {
+            return;
+        }
+        Cliente cliente = createOrLinkClienteFromProspecto(prospecto);
+        oportunidad.setCliente(cliente);
+        appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Cliente vinculado al cierre de venta");
+    }
+
+    private Cliente createOrLinkClienteFromProspecto(CrmProspecto prospecto) {
+        if (prospecto.getClienteId() != null) {
+            return findCliente(prospecto.getClienteId());
+        }
+        String tipoDocumento = normalizeClienteTipoDocumento(required(prospecto.getTipoDocumento(), "El prospecto necesita tipo de documento para convertirse en cliente"));
+        String numeroDocumento = required(prospecto.getNumeroDocumento(), "El prospecto necesita numero de documento para convertirse en cliente");
+        String nombre = "JURIDICA".equals(prospecto.getTipoPersona())
+                ? firstNonBlank(prospecto.getRazonSocial(), prospecto.getNombreComercial(), prospecto.getNombre())
+                : prospecto.getNombre();
+
+        Cliente existing = clienteRepository.findByTipoDocumentoAndNumeroDocumento(tipoDocumento, numeroDocumento).orElse(null);
+        if (existing != null) {
+            linkProspectoCliente(prospecto, existing);
+            return existing;
+        }
+
+        ClienteResponse created = createClienteUseCase.execute(new CreateClienteRequest(
+                tipoDocumento,
+                numeroDocumento,
+                nombre,
+                prospecto.getCorreo(),
+                prospecto.getDireccion(),
+                null,
+                prospecto.getTelefono(),
+                BigDecimal.ZERO,
+                0,
+                true
+        ));
+        Cliente cliente = findCliente(created.id());
+        linkProspectoCliente(prospecto, cliente);
+        return cliente;
+    }
+
+    private void linkProspectoCliente(CrmProspecto prospecto, Cliente cliente) {
+        prospecto.setClienteId(cliente.getId());
+        prospecto.setEstado("CONVERTIDO");
+        prospecto.setFechaConversion(OffsetDateTime.now());
+        prospectoRepository.save(prospecto);
+    }
+
+    private String normalizeClienteTipoDocumento(String value) {
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "1", "DNI" -> "1";
+            case "6", "RUC" -> "6";
+            default -> throw new BusinessException("TIPO_DOCUMENTO_CLIENTE_INVALIDO", "El tipo de documento del prospecto debe ser DNI/RUC o 1/6 para crear el cliente");
+        };
     }
 
     private List<CrmActividad> oportunidadActivities(CrmOportunidad oportunidad) {
@@ -1137,6 +1356,21 @@ public class CrmUseCaseService {
         return etapaPipelineRepository.findByActivoTrueOrderByOrdenAscIdAsc();
     }
 
+    private List<CrmEtapaPipeline> activePipelineStages() {
+        return activeStages().stream()
+                .filter(etapa -> ETAPAS_PIPELINE_ACTIVO.contains(etapa.getCodigo()))
+                .toList();
+    }
+
+    private void ensureOpenOpportunity(CrmOportunidad oportunidad) {
+        if (!"ABIERTA".equals(oportunidad.getEstado())) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_CERRADA",
+                    "La oportunidad ya fue cerrada y no puede cambiar de resultado"
+            );
+        }
+    }
+
     private CrmEtapaPipeline resolveStageByCode(String codigo) {
         return etapaPipelineRepository.findByCodigo(normalizeCode(codigo))
                 .filter(CrmEtapaPipeline::isActivo)
@@ -1236,6 +1470,244 @@ public class CrmUseCaseService {
                 : oportunidadRepository.findByResponsableIdOrderByIdDesc(currentUserKey());
     }
 
+    private PageResponse<CrmOportunidadResponse> pageOportunidades(String query,
+                                                                  Long etapaId,
+                                                                  String etapa,
+                                                                  String estado,
+                                                                  String responsableId,
+                                                                  LocalDate cierreDesde,
+                                                                  LocalDate cierreHasta,
+                                                                  boolean soloPagosPendientes,
+                                                                  int page,
+                                                                  int size) {
+        boolean viewAll = canViewAll();
+        List<String> scope = viewAll ? List.of(PUBLIC_LEAD_OWNER) : List.of(currentUserKey());
+        Page<CrmOportunidad> result = oportunidadRepository.findAll(
+                oportunidadPageSpec(
+                        viewAll,
+                        scope,
+                        normalizeSearch(query),
+                        etapaId,
+                        normalizeFilter(etapa),
+                        normalizeFilter(estado),
+                        normalizeFilter(responsableId),
+                        cierreDesde,
+                        cierreHasta,
+                        soloPagosPendientes
+                ),
+                safePageable(page, size, Sort.by(Sort.Order.desc("fechaUltimaActualizacion"), Sort.Order.desc("id")))
+        );
+        return PageResponse.from(result, CrmMapper.toOportunidadResponses(result.getContent()));
+    }
+
+    private Specification<CrmProspecto> prospectoPageSpec(boolean viewAll,
+                                                          List<String> scope,
+                                                          String query,
+                                                          String estado,
+                                                          String origen,
+                                                          String canalIngreso,
+                                                          String campania,
+                                                          String responsableId,
+                                                          LocalDate fechaDesde,
+                                                          LocalDate fechaHasta) {
+        return (root, criteriaQuery, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (!viewAll) {
+                predicates.add(root.get("responsableId").in(scope));
+            }
+            if (hasText(query)) {
+                String pattern = likePattern(query);
+                predicates.add(cb.or(
+                        likeText(cb, root.get("nombre"), pattern),
+                        likeText(cb, root.get("razonSocial"), pattern),
+                        likeText(cb, root.get("nombreComercial"), pattern),
+                        likeText(cb, root.get("telefono"), pattern),
+                        likeText(cb, root.get("correo"), pattern),
+                        likeText(cb, root.get("numeroDocumento"), pattern),
+                        likeText(cb, root.get("interesPrincipal"), pattern),
+                        likeText(cb, root.get("campania"), pattern)
+                ));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+            if (origen != null) {
+                predicates.add(cb.equal(root.get("origen"), origen));
+            }
+            if (canalIngreso != null) {
+                predicates.add(cb.equal(root.get("canalIngreso"), canalIngreso));
+            }
+            if (campania != null) {
+                predicates.add(cb.equal(cb.lower(cb.coalesce(root.get("campania"), "")), campania));
+            }
+            if (responsableId != null) {
+                predicates.add(cb.equal(root.get("responsableId"), responsableId));
+            }
+            if (fechaDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaInteres"), fechaDesde));
+            }
+            if (fechaHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fechaInteres"), fechaHasta));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private Specification<CrmActividad> actividadPageSpec(boolean viewAll,
+                                                          List<String> scope,
+                                                          String query,
+                                                          String estado,
+                                                          String tipoActividad,
+                                                          String usuarioId,
+                                                          Long prospectoId,
+                                                          Long oportunidadId,
+                                                          OffsetDateTime fechaDesde,
+                                                          OffsetDateTime fechaHasta) {
+        return (root, criteriaQuery, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (!viewAll) {
+                predicates.add(root.get("usuarioId").in(scope));
+            }
+            if (hasText(query)) {
+                String pattern = likePattern(query);
+                var prospecto = root.join("prospecto", JoinType.LEFT);
+                var oportunidad = root.join("oportunidad", JoinType.LEFT);
+                var cliente = root.join("cliente", JoinType.LEFT);
+                predicates.add(cb.or(
+                        likeText(cb, root.get("asunto"), pattern),
+                        likeText(cb, root.get("descripcion"), pattern),
+                        likeText(cb, prospecto.get("nombre"), pattern),
+                        likeText(cb, prospecto.get("telefono"), pattern),
+                        likeText(cb, prospecto.get("correo"), pattern),
+                        likeText(cb, oportunidad.get("titulo"), pattern),
+                        likeText(cb, cliente.get("nombre"), pattern),
+                        likeText(cb, cliente.get("email"), pattern),
+                        likeText(cb, cliente.get("telefono"), pattern),
+                        likeText(cb, cliente.get("numeroDocumento"), pattern)
+                ));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+            if (tipoActividad != null) {
+                predicates.add(cb.equal(root.get("tipoActividad"), tipoActividad));
+            }
+            if (usuarioId != null) {
+                predicates.add(cb.equal(root.get("usuarioId"), usuarioId));
+            }
+            if (prospectoId != null) {
+                predicates.add(cb.equal(root.join("prospecto", JoinType.LEFT).get("id"), prospectoId));
+            }
+            if (oportunidadId != null) {
+                predicates.add(cb.equal(root.join("oportunidad", JoinType.LEFT).get("id"), oportunidadId));
+            }
+            if (fechaDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaProgramada"), fechaDesde));
+            }
+            if (fechaHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fechaProgramada"), fechaHasta));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private Specification<CrmOportunidad> oportunidadPageSpec(boolean viewAll,
+                                                              List<String> scope,
+                                                              String query,
+                                                              Long etapaId,
+                                                              String etapa,
+                                                              String estado,
+                                                              String responsableId,
+                                                              LocalDate cierreDesde,
+                                                              LocalDate cierreHasta,
+                                                              boolean soloPagosPendientes) {
+        return (root, criteriaQuery, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (!viewAll) {
+                predicates.add(root.get("responsableId").in(scope));
+            }
+            if (hasText(query)) {
+                String pattern = likePattern(query);
+                var prospecto = root.join("prospecto", JoinType.LEFT);
+                var cliente = root.join("cliente", JoinType.LEFT);
+                predicates.add(cb.or(
+                        likeText(cb, root.get("titulo"), pattern),
+                        likeText(cb, root.get("descripcion"), pattern),
+                        likeText(cb, prospecto.get("nombre"), pattern),
+                        likeText(cb, prospecto.get("telefono"), pattern),
+                        likeText(cb, prospecto.get("correo"), pattern),
+                        likeText(cb, cliente.get("nombre"), pattern),
+                        likeText(cb, cliente.get("email"), pattern),
+                        likeText(cb, cliente.get("telefono"), pattern),
+                        likeText(cb, cliente.get("numeroDocumento"), pattern)
+                ));
+            }
+            if (etapaId != null) {
+                predicates.add(cb.equal(root.join("etapaPipeline", JoinType.LEFT).get("id"), etapaId));
+            }
+            if (etapa != null) {
+                predicates.add(cb.equal(root.get("etapa"), etapa));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+            if (responsableId != null) {
+                predicates.add(cb.equal(root.get("responsableId"), responsableId));
+            }
+            if (cierreDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaCierreEstimada"), cierreDesde));
+            }
+            if (cierreHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fechaCierreEstimada"), cierreHasta));
+            }
+            if (soloPagosPendientes) {
+                predicates.add(cb.and(
+                        cb.equal(root.get("estado"), "GANADA"),
+                        cb.or(
+                                cb.isNull(root.get("montoReal")),
+                                cb.lessThan(root.get("montoReal"), root.get("montoEstimado"))
+                        )
+                ));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private String likePattern(String query) {
+        return "%" + query.toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private Predicate likeText(CriteriaBuilder cb, Expression<String> value, String pattern) {
+        return cb.like(cb.lower(cb.coalesce(value, "")), pattern);
+    }
+
+    private Pageable safePageable(int page, int size, Sort sort) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        return PageRequest.of(safePage, safeSize, sort);
+    }
+
+    private String normalizeSearch(String value) {
+        String normalized = trim(value);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeSearchLike(String value) {
+        String normalized = normalizeSearch(value);
+        return normalized == null ? "" : normalized;
+    }
+
+    private String normalizeFilter(String value) {
+        String normalized = trim(value);
+        if (normalized == null
+                || "TODOS".equalsIgnoreCase(normalized)
+                || "ALL".equalsIgnoreCase(normalized)
+                || "NULL".equalsIgnoreCase(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
     private BigDecimal sumPipeline(List<CrmOportunidad> oportunidades) {
         return oportunidades.stream()
                 .filter(oportunidad -> "ABIERTA".equals(oportunidad.getEstado()))
@@ -1299,6 +1771,88 @@ public class CrmUseCaseService {
             throw new BusinessException("CRM_CATALOGO_PUBLICO_INACTIVO", "La oferta CRM no esta disponible para captar leads");
         }
         return item;
+    }
+
+    private Optional<CrmProspecto> findDuplicatePublicLead(PublicCrmLeadRequest request) {
+        String telefono = trim(request.telefono());
+        if (telefono != null) {
+            Optional<CrmProspecto> byPhone = prospectoRepository.findFirstByTelefonoOrderByIdDesc(telefono);
+            if (byPhone.isPresent()) {
+                return byPhone;
+            }
+        }
+        String correo = trim(request.correo());
+        if (correo != null) {
+            return prospectoRepository.findFirstByCorreoIgnoreCaseOrderByIdDesc(correo);
+        }
+        return Optional.empty();
+    }
+
+    private boolean upsertPublicLeadInterest(CrmProspecto prospecto,
+                                             CrmCatalogoItem catalogoItem,
+                                             PublicCrmLeadRequest request,
+                                             LandingLeadContext leadContext) {
+        String landingKey = trim(request.landingKey());
+        String campania = trim(leadContext.campania());
+        Long catalogoItemId = catalogoItem == null ? null : catalogoItem.getId();
+        boolean productoPendiente = leadContext.productoPendiente();
+
+        Optional<CrmProspectoInteres> existing = prospectoInteresRepository
+                .findMatchingPublicLeadInterest(prospecto.getId(), landingKey, campania, catalogoItemId, productoPendiente)
+                .stream()
+                .findFirst();
+
+        CrmProspectoInteres interes = existing.orElseGet(CrmProspectoInteres::new);
+        boolean nuevoInteres = existing.isEmpty();
+        if (nuevoInteres) {
+            interes.setProspecto(prospecto);
+            interes.setContadorEnvios(0);
+        }
+        interes.setLandingKey(landingKey);
+        interes.setCampania(campania);
+        interes.setCanalIngreso(defaultEnum(leadContext.canalIngreso(), "LANDING", CANALES_INGRESO, "CANAL_CRM_INVALIDO"));
+        interes.setCatalogoItemId(catalogoItemId);
+        interes.setProductoPendiente(productoPendiente);
+        interes.setTipoInteres(catalogoItem == null ? "PRODUCTO" : resolveTipoComercial(catalogoItem.getTipoItem()));
+        interes.setInteresPrincipal(trim(catalogoItem == null
+                ? firstNonBlank(request.interesPrincipal(), request.mensaje(), "Interes general")
+                : catalogoItem.getNombre()));
+        interes.setInteresDetalle(trim(catalogoItem == null
+                ? firstNonBlank(request.interesDetalle(), request.mensaje())
+                : firstNonBlank(catalogoItem.getDescripcion(), request.interesDetalle())));
+        interes.setMensaje(trim(request.mensaje()));
+        interes.setPresupuestoEstimado(catalogoItem == null || catalogoItem.getPrecioReferencial() == null ? null : money(nonNegative(catalogoItem.getPrecioReferencial())));
+        interes.setFechaInteres(request.fechaInteres() == null ? java.time.LocalDate.now() : request.fechaInteres());
+        interes.setLandingUrl(trim(request.landingUrl()));
+        interes.setMetadataJson(publicLeadMetadata(request, catalogoItem, leadContext));
+        interes.setUltimoEnvioEn(OffsetDateTime.now());
+        interes.setContadorEnvios((interes.getContadorEnvios() == null ? 0 : interes.getContadorEnvios()) + 1);
+        prospectoInteresRepository.save(interes);
+        return nuevoInteres;
+    }
+
+    private CrmProspectoInteresResponse toProspectoInteresResponse(CrmProspectoInteres interes) {
+        return new CrmProspectoInteresResponse(
+                interes.getId(),
+                interes.getProspecto() == null ? null : interes.getProspecto().getId(),
+                interes.getLandingKey(),
+                interes.getCampania(),
+                interes.getCanalIngreso(),
+                interes.getCatalogoItemId(),
+                interes.isProductoPendiente(),
+                interes.getTipoInteres(),
+                interes.getInteresPrincipal(),
+                interes.getInteresDetalle(),
+                interes.getMensaje(),
+                interes.getPresupuestoEstimado(),
+                interes.getFechaInteres(),
+                interes.getLandingUrl(),
+                interes.getMetadataJson(),
+                interes.getContadorEnvios(),
+                interes.getUltimoEnvioEn(),
+                interes.getCreatedAt(),
+                interes.getUpdatedAt()
+        );
     }
 
     private String resolveResponsable(String requested) {
@@ -1695,7 +2249,7 @@ public class CrmUseCaseService {
         actividad.setAsunto("Contactar lead web: " + prospecto.getNombre());
         actividad.setDescripcion(trim(firstNonBlank(
                 request.mensaje(),
-                "Lead captado desde landing para " + catalogoItem.getNombre()
+                catalogoItem == null ? "Lead captado desde landing con producto pendiente de definir" : "Lead captado desde landing para " + catalogoItem.getNombre()
         )));
         actividad.setFechaProgramada(OffsetDateTime.now().plusMinutes(15));
         actividad.setEstado("PENDIENTE");
@@ -1713,6 +2267,23 @@ public class CrmUseCaseService {
         return config;
     }
 
+    private CrmCurrencyConfig defaultCurrencyConfig(String moneda) {
+        CrmCurrencyConfig config = new CrmCurrencyConfig();
+        config.setMoneda(moneda);
+        if ("EUR".equals(moneda)) {
+            config.setNombre("Euro");
+            config.setSimbolo("€");
+            config.setTipoCambioBase(new BigDecimal("4.100000"));
+        } else {
+            config.setNombre("Dolar americano");
+            config.setSimbolo("$");
+            config.setTipoCambioBase(new BigDecimal("3.800000"));
+        }
+        config.setMargenConversionPorcentaje(BigDecimal.ZERO);
+        config.setActivo(true);
+        return config;
+    }
+
     private String defaultCanalName(String canal) {
         return switch (canal) {
             case "WEB" -> "Landing web";
@@ -1721,6 +2292,24 @@ public class CrmUseCaseService {
             case "FACEBOOK" -> "Facebook Lead Ads";
             default -> canal;
         };
+    }
+
+    private CrmCurrencyConfigResponse toCurrencyConfigResponse(CrmCurrencyConfig config) {
+        BigDecimal base = config.getTipoCambioBase() == null ? BigDecimal.ONE : config.getTipoCambioBase();
+        BigDecimal margin = config.getMargenConversionPorcentaje() == null ? BigDecimal.ZERO : config.getMargenConversionPorcentaje();
+        BigDecimal saleRate = base
+                .multiply(BigDecimal.ONE.add(margin.divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP)))
+                .setScale(6, RoundingMode.HALF_UP);
+        return new CrmCurrencyConfigResponse(
+                config.getId(),
+                config.getMoneda(),
+                config.getNombre(),
+                config.getSimbolo(),
+                base.setScale(6, RoundingMode.HALF_UP),
+                margin.setScale(4, RoundingMode.HALF_UP),
+                saleRate,
+                config.isActivo()
+        );
     }
 
     private CrmCanalTokenConfigResponse toCanalTokenConfigResponse(CrmCanalTokenConfig config) {
@@ -1738,18 +2327,22 @@ public class CrmUseCaseService {
         );
     }
 
-    private String publicLeadMetadata(PublicCrmLeadRequest request, CrmCatalogoItem catalogoItem) {
+    private String publicLeadMetadata(PublicCrmLeadRequest request, CrmCatalogoItem catalogoItem, LandingLeadContext leadContext) {
         return """
-                {"source":"public-crm-lead","catalogoItemId":%d,"catalogoTokenValidado":true,"tipoItem":"%s","oferta":"%s","precioReferencial":"%s","landingUrl":"%s","campania":"%s","payloadCliente":"%s","catalogoMetadata":"%s"}
+                {"source":"public-crm-lead","landingKey":"%s","modoProducto":"%s","productoPendiente":%s,"catalogoItemId":%s,"catalogoTokenValidado":%s,"tipoItem":"%s","oferta":"%s","precioReferencial":"%s","landingUrl":"%s","campania":"%s","payloadCliente":"%s","catalogoMetadata":"%s"}
                 """.formatted(
-                catalogoItem.getId(),
-                json(catalogoItem.getTipoItem()),
-                json(catalogoItem.getNombre()),
-                catalogoItem.getPrecioReferencial() == null ? "0.00" : catalogoItem.getPrecioReferencial().toPlainString(),
+                json(request.landingKey()),
+                leadContext.landingConfig() == null || leadContext.landingConfig().getModoProducto() == null ? "CATALOGO_TOKEN" : leadContext.landingConfig().getModoProducto().name(),
+                leadContext.productoPendiente(),
+                catalogoItem == null ? "null" : catalogoItem.getId().toString(),
+                catalogoItem != null,
+                catalogoItem == null ? "" : json(catalogoItem.getTipoItem()),
+                catalogoItem == null ? "" : json(catalogoItem.getNombre()),
+                catalogoItem == null || catalogoItem.getPrecioReferencial() == null ? "0.00" : catalogoItem.getPrecioReferencial().toPlainString(),
                 json(request.landingUrl()),
-                json(request.campania()),
+                json(leadContext.campania()),
                 json(request.metadataJson()),
-                json(catalogoItem.getMetadataJson())
+                catalogoItem == null ? "" : json(catalogoItem.getMetadataJson())
         ).trim();
     }
 

@@ -55,6 +55,9 @@ public class CrmProspecto extends BaseEntity {
     @Column(name = "landing_url", length = 500)
     private String landingUrl;
 
+    @Column(name = "landing_key", length = 120)
+    private String landingKey;
+
     @Column(name = "mensaje", length = 1500)
     private String mensaje;
 
@@ -78,6 +81,9 @@ public class CrmProspecto extends BaseEntity {
 
     @Column(name = "catalogo_item_id")
     private Long catalogoItemId;
+
+    @Column(name = "producto_pendiente", nullable = false)
+    private boolean productoPendiente = false;
 
     @Column(name = "estado", nullable = false, length = 30)
     private String estado = "NUEVO";

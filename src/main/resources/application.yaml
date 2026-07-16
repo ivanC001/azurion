@@ -52,6 +52,7 @@ security:
 azurion:
   security:
     disable-auth-for-dev: ${DISABLE_AUTH_FOR_DEV:false}
+    email-secret-key: ${AZURION_EMAIL_SECRET_KEY:dev-email-secret-change-me-32-bytes-minimum}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
   multitenancy:

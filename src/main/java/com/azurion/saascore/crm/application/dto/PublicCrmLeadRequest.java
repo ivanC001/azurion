@@ -2,19 +2,19 @@ package com.azurion.saascore.crm.application.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record PublicCrmLeadRequest(
-        @JsonAlias({"Ruc_tenant", "rucTenant", "tenantId"}) String rucTenant,
+        @JsonAlias({"Ruc_tenant", "rucTenant", "tenantId"}) @Size(max = 30) String rucTenant,
+        @Size(max = 120) String landingKey,
         String tipoPersona,
         String tipoDocumento,
         String numeroDocumento,
-        @NotBlank @Size(max = 180) String nombre,
+        @Size(max = 180) String nombre,
         @Size(max = 220) String empresa,
-        @Email @Size(max = 180) String correo,
+        @JsonAlias({"email", "emai"}) @Email @Size(max = 180) String correo,
         @Size(max = 40) String telefono,
         @Size(max = 500) String direccion,
         String origen,

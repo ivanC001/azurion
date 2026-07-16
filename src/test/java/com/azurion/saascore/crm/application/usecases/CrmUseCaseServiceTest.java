@@ -17,14 +17,19 @@ import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepositor
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
+import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
+import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
+import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmCurrencyConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.shared.exception.BusinessException;
 import java.util.List;
@@ -83,6 +88,15 @@ class CrmUseCaseServiceTest {
     @Mock
     CrmCanalTokenConfigRepository canalTokenConfigRepository;
 
+    @Mock
+    CrmCurrencyConfigRepository currencyConfigRepository;
+
+    @Mock
+    LandingLeadValidationService landingLeadValidationService;
+
+    @Mock
+    CrmProspectoInteresRepository prospectoInteresRepository;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -100,7 +114,10 @@ class CrmUseCaseServiceTest {
                 createCotizacionUseCase,
                 cotizacionRepository,
                 authorizationService,
-                canalTokenConfigRepository
+                canalTokenConfigRepository,
+                currencyConfigRepository,
+                landingLeadValidationService,
+                prospectoInteresRepository
         );
     }
 
@@ -182,6 +199,15 @@ class CrmUseCaseServiceTest {
         prospecto.setNombre("Cliente cierre CRM");
         prospecto.setEstado("CONVERTIDO");
         prospecto.setResponsableId("10");
+        Cliente createdCliente = new Cliente();
+        createdCliente.setId(8L);
+        createdCliente.setTipoDocumento("1");
+        createdCliente.setNumeroDocumento("74859621");
+        createdCliente.setNombre("Cliente cierre CRM");
+        createdCliente.setLimiteCredito(BigDecimal.ZERO);
+        createdCliente.setSaldoDeuda(BigDecimal.ZERO);
+        createdCliente.setDiasCredito(0);
+        createdCliente.setActivo(true);
         when(prospectoRepository.findById(17L)).thenReturn(Optional.of(prospecto));
         when(createClienteUseCase.execute(org.mockito.ArgumentMatchers.any())).thenReturn(new ClienteResponse(
                 8L,
@@ -199,6 +225,7 @@ class CrmUseCaseServiceTest {
                 false,
                 true
         ));
+        when(clienteRepository.findById(8L)).thenReturn(Optional.of(createdCliente));
         when(prospectoRepository.save(prospecto)).thenReturn(prospecto);
 
         ClienteResponse cliente = service.convertirProspectoCliente(17L);
@@ -243,6 +270,30 @@ class CrmUseCaseServiceTest {
         assertNotNull(prospecto.getFechaConversion());
         verify(createClienteUseCase, never()).execute(org.mockito.ArgumentMatchers.any());
         verify(prospectoRepository).save(prospecto);
+    }
+
+    @Test
+    void pipelineSoloExponeEtapasActivasDeTrabajoYOportunidadesAbiertas() {
+        authenticate("ROLE_ADMIN");
+        CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
+        CrmEtapaPipeline cotizado = etapa(2L, "COTIZADO", 2, false, false);
+        CrmEtapaPipeline negociacion = etapa(3L, "NEGOCIACION", 3, false, false);
+        CrmEtapaPipeline ganado = etapa(4L, "GANADO", 4, true, false);
+        CrmEtapaPipeline perdido = etapa(5L, "PERDIDO", 5, false, true);
+
+        CrmOportunidad abierta = oportunidad(10L, interesado, "ABIERTA");
+        CrmOportunidad cerrada = oportunidad(11L, ganado, "GANADA");
+        when(etapaPipelineRepository.findByActivoTrueOrderByOrdenAscIdAsc())
+                .thenReturn(List.of(interesado, cotizado, negociacion, ganado, perdido));
+        when(oportunidadRepository.findAllByOrderByIdDesc()).thenReturn(List.of(abierta, cerrada));
+
+        var pipeline = service.pipeline();
+
+        assertEquals(List.of("INTERESADO", "COTIZADO", "NEGOCIACION"),
+                pipeline.stream().map(column -> column.etapa().codigo()).toList());
+        assertEquals(1, pipeline.getFirst().cantidad());
+        assertEquals(0, pipeline.get(1).cantidad());
+        assertEquals(0, pipeline.get(2).cantidad());
     }
 
     private CreateCrmProspectoRequest prospectoRequestAsignadoA(String responsableId) {
@@ -292,6 +343,31 @@ class CrmUseCaseServiceTest {
         prospecto.setEstado("NUEVO");
         prospecto.setResponsableId("crm-public");
         return prospecto;
+    }
+
+    private CrmEtapaPipeline etapa(Long id, String codigo, int orden, boolean ganado, boolean perdido) {
+        CrmEtapaPipeline etapa = new CrmEtapaPipeline();
+        etapa.setId(id);
+        etapa.setCodigo(codigo);
+        etapa.setNombre(codigo);
+        etapa.setOrden(orden);
+        etapa.setGanado(ganado);
+        etapa.setPerdido(perdido);
+        etapa.setActivo(true);
+        return etapa;
+    }
+
+    private CrmOportunidad oportunidad(Long id, CrmEtapaPipeline etapa, String estado) {
+        CrmOportunidad oportunidad = new CrmOportunidad();
+        oportunidad.setId(id);
+        oportunidad.setTitulo("Oportunidad " + id);
+        oportunidad.setMontoEstimado(BigDecimal.valueOf(450));
+        oportunidad.setProbabilidad(etapa.getProbabilidadDefault());
+        oportunidad.setEtapaPipeline(etapa);
+        oportunidad.setEtapa(etapa.getCodigo());
+        oportunidad.setResponsableId("10");
+        oportunidad.setEstado(estado);
+        return oportunidad;
     }
 
     private void authenticate(String... authorities) {

@@ -7,6 +7,7 @@ import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.saascore.cotizaciones.application.dto.CreateCotizacionRequest;
 import com.azurion.saascore.cotizaciones.application.dto.CreatePromocionCotizacionRequest;
 import com.azurion.saascore.cotizaciones.application.dto.PromocionCotizacionResponse;
+import com.azurion.saascore.cotizaciones.application.dto.SendCotizacionEmailResponse;
 import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
 import com.azurion.saascore.cotizaciones.application.usecases.ConvertCotizacionVentaUseCase;
 import com.azurion.saascore.cotizaciones.application.usecases.CreateCotizacionUseCase;
@@ -14,6 +15,7 @@ import com.azurion.saascore.cotizaciones.application.usecases.GenerateCotizacion
 import com.azurion.saascore.cotizaciones.application.usecases.GetCotizacionUseCase;
 import com.azurion.saascore.cotizaciones.application.usecases.ListCotizacionesUseCase;
 import com.azurion.saascore.cotizaciones.application.usecases.PromocionCotizacionUseCase;
+import com.azurion.saascore.cotizaciones.application.usecases.SendCotizacionEmailUseCase;
 import com.azurion.saascore.cotizaciones.application.usecases.UpdateCotizacionEstadoUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
@@ -43,6 +45,7 @@ public class CotizacionController {
     private final GenerateCotizacionPdfUseCase generateCotizacionPdfUseCase;
     private final ConvertCotizacionVentaUseCase convertCotizacionVentaUseCase;
     private final PromocionCotizacionUseCase promocionCotizacionUseCase;
+    private final SendCotizacionEmailUseCase sendCotizacionEmailUseCase;
 
     @GetMapping
     @PreAuthorize("hasAuthority('COTIZACIONES_READ')")
@@ -85,6 +88,12 @@ public class CotizacionController {
     @PreAuthorize("hasAuthority('COTIZACIONES_PDF')")
     public ApiResponse<CotizacionPdfResponse> pdf(@PathVariable Long id) {
         return ApiResponse.ok(generateCotizacionPdfUseCase.execute(id), "PDF de cotizacion generado");
+    }
+
+    @PostMapping("/{id}/enviar-correo")
+    @PreAuthorize("hasAuthority('COTIZACIONES_UPDATE')")
+    public ApiResponse<SendCotizacionEmailResponse> enviarCorreo(@PathVariable Long id) {
+        return ApiResponse.ok(sendCotizacionEmailUseCase.execute(id), "Cotizacion enviada por correo");
     }
 
     @PostMapping("/{id}/convertir-venta")

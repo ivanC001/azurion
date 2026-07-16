@@ -73,7 +73,12 @@ public class TenantModuleMigrationPlanner {
             "V47__crm_negotiation_process.sql",
             "V48__crm_quote_product_warehouse_repair.sql",
             "V49__crm_simplified_opportunity_flow.sql",
-            "V50__crm_channel_token_config.sql"
+            "V50__crm_channel_token_config.sql",
+            "V51__crm_landing_config.sql",
+            "V52__crm_prospect_interests.sql",
+            "V53__tenant_email_config.sql",
+            "V54__crm_pagination_indexes.sql",
+            "V55__crm_currency_config.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -245,7 +250,12 @@ public class TenantModuleMigrationPlanner {
                 "V47__crm_negotiation_process.sql",
                 "V48__crm_quote_product_warehouse_repair.sql",
                 "V49__crm_simplified_opportunity_flow.sql",
-                "V50__crm_channel_token_config.sql"
+                "V50__crm_channel_token_config.sql",
+                "V51__crm_landing_config.sql",
+                "V52__crm_prospect_interests.sql",
+                "V53__tenant_email_config.sql",
+                "V54__crm_pagination_indexes.sql",
+                "V55__crm_currency_config.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;
