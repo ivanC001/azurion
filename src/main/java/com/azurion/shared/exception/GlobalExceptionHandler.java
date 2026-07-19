@@ -17,6 +17,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -145,6 +147,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new ApiError(
                 "METHOD_NOT_ALLOWED",
                 "HTTP method not allowed for this endpoint",
+                List.of(),
+                OffsetDateTime.now()
+        ));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ApiError(
+                "FILE_TOO_LARGE",
+                "El archivo supera el limite permitido de 8 MB",
+                List.of(),
+                OffsetDateTime.now()
+        ));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiError> handleMultipart(MultipartException ex) {
+        log.warn("Invalid multipart request: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(new ApiError(
+                "INVALID_MULTIPART_REQUEST",
+                "No se pudo procesar el archivo adjunto",
                 List.of(),
                 OffsetDateTime.now()
         ));

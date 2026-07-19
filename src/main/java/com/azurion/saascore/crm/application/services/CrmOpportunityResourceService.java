@@ -90,6 +90,9 @@ public class CrmOpportunityResourceService {
         resource.setDataJson(writeData(data));
         resource.setCreatedBy(currentUserKey());
         StoredFile stored = attachNewFile(resource, opportunityId, file);
+        if (stored != null) {
+            deleteAfterRollback(stored.relativePath());
+        }
         try {
             return toResponse(recursoRepository.save(resource));
         } catch (RuntimeException ex) {
@@ -119,6 +122,9 @@ public class CrmOpportunityResourceService {
         resource.setDataJson(writeData(data));
         String oldPath = resource.getArchivoPath();
         StoredFile stored = attachNewFile(resource, opportunityId, file);
+        if (stored != null) {
+            deleteAfterRollback(stored.relativePath());
+        }
         try {
             CrmOportunidadRecurso saved = recursoRepository.save(resource);
             if (stored != null && oldPath != null) {
@@ -345,6 +351,20 @@ public class CrmOpportunityResourceService {
             @Override
             public void afterCommit() {
                 fileStorageService.deleteQuietly(relativePath);
+            }
+        });
+    }
+
+    private void deleteAfterRollback(String relativePath) {
+        if (relativePath == null || relativePath.isBlank() || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                    fileStorageService.deleteQuietly(relativePath);
+                }
             }
         });
     }

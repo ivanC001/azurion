@@ -26,8 +26,28 @@ services:
       JWT_SECRET: replace_this_with_very_long_secure_secret_32_chars_minimum
       JWT_ISSUER: azurion
       JWT_EXP_MIN: 120
+      AZURION_PRIVATE_FILES_DIR: /app/data/private-files
+      AZURION_PUBLIC_FILES_DIR: /app/data/public-files
+      MULTIPART_MAX_FILE_SIZE: 8MB
+      MULTIPART_MAX_REQUEST_SIZE: 10MB
+      RATE_LIMIT_TRUSTED_PROXIES: ${RATE_LIMIT_TRUSTED_PROXIES:-127.0.0.1,::1}
+      SMTP_CONNECT_TIMEOUT_MS: ${SMTP_CONNECT_TIMEOUT_MS:-10000}
+      SMTP_READ_TIMEOUT_MS: ${SMTP_READ_TIMEOUT_MS:-20000}
+      SMTP_WRITE_TIMEOUT_MS: ${SMTP_WRITE_TIMEOUT_MS:-20000}
+      SMTP_TLS_PROTOCOLS: ${SMTP_TLS_PROTOCOLS:-TLSv1.2 TLSv1.3}
+      SMTP_CHECK_SERVER_IDENTITY: ${SMTP_CHECK_SERVER_IDENTITY:-true}
+      FACTURADOR_BASE_URL: ${FACTURADOR_BASE_URL:-http://host.docker.internal:8000}
+      FACTURADOR_API_KEY: ${FACTURADOR_API_KEY:-}
+      FACTURADOR_WAIT_PROCESSED_ENABLED: ${FACTURADOR_WAIT_PROCESSED_ENABLED:-false}
+      WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com}
+      WHATSAPP_GRAPH_API_VERSION: ${WHATSAPP_GRAPH_API_VERSION:-v25.0}
     ports:
       - "8080:8080"
+    volumes:
+      - azurion_app_data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   azurion_pg_data:
+  azurion_app_data:

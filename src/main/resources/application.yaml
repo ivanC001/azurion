@@ -27,6 +27,11 @@ spring:
     locations: classpath:db/migration/public
   jackson:
     default-property-inclusion: non_null
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:8MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:10MB}
+      file-size-threshold: 0B
 
 server:
   port: ${SERVER_PORT:8080}
@@ -64,6 +69,14 @@ azurion:
       auth-requests-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:10}
       public-requests-per-minute: ${RATE_LIMIT_PUBLIC_PER_MINUTE:60}
       max-clients: ${RATE_LIMIT_MAX_CLIENTS:10000}
+      trusted-proxies: ${RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1,::1}
+  email:
+    transport:
+      connect-timeout-millis: ${SMTP_CONNECT_TIMEOUT_MS:10000}
+      read-timeout-millis: ${SMTP_READ_TIMEOUT_MS:20000}
+      write-timeout-millis: ${SMTP_WRITE_TIMEOUT_MS:20000}
+      tls-protocols: ${SMTP_TLS_PROTOCOLS:TLSv1.2 TLSv1.3}
+      check-server-identity: ${SMTP_CHECK_SERVER_IDENTITY:true}
   whatsapp:
     graph-base-url: ${WHATSAPP_GRAPH_BASE_URL:https://graph.facebook.com}
     graph-api-version: ${WHATSAPP_GRAPH_API_VERSION:v25.0}
@@ -84,7 +97,7 @@ azurion:
     api-prefix: ${FACTURADOR_API_PREFIX:/api}
     connect-timeout-millis: ${FACTURADOR_CONNECT_TIMEOUT_MS:5000}
     read-timeout-millis: ${FACTURADOR_READ_TIMEOUT_MS:20000}
-    wait-processed-enabled: ${FACTURADOR_WAIT_PROCESSED_ENABLED:true}
+    wait-processed-enabled: ${FACTURADOR_WAIT_PROCESSED_ENABLED:false}
     wait-processed-timeout-millis: ${FACTURADOR_WAIT_PROCESSED_TIMEOUT_MS:90000}
     wait-processed-poll-interval-millis: ${FACTURADOR_WAIT_PROCESSED_POLL_INTERVAL_MS:1500}
     default-api-key: ${FACTURADOR_API_KEY:}

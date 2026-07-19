@@ -2,12 +2,14 @@ package com.azurion.saascore.crm.infrastructure.storage;
 
 import com.azurion.multitenancy.TenantContext;
 import com.azurion.shared.exception.BusinessException;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -16,11 +18,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@Slf4j
 public class CrmPrivateFileStorageService {
 
     public static final long MAX_FILE_BYTES = 8L * 1024L * 1024L;
@@ -40,6 +44,34 @@ public class CrmPrivateFileStorageService {
             @Value("${azurion.storage.private-files.root-dir:${user.dir}/storage/private-files}") String rootDirectory
     ) {
         this.rootDirectory = Paths.get(rootDirectory).toAbsolutePath().normalize();
+    }
+
+    @PostConstruct
+    void initializeStorage() {
+        Path probe = null;
+        try {
+            Files.createDirectories(rootDirectory);
+            if (!Files.isDirectory(rootDirectory)) {
+                throw new IOException("Configured path is not a directory");
+            }
+            probe = Files.createTempFile(rootDirectory, ".crm-storage-check-", ".tmp");
+            log.info("CRM private file storage ready at {}", rootDirectory);
+        } catch (IOException | SecurityException ex) {
+            log.error("CRM private file storage is not writable at {}", rootDirectory, ex);
+            throw new IllegalStateException(
+                    "CRM private file storage is not writable. Check AZURION_PRIVATE_FILES_DIR and volume permissions: "
+                            + rootDirectory,
+                    ex
+            );
+        } finally {
+            if (probe != null) {
+                try {
+                    Files.deleteIfExists(probe);
+                } catch (IOException ex) {
+                    log.warn("Could not remove CRM storage probe file {}", probe, ex);
+                }
+            }
+        }
     }
 
     public StoredFile store(Long opportunityId, MultipartFile file) {
@@ -67,14 +99,27 @@ public class CrmPrivateFileStorageService {
             Path temporary = Files.createTempFile(target.getParent(), "upload-", ".tmp");
             try {
                 Files.write(temporary, content, StandardOpenOption.TRUNCATE_EXISTING);
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException ignored) {
+                    Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                }
             } finally {
                 Files.deleteIfExists(temporary);
             }
             return new StoredFile(relative.toString().replace('\\', '/'), originalName, detectedMime, (long) content.length);
         } catch (BusinessException ex) {
             throw ex;
-        } catch (IOException ex) {
+        } catch (IOException | SecurityException ex) {
+            log.error(
+                    "Could not store CRM private file. root={}, opportunityId={}, tenant={}, originalName={}, size={}",
+                    rootDirectory,
+                    opportunityId,
+                    TenantContext.getTenantId(),
+                    file == null ? null : safeOriginalName(file.getOriginalFilename()),
+                    file == null ? 0 : file.getSize(),
+                    ex
+            );
             throw new BusinessException("CRM_ARCHIVO_SAVE_ERROR", "No se pudo guardar el archivo");
         }
     }

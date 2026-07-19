@@ -18,7 +18,7 @@ public class FacturadorProperties {
     private String apiPrefix = "/api";
     private long connectTimeoutMillis = 5000;
     private long readTimeoutMillis = 20000;
-    private boolean waitProcessedEnabled = true;
+    private boolean waitProcessedEnabled = false;
     private long waitProcessedTimeoutMillis = 90000;
     private long waitProcessedPollIntervalMillis = 1500;
     private String defaultApiKey;

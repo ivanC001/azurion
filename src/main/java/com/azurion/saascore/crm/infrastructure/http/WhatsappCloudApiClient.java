@@ -23,8 +23,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class WhatsappCloudApiClient {
 
     private final ObjectMapper objectMapper;
@@ -82,7 +84,8 @@ public class WhatsappCloudApiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             JsonNode responseJson = parseResponse(response.body());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                String metaMessage = responseJson.path("error").path("message").asText("Meta rechazo el mensaje");
+                String metaMessage = metaError(responseJson, "Meta rechazo el mensaje")
+                        + " (HTTP " + response.statusCode() + ")";
                 throw new BusinessException("CRM_WHATSAPP_META_ERROR", metaMessage);
             }
 
@@ -98,6 +101,12 @@ public class WhatsappCloudApiClient {
             Thread.currentThread().interrupt();
             throw new BusinessException("CRM_WHATSAPP_ENVIO_INTERRUMPIDO", "El envio a WhatsApp fue interrumpido");
         } catch (Exception ex) {
+            log.warn(
+                    "No se pudo enviar WhatsApp phoneNumberId={} errorType={} detail={}",
+                    config.getPhoneNumberId(),
+                    ex.getClass().getSimpleName(),
+                    safeDetail(ex)
+            );
             throw new BusinessException("CRM_WHATSAPP_NO_DISPONIBLE", "No se pudo conectar con WhatsApp Cloud API");
         }
     }
@@ -272,7 +281,20 @@ public class WhatsappCloudApiClient {
     }
 
     private String metaError(JsonNode body, String fallback) {
-        return body.path("error").path("message").asText(fallback);
+        JsonNode error = body.path("error");
+        String message = error.path("message").asText(fallback);
+        String code = error.path("code").asText("");
+        String subcode = error.path("error_subcode").asText("");
+        String reference = code.isBlank() ? "" : " [Meta " + code + (subcode.isBlank() ? "" : "/" + subcode) + "]";
+        return message + reference;
+    }
+
+    private String safeDetail(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return exception.getClass().getSimpleName();
+        }
+        return message.replaceAll("(?i)(access[_ -]?token|secret|authorization)[=: ]+\\S+", "$1=***");
     }
 
     private OffsetDateTime epochSeconds(long value) {

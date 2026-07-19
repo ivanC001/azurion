@@ -26,17 +26,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final int authLimit;
     private final int publicLimit;
     private final RequestRateLimiter rateLimiter;
+    private final ClientIpResolver clientIpResolver;
 
     public RateLimitFilter(
             @Value("${azurion.security.rate-limit.enabled:true}") boolean enabled,
             @Value("${azurion.security.rate-limit.auth-requests-per-minute:10}") int authLimit,
             @Value("${azurion.security.rate-limit.public-requests-per-minute:60}") int publicLimit,
-            @Value("${azurion.security.rate-limit.max-clients:10000}") int maxClients
+            @Value("${azurion.security.rate-limit.max-clients:10000}") int maxClients,
+            ClientIpResolver clientIpResolver
     ) {
         this.enabled = enabled;
         this.authLimit = positive(authLimit, "auth-requests-per-minute");
         this.publicLimit = positive(publicLimit, "public-requests-per-minute");
         this.rateLimiter = new RequestRateLimiter(positive(maxClients, "max-clients"));
+        this.clientIpResolver = clientIpResolver;
     }
 
     @Override
@@ -55,7 +58,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean authRequest = AUTH_PATHS.contains(path);
         int limit = authRequest ? authLimit : publicLimit;
         String bucket = authRequest ? "auth" : "public-crm";
-        String client = request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
+        String client = clientIpResolver.resolve(request);
 
         RequestRateLimiter.Decision decision = rateLimiter.tryAcquire(bucket + ':' + client, limit, WINDOW);
         if (!decision.allowed()) {

@@ -1,6 +1,7 @@
 package com.azurion.saascore.empresas.infrastructure.storage;
 
 import com.azurion.shared.exception.BusinessException;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,8 +16,10 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class CompanyBrandingStorageService {
 
     private static final long MAX_LOGO_BYTES = 2L * 1024L * 1024L;
@@ -28,6 +31,22 @@ public class CompanyBrandingStorageService {
             @Value("${azurion.storage.public-files.root-dir:${user.dir}/storage/public-files}") String rootDirectory
     ) {
         this.rootDirectory = Paths.get(rootDirectory).toAbsolutePath().normalize();
+    }
+
+    @PostConstruct
+    void ensureWritableStorage() {
+        try {
+            Files.createDirectories(rootDirectory);
+            Path probe = Files.createTempFile(rootDirectory, ".azurion-write-test-", ".tmp");
+            Files.deleteIfExists(probe);
+            log.info("Almacenamiento publico listo en {}", rootDirectory);
+        } catch (IOException ex) {
+            log.error("El almacenamiento publico no es escribible en {}: {}", rootDirectory, ex.getMessage());
+            throw new IllegalStateException(
+                    "AZURION_PUBLIC_FILES_DIR no existe o no permite escritura: " + rootDirectory,
+                    ex
+            );
+        }
     }
 
     public String storePanelLogo(String tenantId, MultipartFile file) {
@@ -58,6 +77,7 @@ public class CompanyBrandingStorageService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (IOException ex) {
+            log.error("No se pudo guardar logo de tenant={} en {}: {}", tenantId, rootDirectory, ex.getMessage());
             throw new BusinessException("EMPRESA_LOGO_SAVE_ERROR", "No se pudo guardar el logo del panel.");
         }
     }
