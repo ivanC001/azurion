@@ -29,7 +29,7 @@ public class EmpresaModuloController {
     private final AsignarModulosEmpresaUseCase asignarModulosEmpresaUseCase;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ADMIN_GENERAL','ADMIN_EMPRESA','ADMIN') or hasAuthority('EMPRESA_MODULOS_READ')")
+    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ADMIN_GENERAL','ADMIN_EMPRESA') or hasAuthority('EMPRESA_MODULOS_READ')")
     public ApiResponse<List<EmpresaModuloResponse>> list(@PathVariable Long empresaId) {
         return ApiResponse.ok(listEmpresaModulosUseCase.execute(empresaId), "Modulos de empresa");
     }

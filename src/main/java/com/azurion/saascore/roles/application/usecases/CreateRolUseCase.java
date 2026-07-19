@@ -5,6 +5,7 @@ import com.azurion.saascore.roles.application.dto.RolResponse;
 import com.azurion.saascore.roles.application.mappers.RolesMapper;
 import com.azurion.saascore.roles.application.support.RolesBusinessRules;
 import com.azurion.saascore.roles.domain.entities.Rol;
+import com.azurion.saascore.roles.domain.entities.RoleScope;
 import com.azurion.saascore.roles.domain.repositories.RolRepository;
 import com.azurion.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +33,10 @@ public class CreateRolUseCase {
         rol.setCodigo(normalizedCode);
         rol.setNombre(request.nombre().trim());
         rol.setDescripcion(request.descripcion());
+        rol.setAmbito(request.ambito() == null ? RoleScope.ERP : request.ambito());
         rol.setActivo(true);
         rol.setSistema(false);
+        rol.setDeprecated(false);
 
         return RolesMapper.toRolResponse(rolRepository.save(rol));
     }

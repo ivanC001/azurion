@@ -11,6 +11,7 @@ import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,6 +25,7 @@ public class AuthController {
     private final RegisterAdminGeneralUseCase registerAdminGeneralUseCase;
 
     @PostMapping("/register")
+    @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ADMIN_GENERAL')")
     public ApiResponse<RegisterAdminGeneralResponse> register(@Valid @RequestBody RegisterAdminGeneralRequest request) {
         return ApiResponse.ok(registerAdminGeneralUseCase.execute(request), "Administrador general registrado");
     }
@@ -38,8 +40,4 @@ public class AuthController {
         return ApiResponse.ok(loginUseCase.executeTenant(request), "Login tenant successful");
     }
 
-    @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.ok(loginUseCase.execute(request), "Login successful");
-    }
 }

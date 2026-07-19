@@ -44,8 +44,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -121,7 +119,7 @@ public class RegistrarVentaCajaUseCase {
         FacturadorTarget target = requiereFacturador ? resolveTarget(request.tipoComprobante()) : null;
         if (requiereFacturador) {
             Map<String, Object> payload = buildPayload(request, empresa, caja, target.tipoSunat(), resolvedItems, venta.externalId(), clienteVenta, fechaEmision);
-            dispatchFacturacionAfterCommit(new VentaFacturacionAsyncTask(
+            dispatchVentaFacturacionAsyncUseCase.dispatch(new VentaFacturacionAsyncTask(
                     tenantId,
                     empresa.getRuc(),
                     venta.id(),
@@ -171,19 +169,6 @@ public class RegistrarVentaCajaUseCase {
                                 Map.of("estado", "NO_REQUIERE", "external_id", venta.externalId())
                         )
         );
-    }
-
-    private void dispatchFacturacionAfterCommit(VentaFacturacionAsyncTask task) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            dispatchVentaFacturacionAsyncUseCase.dispatch(task);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                dispatchVentaFacturacionAsyncUseCase.dispatch(task);
-            }
-        });
     }
 
     private FacturadorTarget resolveTarget(TipoComprobanteVenta tipo) {

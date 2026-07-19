@@ -43,27 +43,6 @@ public class LoginUseCase {
     private final ModuleAccessService moduleAccessService;
     private final PasswordEncoder passwordEncoder;
 
-    public LoginResponse execute(LoginRequest request) {
-        if (request.tenantId() != null && !request.tenantId().isBlank()
-                && !TenantContext.DEFAULT_TENANT.equalsIgnoreCase(request.tenantId())) {
-            TenantLoginResponse tenantLogin = executeTenant(request);
-            return new LoginResponse(
-                    tenantLogin.accessToken(),
-                    tenantLogin.tokenType(),
-                    tenantLogin.expiresInSeconds(),
-                    tenantLogin.username(),
-                    tenantLogin.tenantId(),
-                    tenantLogin.roles(),
-                    tenantLogin.permissions(),
-                    tenantLogin.modules(),
-                    false,
-                    tenantLogin.adminEmpresa(),
-                    tenantLogin.issuedAt()
-            );
-        }
-        return executePublic(request);
-    }
-
     public LoginResponse executePublic(LoginRequest request) {
         TenantContext.setTenantId(TenantContext.DEFAULT_TENANT);
 
@@ -116,15 +95,11 @@ public class LoginUseCase {
                     .map(usuarioRol -> RoleCodeSupport.toAuthority(usuarioRol.getRol().getCodigo()))
                     .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
 
-            if (tenantRoles.contains("ROLE_ADMIN_EMPRESA")) {
-                tenantRoles.add("ROLE_ADMIN");
-            }
-
             List<String> roleList = List.copyOf(tenantRoles);
-            List<String> permissions = effectivePermissionService.findPermissionCodes(tenantUser.getId());
             Empresa empresa = empresaRepository.findByTenantId(tenant)
                     .orElseThrow(() -> new BusinessException("TENANT_NO_ENCONTRADO", "Empresa no encontrada para el tenant"));
             List<String> modules = moduleAccessService.getActiveModules(empresa.getId());
+            List<String> permissions = effectivePermissionService.findPermissionCodes(tenantUser.getId(), modules);
             String token = jwtTokenProvider.generateToken(
                     tenantUser.getUsername(),
                     tenantUser.getId(),
@@ -148,7 +123,7 @@ public class LoginUseCase {
                     permissions,
                     modules,
                     usuarioSucursalScopeService.findByUsuarioId(tenantUser.getId()),
-                    tenantRoles.contains("ROLE_ADMIN_EMPRESA") || tenantRoles.contains("ROLE_ADMIN"),
+                    tenantRoles.contains("ROLE_ADMIN_EMPRESA"),
                     OffsetDateTime.now()
             );
         }

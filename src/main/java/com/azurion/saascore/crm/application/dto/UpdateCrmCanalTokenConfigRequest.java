@@ -9,7 +9,9 @@ public record UpdateCrmCanalTokenConfigRequest(
         @Size(max = 300) String verifyToken,
         @Size(max = 500) String webhookUrl,
         @Size(max = 180) String appId,
+        @Size(max = 500) String appSecret,
         @Size(max = 180) String phoneNumberId,
+        @Size(max = 180) String wabaId,
         Boolean activo,
         String metadataJson
 ) {

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.azurion.saascore.roles.application.dto.CreateRolRequest;
 import com.azurion.saascore.roles.domain.entities.Rol;
+import com.azurion.saascore.roles.domain.entities.RoleScope;
 import com.azurion.saascore.roles.domain.repositories.RolRepository;
 import com.azurion.shared.exception.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ class CreateRolUseCaseTest {
 
     @Test
     void shouldRejectReservedRoleCode() {
-        CreateRolRequest request = new CreateRolRequest("admin", "Administrador", "Reservado");
+        CreateRolRequest request = new CreateRolRequest("admin", "Administrador", "Reservado", RoleScope.TENANT);
 
         BusinessException exception = assertThrows(BusinessException.class, () -> useCase.execute(request));
 
@@ -39,7 +40,9 @@ class CreateRolUseCaseTest {
 
     @Test
     void shouldNormalizeAndPersistCustomRole() {
-        CreateRolRequest request = new CreateRolRequest(" supervisor ventas ", "Supervisor ventas", "Opera reportes");
+        CreateRolRequest request = new CreateRolRequest(
+                " supervisor ventas ", "Supervisor ventas", "Opera reportes", RoleScope.ERP
+        );
         when(rolRepository.existsByCodigoIgnoreCase("SUPERVISOR_VENTAS")).thenReturn(false);
         when(rolRepository.save(any(Rol.class))).thenAnswer(invocation -> {
             Rol rol = invocation.getArgument(0);
@@ -55,5 +58,6 @@ class CreateRolUseCaseTest {
         assertEquals("SUPERVISOR_VENTAS", saved.getCodigo());
         assertEquals("Supervisor ventas", saved.getNombre());
         assertEquals(false, saved.isSistema());
+        assertEquals(RoleScope.ERP, saved.getAmbito());
     }
 }

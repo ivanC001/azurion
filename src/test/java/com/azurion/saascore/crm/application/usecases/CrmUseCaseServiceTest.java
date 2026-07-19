@@ -18,7 +18,9 @@ import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
+import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
+import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
@@ -45,6 +47,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class CrmUseCaseServiceTest {
@@ -97,6 +102,9 @@ class CrmUseCaseServiceTest {
     @Mock
     CrmProspectoInteresRepository prospectoInteresRepository;
 
+    @Mock
+    CrmSecretEncryptionService crmSecretEncryptionService;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -117,7 +125,8 @@ class CrmUseCaseServiceTest {
                 canalTokenConfigRepository,
                 currencyConfigRepository,
                 landingLeadValidationService,
-                prospectoInteresRepository
+                prospectoInteresRepository,
+                crmSecretEncryptionService
         );
     }
 
@@ -128,7 +137,7 @@ class CrmUseCaseServiceTest {
 
     @Test
     void vendedorNoPuedeAsignarProspectoAOtroResponsable() {
-        authenticate("CRM_WRITE");
+        authenticate("CRM_LEADS_WRITE");
         when(authorizationService.currentUsuarioId()).thenReturn(10L);
 
         CreateCrmProspectoRequest request = prospectoRequestAsignadoA("20");
@@ -141,7 +150,7 @@ class CrmUseCaseServiceTest {
 
     @Test
     void usuarioConPermisoAssignPuedeAsignarProspecto() {
-        authenticate("CRM_WRITE", "CRM_ASSIGN");
+        authenticate("CRM_LEADS_WRITE", "CRM_ASSIGN");
         when(authorizationService.currentUsuarioId()).thenReturn(10L);
         when(prospectoRepository.save(org.mockito.ArgumentMatchers.any(CrmProspecto.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -153,6 +162,26 @@ class CrmUseCaseServiceTest {
         ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
         verify(prospectoRepository).save(captor.capture());
         assertEquals("20", captor.getValue().getResponsableId());
+    }
+
+    @Test
+    void bandejaSoloExponeCanalesActivosDelTenant() {
+        CrmCanalTokenConfig whatsapp = new CrmCanalTokenConfig();
+        whatsapp.setCanal("WHATSAPP");
+        whatsapp.setNombre("WhatsApp Business");
+        whatsapp.setActivo(true);
+        CrmCanalTokenConfig facebook = new CrmCanalTokenConfig();
+        facebook.setCanal("FACEBOOK");
+        facebook.setNombre("Facebook Lead Ads");
+        facebook.setActivo(false);
+        when(canalTokenConfigRepository.findAllByOrderByCanalAsc()).thenReturn(List.of(facebook, whatsapp));
+
+        var channels = service.listInboxChannels(true);
+
+        assertEquals(List.of("WHATSAPP", "CORREO"), channels.stream()
+                .filter(item -> item.activo())
+                .map(item -> item.canal())
+                .toList());
     }
 
     @Test
@@ -191,7 +220,7 @@ class CrmUseCaseServiceTest {
 
     @Test
     void prospectoConvertidoAOportunidadTodaviaPuedeConvertirseACliente() {
-        authenticate("ROLE_ADMIN");
+        authenticate("CRM_VIEW_ALL");
         CrmProspecto prospecto = new CrmProspecto();
         prospecto.setTipoPersona("NATURAL");
         prospecto.setTipoDocumento("1");
@@ -239,7 +268,7 @@ class CrmUseCaseServiceTest {
 
     @Test
     void prospectoSeEnlazaAClienteExistentePorDocumento() {
-        authenticate("ROLE_ADMIN");
+        authenticate("CRM_VIEW_ALL");
         CrmProspecto prospecto = new CrmProspecto();
         prospecto.setTipoPersona("NATURAL");
         prospecto.setTipoDocumento("1");
@@ -274,7 +303,7 @@ class CrmUseCaseServiceTest {
 
     @Test
     void pipelineSoloExponeEtapasActivasDeTrabajoYOportunidadesAbiertas() {
-        authenticate("ROLE_ADMIN");
+        authenticate("CRM_VIEW_ALL");
         CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
         CrmEtapaPipeline cotizado = etapa(2L, "COTIZADO", 2, false, false);
         CrmEtapaPipeline negociacion = etapa(3L, "NEGOCIACION", 3, false, false);
@@ -294,6 +323,30 @@ class CrmUseCaseServiceTest {
         assertEquals(1, pipeline.getFirst().cantidad());
         assertEquals(0, pipeline.get(1).cantidad());
         assertEquals(0, pipeline.get(2).cantidad());
+    }
+
+    @Test
+    void resultadosComercialesUsanPaginacionDeVeinteYCierreReal() {
+        authenticate("CRM_VIEW_ALL");
+        CrmEtapaPipeline ganado = etapa(4L, "GANADO", 4, true, false);
+        CrmEtapaPipeline perdido = etapa(5L, "PERDIDO", 5, false, true);
+        CrmOportunidad ganada = oportunidad(21L, ganado, "GANADA");
+        CrmOportunidad perdida = oportunidad(22L, perdido, "PERDIDA");
+        when(oportunidadRepository.findAll(
+                org.mockito.ArgumentMatchers.<Specification<CrmOportunidad>>any(),
+                org.mockito.ArgumentMatchers.any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(ganada, perdida)));
+
+        var result = service.pageResultados(null, null, null, null, null, 0, 20);
+
+        assertEquals(2, result.content().size());
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(oportunidadRepository).findAll(
+                org.mockito.ArgumentMatchers.<Specification<CrmOportunidad>>any(),
+                pageableCaptor.capture()
+        );
+        assertEquals(20, pageableCaptor.getValue().getPageSize());
+        assertEquals("fechaCierreReal", pageableCaptor.getValue().getSort().iterator().next().getProperty());
     }
 
     private CreateCrmProspectoRequest prospectoRequestAsignadoA(String responsableId) {

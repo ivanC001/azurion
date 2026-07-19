@@ -23,6 +23,7 @@ import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmCurrencyConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
+import com.azurion.saascore.crm.application.dto.CrmInboxChannelResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaResumenResponse;
 import com.azurion.saascore.crm.application.dto.CrmNegociacionResponse;
@@ -48,6 +49,7 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
+import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
@@ -156,6 +158,7 @@ public class CrmUseCaseService {
     private final CrmCurrencyConfigRepository currencyConfigRepository;
     private final LandingLeadValidationService landingLeadValidationService;
     private final CrmProspectoInteresRepository prospectoInteresRepository;
+    private final CrmSecretEncryptionService crmSecretEncryptionService;
 
     @Transactional(readOnly = true)
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
@@ -205,9 +208,31 @@ public class CrmUseCaseService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<CrmInboxChannelResponse> listInboxChannels(boolean emailActive) {
+        Map<String, CrmCanalTokenConfig> existing = new LinkedHashMap<>();
+        for (CrmCanalTokenConfig item : canalTokenConfigRepository.findAllByOrderByCanalAsc()) {
+            existing.put(item.getCanal(), item);
+        }
+        return List.of(
+                inboxChannel("WHATSAPP", "WhatsApp", existing),
+                inboxChannel("FACEBOOK", "Facebook", existing),
+                inboxChannel("INSTAGRAM", "Instagram", existing),
+                new CrmInboxChannelResponse("CORREO", "Correo", emailActive)
+        );
+    }
+
     @Transactional
     public CrmCanalTokenConfigResponse saveCanalTokenConfig(UpdateCrmCanalTokenConfigRequest request) {
         String canal = requireEnum(request.canal(), Set.of("WEB", "WHATSAPP", "INSTAGRAM", "FACEBOOK"), "CRM_CANAL_INVALIDO");
+        boolean whatsappConnectionChanged = "WHATSAPP".equals(canal) && (
+                hasText(request.accessToken())
+                        || hasText(request.appId())
+                        || hasText(request.appSecret())
+                        || hasText(request.phoneNumberId())
+                        || hasText(request.wabaId())
+        );
+        boolean whatsappVerifyTokenChanged = "WHATSAPP".equals(canal) && hasText(request.verifyToken());
         CrmCanalTokenConfig config = canalTokenConfigRepository.findByCanal(canal)
                 .orElseGet(() -> {
                     CrmCanalTokenConfig item = new CrmCanalTokenConfig();
@@ -216,15 +241,28 @@ public class CrmUseCaseService {
                     return item;
                 });
         updateIfPresent(request.nombre(), value -> config.setNombre(trim(value)));
-        updateIfPresent(request.accessToken(), value -> config.setAccessToken(trim(value)));
-        updateIfPresent(request.verifyToken(), value -> config.setVerifyToken(trim(value)));
+        updateIfPresent(request.accessToken(), value -> config.setAccessToken(crmSecretEncryptionService.encrypt(trim(value))));
+        updateIfPresent(request.verifyToken(), value -> config.setVerifyToken(crmSecretEncryptionService.encrypt(trim(value))));
         updateIfPresent(request.webhookUrl(), value -> config.setWebhookUrl(trim(value)));
         updateIfPresent(request.appId(), value -> config.setAppId(trim(value)));
+        updateIfPresent(request.appSecret(), value -> config.setAppSecret(crmSecretEncryptionService.encrypt(trim(value))));
         updateIfPresent(request.phoneNumberId(), value -> config.setPhoneNumberId(trim(value)));
+        updateIfPresent(request.wabaId(), value -> config.setWabaId(trim(value)));
         updateIfPresent(request.metadataJson(), value -> config.setMetadataJson(trim(value)));
         if (request.activo() != null) {
             config.setActivo(request.activo());
         }
+        if ("WHATSAPP".equals(canal)) {
+            config.setWebhookUrl(null);
+            config.setMetadataJson(null);
+            if (whatsappConnectionChanged) {
+                resetWhatsappConnectionStatus(config);
+            }
+            if (whatsappVerifyTokenChanged) {
+                config.setWebhookVerifiedAt(null);
+            }
+        }
+        validateWhatsappConfig(config);
         return toCanalTokenConfigResponse(canalTokenConfigRepository.save(config));
     }
 
@@ -667,7 +705,31 @@ public class CrmUseCaseService {
                                                                   LocalDate cierreHasta,
                                                                   int page,
                                                                   int size) {
-        return pageOportunidades(query, etapaId, etapa, estado, responsableId, cierreDesde, cierreHasta, false, page, size);
+        return pageOportunidades(query, etapaId, etapa, estado, responsableId, cierreDesde, cierreHasta, false, false, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CrmOportunidadResponse> pageResultados(String query,
+                                                               String estado,
+                                                               String responsableId,
+                                                               LocalDate cierreDesde,
+                                                               LocalDate cierreHasta,
+                                                               int page,
+                                                               int size) {
+        String resultado = optionalEnum(estado, Set.of("GANADA", "PERDIDA"), "CRM_RESULTADO_INVALIDO");
+        return pageOportunidades(
+                query,
+                null,
+                null,
+                resultado,
+                responsableId,
+                cierreDesde,
+                cierreHasta,
+                false,
+                true,
+                page,
+                size
+        );
     }
 
     @Transactional(readOnly = true)
@@ -677,7 +739,7 @@ public class CrmUseCaseService {
                                                                      LocalDate cierreHasta,
                                                                      int page,
                                                                      int size) {
-        return pageOportunidades(query, null, null, "GANADA", responsableId, cierreDesde, cierreHasta, true, page, size);
+        return pageOportunidades(query, null, null, "GANADA", responsableId, cierreDesde, cierreHasta, true, false, page, size);
     }
 
     @Transactional(readOnly = true)
@@ -1478,6 +1540,7 @@ public class CrmUseCaseService {
                                                                   LocalDate cierreDesde,
                                                                   LocalDate cierreHasta,
                                                                   boolean soloPagosPendientes,
+                                                                  boolean soloCerradas,
                                                                   int page,
                                                                   int size) {
         boolean viewAll = canViewAll();
@@ -1493,9 +1556,16 @@ public class CrmUseCaseService {
                         normalizeFilter(responsableId),
                         cierreDesde,
                         cierreHasta,
-                        soloPagosPendientes
+                        soloPagosPendientes,
+                        soloCerradas
                 ),
-                safePageable(page, size, Sort.by(Sort.Order.desc("fechaUltimaActualizacion"), Sort.Order.desc("id")))
+                safePageable(
+                        page,
+                        size,
+                        soloCerradas
+                                ? Sort.by(Sort.Order.desc("fechaCierreReal"), Sort.Order.desc("id"))
+                                : Sort.by(Sort.Order.desc("fechaUltimaActualizacion"), Sort.Order.desc("id"))
+                )
         );
         return PageResponse.from(result, CrmMapper.toOportunidadResponses(result.getContent()));
     }
@@ -1620,7 +1690,8 @@ public class CrmUseCaseService {
                                                               String responsableId,
                                                               LocalDate cierreDesde,
                                                               LocalDate cierreHasta,
-                                                              boolean soloPagosPendientes) {
+                                                              boolean soloPagosPendientes,
+                                                              boolean soloCerradas) {
         return (root, criteriaQuery, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (!viewAll) {
@@ -1650,15 +1721,23 @@ public class CrmUseCaseService {
             }
             if (estado != null) {
                 predicates.add(cb.equal(root.get("estado"), estado));
+            } else if (soloCerradas) {
+                predicates.add(root.get("estado").in(Set.of("GANADA", "PERDIDA")));
             }
             if (responsableId != null) {
                 predicates.add(cb.equal(root.get("responsableId"), responsableId));
             }
             if (cierreDesde != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaCierreEstimada"), cierreDesde));
+                predicates.add(cb.greaterThanOrEqualTo(
+                        root.get(soloCerradas ? "fechaCierreReal" : "fechaCierreEstimada"),
+                        cierreDesde
+                ));
             }
             if (cierreHasta != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("fechaCierreEstimada"), cierreHasta));
+                predicates.add(cb.lessThanOrEqualTo(
+                        root.get(soloCerradas ? "fechaCierreReal" : "fechaCierreEstimada"),
+                        cierreHasta
+                ));
             }
             if (soloPagosPendientes) {
                 predicates.add(cb.and(
@@ -1887,9 +1966,7 @@ public class CrmUseCaseService {
     private boolean canViewAll() {
         return hasAuthority("CRM_VIEW_ALL")
                 || hasAuthority("ROLE_ADMIN_GENERAL")
-                || hasAuthority("ROLE_PLATFORM_ADMIN")
-                || hasAuthority("ROLE_ADMIN_EMPRESA")
-                || hasAuthority("ROLE_ADMIN");
+                || hasAuthority("ROLE_PLATFORM_ADMIN");
     }
 
     private boolean hasAuthority(String authority) {
@@ -1900,14 +1977,12 @@ public class CrmUseCaseService {
 
     private boolean canReadPublicLeadQueue() {
         return canViewAll()
-                || hasAuthority("CRM_READ")
                 || hasAuthority("CRM_LEADS_READ")
                 || hasAuthority("CRM_ACTIVITIES_READ");
     }
 
     private boolean canWritePublicLeadQueue() {
         return canViewAll()
-                || hasAuthority("CRM_WRITE")
                 || hasAuthority("CRM_LEADS_WRITE")
                 || hasAuthority("CRM_ACTIVITIES_WRITE");
     }
@@ -2267,6 +2342,13 @@ public class CrmUseCaseService {
         return config;
     }
 
+    private CrmInboxChannelResponse inboxChannel(String canal,
+                                                 String nombre,
+                                                 Map<String, CrmCanalTokenConfig> existing) {
+        CrmCanalTokenConfig config = existing.get(canal);
+        return new CrmInboxChannelResponse(canal, nombre, config != null && config.isActivo());
+    }
+
     private CrmCurrencyConfig defaultCurrencyConfig(String moneda) {
         CrmCurrencyConfig config = new CrmCurrencyConfig();
         config.setMoneda(moneda);
@@ -2317,14 +2399,62 @@ public class CrmUseCaseService {
                 config.getId(),
                 config.getCanal(),
                 config.getNombre(),
-                config.getAccessToken(),
-                config.getVerifyToken(),
+                null,
+                null,
                 config.getWebhookUrl(),
                 config.getAppId(),
                 config.getPhoneNumberId(),
+                config.getWabaId(),
+                hasText(config.getAccessToken()),
+                hasText(config.getVerifyToken()),
+                hasText(config.getAppSecret()),
+                config.getWebhookVerifiedAt(),
+                config.getLastConnectionTestAt(),
+                config.getLastConnectionOk(),
+                config.getLastConnectionMessage(),
+                config.getWabaSubscribed(),
+                config.getMetaDisplayPhoneNumber(),
+                config.getMetaVerifiedName(),
+                config.getMetaQualityRating(),
+                config.getMetaTokenExpiresAt(),
                 config.isActivo(),
                 config.getMetadataJson()
         );
+    }
+
+    private void validateWhatsappConfig(CrmCanalTokenConfig config) {
+        if (!"WHATSAPP".equals(config.getCanal()) || !config.isActivo()) {
+            return;
+        }
+        if (!hasText(config.getPhoneNumberId())) {
+            throw new BusinessException("CRM_WHATSAPP_PHONE_ID_REQUERIDO", "Configura el Phone number ID de WhatsApp");
+        }
+        if (!hasText(config.getWabaId())) {
+            throw new BusinessException("CRM_WHATSAPP_WABA_ID_REQUERIDO", "Configura el WABA ID de WhatsApp");
+        }
+        if (!hasText(config.getAccessToken())) {
+            throw new BusinessException("CRM_WHATSAPP_ACCESS_TOKEN_REQUERIDO", "Configura el access token de WhatsApp");
+        }
+        if (!hasText(config.getVerifyToken())) {
+            throw new BusinessException("CRM_WHATSAPP_VERIFY_TOKEN_REQUERIDO", "Configura el verify token del webhook");
+        }
+        if (!hasText(config.getAppSecret())) {
+            throw new BusinessException("CRM_WHATSAPP_APP_SECRET_REQUERIDO", "Configura el App secret para validar la firma del webhook");
+        }
+        if (!hasText(config.getAppId())) {
+            throw new BusinessException("CRM_WHATSAPP_APP_ID_REQUERIDO", "Configura el App ID de Meta");
+        }
+    }
+
+    private void resetWhatsappConnectionStatus(CrmCanalTokenConfig config) {
+        config.setLastConnectionTestAt(null);
+        config.setLastConnectionOk(null);
+        config.setLastConnectionMessage(null);
+        config.setWabaSubscribed(null);
+        config.setMetaDisplayPhoneNumber(null);
+        config.setMetaVerifiedName(null);
+        config.setMetaQualityRating(null);
+        config.setMetaTokenExpiresAt(null);
     }
 
     private String publicLeadMetadata(PublicCrmLeadRequest request, CrmCatalogoItem catalogoItem, LandingLeadContext leadContext) {

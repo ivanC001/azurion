@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/guias")
 @RequiredArgsConstructor
-@RequireModule("FACTURACION")
+@RequireModule({"ERP", "FACTURACION"})
 public class GuiaRemisionController {
 
     private final RegistrarGuiaRemisionUseCase registrarGuiaRemisionUseCase;

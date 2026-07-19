@@ -28,6 +28,15 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
 
     Optional<CrmProspecto> findFirstByTelefonoOrderByIdDesc(String telefono);
 
+    @Query(value = """
+            select *
+            from crm_prospectos
+            where regexp_replace(coalesce(telefono, ''), '[^0-9]', '', 'g') = :telefono
+            order by id desc
+            limit 1
+            """, nativeQuery = true)
+    Optional<CrmProspecto> findFirstByTelefonoNormalizado(@Param("telefono") String telefono);
+
     Optional<CrmProspecto> findFirstByCorreoIgnoreCaseOrderByIdDesc(String correo);
 
     @Query("""

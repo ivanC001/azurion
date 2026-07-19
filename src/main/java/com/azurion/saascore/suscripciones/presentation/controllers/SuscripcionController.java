@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/suscripciones")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ADMIN_GENERAL','ADMIN')")
+@PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ADMIN_GENERAL')")
 public class SuscripcionController {
 
     private final CreateSuscripcionUseCase createSuscripcionUseCase;

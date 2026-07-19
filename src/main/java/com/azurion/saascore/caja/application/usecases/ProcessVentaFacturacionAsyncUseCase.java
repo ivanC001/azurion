@@ -34,28 +34,38 @@ public class ProcessVentaFacturacionAsyncUseCase {
     public void execute(VentaFacturacionAsyncTask task) {
         TenantContext.setTenantId(task.tenantId());
         try {
-            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-            transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-            transactionTemplate.executeWithoutResult(status -> {
-                try {
-                    process(task);
-                } catch (Exception exception) {
-                    log.error("Error procesando facturacion async para venta {}", task.externalId(), exception);
-                    markVentaAsError(task, exception.getMessage());
-                }
-            });
+            runInNewTransaction(() -> markVentaAsProcessing(task));
+
+            FacturadorClient.FacturadorEmissionResult emission = facturadorClient.emitirDocumento(
+                    task.tenantId(),
+                    task.tenantRuc(),
+                    task.endpoint(),
+                    task.payload(),
+                    task.tipoComprobante()
+            );
+
+            runInNewTransaction(() -> applyEmissionResult(task, emission));
+            if (!emission.success()) {
+                throw new IllegalStateException(trimToMax(emission.message(), 500));
+            }
+        } catch (Exception exception) {
+            log.error("Error procesando facturacion async para venta {}", task.externalId(), exception);
+            try {
+                runInNewTransaction(() -> markVentaAsError(task, exception.getMessage()));
+            } catch (Exception markError) {
+                log.error("No se pudo marcar la venta {} como error", task.externalId(), markError);
+            }
+            if (exception instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("Fallo el procesamiento de facturacion", exception);
         } finally {
             TenantContext.clear();
         }
     }
 
-    private void process(VentaFacturacionAsyncTask task) {
-        Venta venta = findVentaWithRetry(task.ventaId(), task.externalId());
-        if (venta == null) {
-            log.error("No se encontro venta {} para procesar facturacion async", task.externalId());
-            return;
-        }
-
+    private void markVentaAsProcessing(VentaFacturacionAsyncTask task) {
+        Venta venta = requireVenta(task);
         venta.setFacturacionEstado(Venta.FACTURACION_ESTADO_PROCESANDO);
         venta.setFacturadorEndpoint(task.endpoint());
         venta.setFacturadorTipoComprobante(task.tipoComprobante());
@@ -64,15 +74,10 @@ public class ProcessVentaFacturacionAsyncUseCase {
         venta.setFacturacionActualizadoEn(OffsetDateTime.now());
         ventaRepository.save(venta);
         emitVentaStatusAfterCommit(VentaStatusRealtimeEvent.fromVenta(task.tenantId(), "ASYNC_PROCESSING", venta));
+    }
 
-        FacturadorClient.FacturadorEmissionResult emission = facturadorClient.emitirDocumento(
-                task.tenantId(),
-                task.tenantRuc(),
-                task.endpoint(),
-                task.payload(),
-                task.tipoComprobante()
-        );
-
+    private void applyEmissionResult(VentaFacturacionAsyncTask task, FacturadorClient.FacturadorEmissionResult emission) {
+        Venta venta = requireVenta(task);
         JsonNode responseBody = emission.responseBody();
         venta.setFacturadorHttpStatus(emission.status());
         venta.setFacturadorMensaje(trimToMax(emission.message(), 500));
@@ -89,17 +94,10 @@ public class ProcessVentaFacturacionAsyncUseCase {
         emitVentaStatusAfterCommit(VentaStatusRealtimeEvent.fromVenta(task.tenantId(), "ASYNC_RESULT", venta));
     }
 
-    private Venta findVentaWithRetry(Long ventaId, String externalId) {
-        for (int attempt = 0; attempt < 5; attempt++) {
-            Venta venta = ventaRepository.findById(ventaId).orElse(null);
-            if (venta != null) {
-                return venta;
-            }
-            if (attempt < 4) {
-                sleep(150L);
-            }
-        }
-        return ventaRepository.findByExternalId(externalId).orElse(null);
+    private Venta requireVenta(VentaFacturacionAsyncTask task) {
+        return ventaRepository.findById(task.ventaId())
+                .or(() -> ventaRepository.findByExternalId(task.externalId()))
+                .orElseThrow(() -> new IllegalStateException("No se encontro la venta " + task.externalId()));
     }
 
     private void markVentaAsError(VentaFacturacionAsyncTask task, String message) {
@@ -216,12 +214,10 @@ public class ProcessVentaFacturacionAsyncUseCase {
         return trimmed.substring(0, maxLength);
     }
 
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException interruptedException) {
-            Thread.currentThread().interrupt();
-        }
+    private void runInNewTransaction(Runnable action) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transactionTemplate.executeWithoutResult(status -> action.run());
     }
 
     private void emitVentaStatusAfterCommit(VentaStatusRealtimeEvent event) {

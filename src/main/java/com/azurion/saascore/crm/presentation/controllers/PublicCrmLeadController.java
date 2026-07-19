@@ -7,6 +7,7 @@ import com.azurion.saascore.crm.application.dto.PublicCrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.usecases.CrmUseCaseService;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.modulos.application.services.ModuleAccessService;
 import com.azurion.shared.api.ApiResponse;
 import com.azurion.shared.exception.BusinessException;
 import jakarta.validation.Valid;
@@ -26,6 +27,7 @@ public class PublicCrmLeadController {
 
     private final CrmUseCaseService crmUseCaseService;
     private final EmpresaRepository empresaRepository;
+    private final ModuleAccessService moduleAccessService;
 
     @PostMapping("/leads")
     public ApiResponse<CrmProspectoResponse> capture(@Valid @RequestBody PublicCrmLeadRequest request) {
@@ -58,10 +60,10 @@ public class PublicCrmLeadController {
         if (!empresa.isActivo()) {
             throw new BusinessException("CRM_TENANT_INACTIVO", "La empresa no esta activa para captar leads");
         }
-        if (empresa.getTenantId().equals(currentTenant)) {
-            return;
+        if (!empresa.getTenantId().equals(currentTenant)) {
+            TenantContext.setTenantId(empresa.getTenantId());
         }
-        TenantContext.setTenantId(empresa.getTenantId());
+        moduleAccessService.requireModule(empresa.getId(), "CRM");
     }
 
     private String firstNonBlank(String first, String second) {

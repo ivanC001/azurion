@@ -24,7 +24,7 @@ public class RemoveUsuarioTenantRolUseCase {
             throw new BusinessException("TENANT_INVALIDO", "tenantId es obligatorio");
         }
 
-        tenantRoleAssignmentAuthorizer.assertCanAssign(tenantId, normalizedRolCodigo);
+        tenantRoleAssignmentAuthorizer.assertCanRemove(tenantId);
 
         UsuarioTenantRol assignment = usuarioTenantRolRepository
                 .findByUsuarioGlobalIdAndTenantIdIgnoreCaseAndRolCodigoIgnoreCaseAndActivoTrue(

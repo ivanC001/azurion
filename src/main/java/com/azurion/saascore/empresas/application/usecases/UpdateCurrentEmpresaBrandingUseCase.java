@@ -5,9 +5,9 @@ import com.azurion.saascore.empresas.application.dto.UpdateEmpresaBrandingReques
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.empresas.infrastructure.storage.CompanyBrandingStorageService;
+import com.azurion.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
@@ -25,8 +25,11 @@ public class UpdateCurrentEmpresaBrandingUseCase {
         } else if (request.getLogoPanelFile() != null && !request.getLogoPanelFile().isEmpty()) {
             String relativePath = storageService.storePanelLogo(empresa.getTenantId(), request.getLogoPanelFile());
             empresa.setLogoPanelUrl(buildPublicFileUrl(relativePath));
-        } else if (storageService.isLikelyExternalUrl(request.getLogoPanelUrl())) {
-            empresa.setLogoPanelUrl(request.getLogoPanelUrl().trim());
+        } else if (request.getLogoPanelUrl() != null && !request.getLogoPanelUrl().isBlank()) {
+            throw new BusinessException(
+                    "EMPRESA_LOGO_URL_NOT_ALLOWED",
+                    "Por seguridad, el logo debe cargarse como archivo y no desde una URL externa."
+            );
         }
 
         Empresa saved = empresaRepository.save(empresa);
@@ -34,9 +37,6 @@ public class UpdateCurrentEmpresaBrandingUseCase {
     }
 
     private String buildPublicFileUrl(String relativePath) {
-        return ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/files/")
-                .path(relativePath)
-                .toUriString();
+        return "/files/" + relativePath;
     }
 }

@@ -13,6 +13,11 @@ public final class RolesBusinessRules {
     public static final Set<String> PROTECTED_ROLE_CODES = Set.of(
             "ADMIN",
             "ADMIN_EMPRESA",
+            "ERP_ADMIN",
+            "ERP_VENDEDOR",
+            "ERP_CAJERO",
+            "ERP_ALMACENERO",
+            "ERP_CONTADOR",
             "SUPERVISOR_SUCURSAL",
             "CAJERO",
             "VENDEDOR",
@@ -65,7 +70,7 @@ public final class RolesBusinessRules {
     }
 
     public static boolean canManagePermissions(Rol rol) {
-        return !isAdministrativeRole(rol);
+        return rol != null && !rol.isSistema() && !isAdministrativeRole(rol);
     }
 
     public static boolean isReservedRoleCode(String codigo) {

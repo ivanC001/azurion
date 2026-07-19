@@ -21,7 +21,10 @@ public class TenantModuleMigrationPlanner {
             "V6__tenant_admin_empresa_role.sql",
             "V7__tenant_users_and_role_seeder.sql",
             "V16__roles_permisos_business_rules.sql",
-            "V38__module_contract_permissions.sql"
+            "V38__module_contract_permissions.sql",
+            "V56__separate_erp_crm_role_scopes.sql",
+            "V57__retire_generic_crm_permissions.sql",
+            "V60__disable_known_seeded_tenant_credentials.sql"
     );
 
     private static final List<String> ALL_TENANT_MIGRATIONS = List.of(
@@ -78,7 +81,14 @@ public class TenantModuleMigrationPlanner {
             "V52__crm_prospect_interests.sql",
             "V53__tenant_email_config.sql",
             "V54__crm_pagination_indexes.sql",
-            "V55__crm_currency_config.sql"
+            "V55__crm_currency_config.sql",
+            "V56__separate_erp_crm_role_scopes.sql",
+            "V57__retire_generic_crm_permissions.sql",
+            "V58__crm_whatsapp_integration.sql",
+            "V59__crm_whatsapp_conversations.sql",
+            "V60__disable_known_seeded_tenant_credentials.sql",
+            "V61__crm_opportunity_resources.sql",
+            "V62__crm_whatsapp_connection_status.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -255,7 +265,12 @@ public class TenantModuleMigrationPlanner {
                 "V52__crm_prospect_interests.sql",
                 "V53__tenant_email_config.sql",
                 "V54__crm_pagination_indexes.sql",
-                "V55__crm_currency_config.sql"
+                "V55__crm_currency_config.sql",
+                "V58__crm_whatsapp_integration.sql",
+                "V59__crm_whatsapp_conversations.sql",
+                "V60__disable_known_seeded_tenant_credentials.sql",
+                "V61__crm_opportunity_resources.sql",
+                "V62__crm_whatsapp_connection_status.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

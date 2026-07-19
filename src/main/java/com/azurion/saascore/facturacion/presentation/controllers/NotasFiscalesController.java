@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/notas")
 @RequiredArgsConstructor
-@RequireModule("FACTURACION")
+@RequireModule({"ERP", "FACTURACION"})
 public class NotasFiscalesController {
 
     private final RegistrarNotaFiscalUseCase registrarNotaFiscalUseCase;

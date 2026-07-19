@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/empresas/current")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN_EMPRESA','ADMIN','PLATFORM_ADMIN','ADMIN_GENERAL')")
+@PreAuthorize("hasAnyRole('ADMIN_EMPRESA','PLATFORM_ADMIN','ADMIN_GENERAL')")
 public class EmpresaBrandingController {
 
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;

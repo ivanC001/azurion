@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping({"/v1/saas/inventory/compras", "/inventario/compras"})
 @RequiredArgsConstructor
-@RequireModule({"INVENTARIO", "COMPRAS"})
+@RequireModule({"ERP", "INVENTARIO", "COMPRAS"})
 public class InventoryCompraController {
 
     private final RegistrarCompraUseCase registrarCompraUseCase;

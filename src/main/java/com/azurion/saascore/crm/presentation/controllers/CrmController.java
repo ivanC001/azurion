@@ -13,6 +13,7 @@ import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmCurrencyConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
+import com.azurion.saascore.crm.application.dto.CrmInboxChannelResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
 import com.azurion.saascore.crm.application.dto.CrmNegociacionResponse;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadResponse;
@@ -36,6 +37,7 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.usecases.CrmUseCaseService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
+import com.azurion.saascore.settings.email.application.services.TenantEmailConfigService;
 import com.azurion.shared.api.ApiResponse;
 import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
@@ -62,9 +64,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrmController {
 
     private final CrmUseCaseService crmUseCaseService;
+    private final TenantEmailConfigService tenantEmailConfigService;
 
     @GetMapping("/configuracion/monedas")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_CONFIG_MANAGE')")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
     public ApiResponse<List<CrmCurrencyConfigResponse>> listCurrencyConfig() {
         return ApiResponse.ok(crmUseCaseService.listCurrencyConfig(), "Monedas CRM");
     }
@@ -76,7 +79,7 @@ public class CrmController {
     }
 
     @GetMapping("/integraciones")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_CONFIG_MANAGE')")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
     public ApiResponse<List<CrmCanalTokenConfigResponse>> listIntegraciones() {
         return ApiResponse.ok(crmUseCaseService.listCanalTokenConfig(), "Integraciones CRM");
     }
@@ -87,8 +90,17 @@ public class CrmController {
         return ApiResponse.ok(crmUseCaseService.saveCanalTokenConfig(request), "Integracion CRM guardada");
     }
 
+    @GetMapping("/bandeja/canales")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
+    public ApiResponse<List<CrmInboxChannelResponse>> listInboxChannels() {
+        return ApiResponse.ok(
+                crmUseCaseService.listInboxChannels(tenantEmailConfigService.isCurrentTenantEmailActive()),
+                "Canales disponibles en la bandeja CRM"
+        );
+    }
+
     @GetMapping("/catalogo")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_CATALOG_MANAGE')")
+    @PreAuthorize("hasAnyAuthority('CRM_CATALOG_MANAGE','CRM_LEADS_READ','CRM_OPPORTUNITIES_READ')")
     public ApiResponse<List<CrmCatalogoItemResponse>> listCatalogo(@RequestParam(required = false) String tipoItem) {
         return ApiResponse.ok(crmUseCaseService.listCatalogo(tipoItem), "Catalogo comercial CRM");
     }
@@ -132,19 +144,19 @@ public class CrmController {
     }
 
     @PostMapping("/prospectos")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_LEADS_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_LEADS_WRITE')")
     public ApiResponse<CrmProspectoResponse> createProspecto(@Valid @RequestBody CreateCrmProspectoRequest request) {
         return ApiResponse.ok(crmUseCaseService.createProspecto(request), "Prospecto CRM creado");
     }
 
     @GetMapping("/prospectos")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_LEADS_READ')")
+    @PreAuthorize("hasAuthority('CRM_LEADS_READ')")
     public ApiResponse<List<CrmProspectoResponse>> listProspectos() {
         return ApiResponse.ok(crmUseCaseService.listProspectos(), "Prospectos CRM");
     }
 
     @GetMapping("/prospectos/page")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_LEADS_READ')")
+    @PreAuthorize("hasAuthority('CRM_LEADS_READ')")
     public ApiResponse<PageResponse<CrmProspectoResponse>> pageProspectos(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String estado,
@@ -163,26 +175,26 @@ public class CrmController {
     }
 
     @GetMapping("/prospectos/{id}")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_LEADS_READ')")
+    @PreAuthorize("hasAuthority('CRM_LEADS_READ')")
     public ApiResponse<CrmProspectoResponse> getProspecto(@PathVariable Long id) {
         return ApiResponse.ok(crmUseCaseService.getProspecto(id), "Prospecto CRM");
     }
 
     @GetMapping("/prospectos/{id}/intereses")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_LEADS_READ')")
+    @PreAuthorize("hasAuthority('CRM_LEADS_READ')")
     public ApiResponse<List<CrmProspectoInteresResponse>> listProspectoIntereses(@PathVariable Long id) {
         return ApiResponse.ok(crmUseCaseService.listProspectoIntereses(id), "Intereses del prospecto CRM");
     }
 
     @PutMapping("/prospectos/{id}")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_LEADS_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_LEADS_WRITE')")
     public ApiResponse<CrmProspectoResponse> updateProspecto(@PathVariable Long id,
                                                              @Valid @RequestBody UpdateCrmProspectoRequest request) {
         return ApiResponse.ok(crmUseCaseService.updateProspecto(id, request), "Prospecto CRM actualizado");
     }
 
     @PostMapping("/prospectos/repartir")
-    @PreAuthorize("hasAnyAuthority('CRM_ASSIGN','CRM_VIEW_ALL','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN','ROLE_ADMIN_EMPRESA','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('CRM_ASSIGN','CRM_VIEW_ALL','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN')")
     public ApiResponse<RepartirCrmProspectosResponse> repartirProspectos(@Valid @RequestBody RepartirCrmProspectosRequest request) {
         return ApiResponse.ok(crmUseCaseService.repartirProspectos(request), "Prospectos CRM repartidos");
     }
@@ -194,19 +206,19 @@ public class CrmController {
     }
 
     @PostMapping("/oportunidades")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_OPPORTUNITIES_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_WRITE')")
     public ApiResponse<CrmOportunidadResponse> createOportunidad(@Valid @RequestBody CreateCrmOportunidadRequest request) {
         return ApiResponse.ok(crmUseCaseService.createOportunidad(request), "Oportunidad CRM creada");
     }
 
     @GetMapping("/oportunidades")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_OPPORTUNITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_READ')")
     public ApiResponse<List<CrmOportunidadResponse>> listOportunidades() {
         return ApiResponse.ok(crmUseCaseService.listOportunidades(), "Oportunidades CRM");
     }
 
     @GetMapping("/oportunidades/page")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_OPPORTUNITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_READ')")
     public ApiResponse<PageResponse<CrmOportunidadResponse>> pageOportunidades(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Long etapaId,
@@ -223,8 +235,24 @@ public class CrmController {
         );
     }
 
-    @GetMapping("/oportunidades/{id}")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_OPPORTUNITIES_READ')")
+    @GetMapping("/resultados/page")
+    @PreAuthorize("hasAnyAuthority('CRM_OPPORTUNITIES_READ','CRM_REPORTS_READ','CRM_REPORTS_TEAM')")
+    public ApiResponse<PageResponse<CrmOportunidadResponse>> pageResultados(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String estado,
+            @RequestParam(required = false) String responsableId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate cierreDesde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate cierreHasta,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(
+                crmUseCaseService.pageResultados(query, estado, responsableId, cierreDesde, cierreHasta, page, size),
+                "Resultados comerciales CRM paginados"
+        );
+    }
+
+    @GetMapping("/oportunidades/{id:\\d+}")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_READ')")
     public ApiResponse<CrmOportunidadResponse> getOportunidad(@PathVariable Long id) {
         return ApiResponse.ok(crmUseCaseService.getOportunidad(id), "Oportunidad CRM");
     }
@@ -236,7 +264,7 @@ public class CrmController {
     }
 
     @PutMapping("/oportunidades/{id}")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_OPPORTUNITIES_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_WRITE')")
     public ApiResponse<CrmOportunidadResponse> updateOportunidad(@PathVariable Long id,
                                                                  @Valid @RequestBody UpdateCrmOportunidadRequest request) {
         return ApiResponse.ok(crmUseCaseService.updateOportunidad(id, request), "Oportunidad CRM actualizada");
@@ -256,7 +284,7 @@ public class CrmController {
     }
 
     @PostMapping("/oportunidades/{id}/marcar-perdida")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_OPPORTUNITIES_CLOSE','CRM_OPPORTUNITY_MARK_LOST')")
+    @PreAuthorize("hasAnyAuthority('CRM_OPPORTUNITIES_CLOSE','CRM_OPPORTUNITY_MARK_LOST')")
     public ApiResponse<CrmOportunidadResponse> marcarPerdida(@PathVariable Long id,
                                                              @Valid @RequestBody MarcarPerdidaRequest request) {
         return ApiResponse.ok(crmUseCaseService.marcarPerdida(id, request), "Oportunidad marcada como perdida");
@@ -270,32 +298,32 @@ public class CrmController {
     }
 
     @GetMapping("/oportunidades/{id}/negociaciones")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_OPPORTUNITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_READ')")
     public ApiResponse<List<CrmNegociacionResponse>> listNegociaciones(@PathVariable Long id) {
         return ApiResponse.ok(crmUseCaseService.listNegociaciones(id), "Negociaciones de la oportunidad");
     }
 
     @PostMapping("/oportunidades/{id}/negociaciones")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_OPPORTUNITIES_WRITE','CRM_OPPORTUNITIES_STAGE')")
+    @PreAuthorize("hasAnyAuthority('CRM_OPPORTUNITIES_WRITE','CRM_OPPORTUNITIES_STAGE')")
     public ApiResponse<CrmNegociacionResponse> registrarNegociacion(@PathVariable Long id,
                                                                     @Valid @RequestBody CreateCrmNegociacionRequest request) {
         return ApiResponse.ok(crmUseCaseService.registrarNegociacion(id, request), "Negociacion registrada");
     }
 
     @PostMapping("/actividades")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_ACTIVITIES_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_ACTIVITIES_WRITE')")
     public ApiResponse<CrmActividadResponse> createActividad(@Valid @RequestBody CreateCrmActividadRequest request) {
         return ApiResponse.ok(crmUseCaseService.createActividad(request), "Actividad CRM creada");
     }
 
     @GetMapping("/actividades")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_ACTIVITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_ACTIVITIES_READ')")
     public ApiResponse<List<CrmActividadResponse>> listActividades() {
         return ApiResponse.ok(crmUseCaseService.listActividades(), "Actividades CRM");
     }
 
     @GetMapping("/actividades/page")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_ACTIVITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_ACTIVITIES_READ')")
     public ApiResponse<PageResponse<CrmActividadResponse>> pageActividades(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String estado,
@@ -314,7 +342,7 @@ public class CrmController {
     }
 
     @GetMapping("/pagos/seguimiento/page")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_OPPORTUNITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_READ')")
     public ApiResponse<PageResponse<CrmOportunidadResponse>> pageSeguimientoPagos(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String responsableId,
@@ -329,20 +357,20 @@ public class CrmController {
     }
 
     @GetMapping("/actividades/{id}")
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_ACTIVITIES_READ')")
+    @PreAuthorize("hasAuthority('CRM_ACTIVITIES_READ')")
     public ApiResponse<CrmActividadResponse> getActividad(@PathVariable Long id) {
         return ApiResponse.ok(crmUseCaseService.getActividad(id), "Actividad CRM");
     }
 
     @PutMapping("/actividades/{id}/realizar")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_ACTIVITIES_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_ACTIVITIES_WRITE')")
     public ApiResponse<CrmActividadResponse> realizarActividad(@PathVariable Long id,
                                                                @Valid @RequestBody RealizarCrmActividadRequest request) {
         return ApiResponse.ok(crmUseCaseService.realizarActividad(id, request), "Actividad CRM realizada");
     }
 
     @PutMapping("/actividades/{id}/cancelar")
-    @PreAuthorize("hasAnyAuthority('CRM_WRITE','CRM_ACTIVITIES_WRITE')")
+    @PreAuthorize("hasAuthority('CRM_ACTIVITIES_WRITE')")
     public ApiResponse<CrmActividadResponse> cancelarActividad(@PathVariable Long id,
                                                                @Valid @RequestBody RealizarCrmActividadRequest request) {
         return ApiResponse.ok(crmUseCaseService.cancelarActividad(id, request), "Actividad CRM cancelada");

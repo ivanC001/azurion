@@ -7,5 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface UsuarioGlobalRepository extends JpaRepository<UsuarioGlobal, Long> {
     Optional<UsuarioGlobal> findByUsernameAndActivoTrue(String username);
 
+    Optional<UsuarioGlobal> findByUsernameIgnoreCase(String username);
+
     boolean existsByUsernameIgnoreCase(String username);
 }

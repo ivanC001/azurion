@@ -16,6 +16,7 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -85,6 +86,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new ApiError(
                 "INVALID_JSON",
                 "Request body is not valid JSON",
+                List.of(),
+                OffsetDateTime.now()
+        ));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.badRequest().body(new ApiError(
+                "INVALID_PARAMETER",
+                "El parametro '" + ex.getName() + "' tiene un formato invalido",
                 List.of(),
                 OffsetDateTime.now()
         ));

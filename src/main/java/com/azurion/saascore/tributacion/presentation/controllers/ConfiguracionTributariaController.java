@@ -5,6 +5,7 @@ import com.azurion.saascore.tributacion.application.dto.ConfiguracionTributariaR
 import com.azurion.saascore.tributacion.application.dto.ProductoTributariaRequest;
 import com.azurion.saascore.tributacion.application.dto.SucursalTributariaRequest;
 import com.azurion.saascore.tributacion.application.dto.TaxResolution;
+import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.tributacion.application.services.ConfiguracionTributariaService;
 import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping({"/configuracion", "/v1/saas/configuracion"})
 @RequiredArgsConstructor
+@RequireModule({"ERP", "FACTURACION"})
 public class ConfiguracionTributariaController {
     private final ConfiguracionTributariaService service;
 

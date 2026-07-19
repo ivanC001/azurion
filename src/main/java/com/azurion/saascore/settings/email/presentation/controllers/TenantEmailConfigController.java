@@ -25,7 +25,7 @@ public class TenantEmailConfigController {
     private final TenantEmailConfigService service;
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('CRM_READ','CRM_CONFIG_MANAGE')")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
     public ApiResponse<EmailConfigResponse> getConfig() {
         return ApiResponse.ok(service.getCurrentTenantConfig(), "Configuracion de correo");
     }

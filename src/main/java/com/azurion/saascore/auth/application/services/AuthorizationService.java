@@ -74,7 +74,7 @@ public class AuthorizationService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> switch (authority.getAuthority()) {
-                    case "ROLE_ADMIN_GENERAL", "ROLE_PLATFORM_ADMIN", "ROLE_ADMIN_EMPRESA", "ROLE_ADMIN" -> true;
+                    case "ROLE_ADMIN_GENERAL", "ROLE_PLATFORM_ADMIN", "ROLE_ERP_ADMIN", "ROLE_CRM_ADMIN" -> true;
                     default -> false;
                 });
     }

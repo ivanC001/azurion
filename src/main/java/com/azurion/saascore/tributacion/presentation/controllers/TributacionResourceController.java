@@ -3,6 +3,7 @@ package com.azurion.saascore.tributacion.presentation.controllers;
 import com.azurion.saascore.tributacion.application.dto.ProductoTributariaRequest;
 import com.azurion.saascore.tributacion.application.dto.SucursalTributariaRequest;
 import com.azurion.saascore.tributacion.application.dto.TaxResolution;
+import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.tributacion.application.services.ConfiguracionTributariaService;
 import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
+@RequireModule({"ERP", "FACTURACION"})
 public class TributacionResourceController {
     private final ConfiguracionTributariaService service;
 

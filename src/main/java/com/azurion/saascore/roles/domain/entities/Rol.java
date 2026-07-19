@@ -4,6 +4,8 @@ import com.azurion.shared.domain.BaseEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.util.LinkedHashSet;
@@ -31,6 +33,13 @@ public class Rol extends BaseEntity {
 
     @Column(name = "sistema", nullable = false)
     private boolean sistema;
+
+    @Column(name = "deprecated", nullable = false)
+    private boolean deprecated;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ambito", nullable = false, length = 20)
+    private RoleScope ambito = RoleScope.ERP;
 
     @OneToMany(mappedBy = "rol", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<RolPermiso> rolPermisos = new LinkedHashSet<>();

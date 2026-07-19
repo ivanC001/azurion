@@ -9,25 +9,29 @@ Backend/API REST enterprise para ERP SaaS modular con Spring Boot 3, Java 21 y P
 1. `docker compose up -d postgres`
 2. `./mvnw spring-boot:run` (Windows: `mvnw.cmd spring-boot:run`)
 
-## Credenciales iniciales
-- Usuario: `platform.admin`
-- Password (hash seeded): `password`
+## Primer administrador
+
+No existen credenciales fijas activas. En el primer arranque configura temporalmente
+`AZURION_BOOTSTRAP_ADMIN_USERNAME` y `AZURION_BOOTSTRAP_ADMIN_PASSWORD` (minimo 16
+caracteres). Tras verificar el acceso, retira ambas variables. Los siguientes
+administradores se crean desde el endpoint protegido `/api/v1/auth/register`.
 
 ## Login
-`POST /api/v1/auth/login`
+Administrador de plataforma: `POST /api/v1/auth/public/login`.
+
+Usuario de empresa: `POST /api/v1/auth/tenant/login`.
 
 ```json
 {
   "username": "platform.admin",
-  "password": "password",
-  "tenantId": "public"
+  "password": "una-clave-segura"
 }
 ```
 
 ## Facturacion integrada (Azurion -> Facturador)
 
 - Flujo: `POST /api/v1/saas/cajas/{id}/ventas`
-- Azurion emite al facturador y, para factura/boleta, espera estado SUNAT final (`ACEPTADO`/`RECHAZADO`/`ERROR`) antes de responder.
+- Azurion guarda la tarea en una cola transaccional, responde al usuario y la procesa con reintentos persistentes.
 - Ticket de venta se registra y responde sin espera SUNAT.
 
 Variables relevantes:

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping({"/v1/saas/almacenes", "/v1/saas/inventory/almacenes"})
 @RequiredArgsConstructor
-@RequireModule("INVENTARIO")
+@RequireModule({"ERP", "INVENTARIO"})
 public class AlmacenController {
 
     private final CreateAlmacenUseCase createAlmacenUseCase;

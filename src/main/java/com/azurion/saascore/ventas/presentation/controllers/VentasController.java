@@ -24,7 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/v1/saas/ventas")
 @RequiredArgsConstructor
-@RequireModule("VENTAS")
+@RequireModule({"ERP", "VENTAS"})
 public class VentasController {
 
     private final RegisterVentaUseCase registerVentaUseCase;

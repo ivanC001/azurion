@@ -2,6 +2,7 @@ package com.azurion.saascore.inventory.presentation.controllers;
 
 import com.azurion.saascore.inventory.application.dto.CategoriaResponse;
 import com.azurion.saascore.inventory.application.usecases.ListCategoriasUseCase;
+import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/inventory/categorias")
 @RequiredArgsConstructor
+@RequireModule({"ERP", "INVENTARIO"})
 public class InventoryCategoriaController {
 
     private final ListCategoriasUseCase listCategoriasUseCase;

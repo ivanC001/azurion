@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping({"/v1/saas/inventory/productos", "/inventario/productos"})
 @RequiredArgsConstructor
-@RequireModule("INVENTARIO")
+@RequireModule({"ERP", "INVENTARIO"})
 public class InventoryProductoController {
 
     private final CreateProductoUseCase createProductoUseCase;

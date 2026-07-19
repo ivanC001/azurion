@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/cajas")
 @RequiredArgsConstructor
-@RequireModule("CAJA")
+@RequireModule({"ERP", "CAJA"})
 public class CajaController {
 
     private final AbrirCajaUseCase abrirCajaUseCase;

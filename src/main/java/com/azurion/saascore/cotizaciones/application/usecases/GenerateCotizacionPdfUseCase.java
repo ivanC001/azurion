@@ -11,9 +11,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -120,7 +117,7 @@ public class GenerateCotizacionPdfUseCase {
             float height = image.getHeight() * scale;
             content.drawImage(image, x + ((maxWidth - width) / 2), y + ((maxHeight - height) / 2), width, height);
         } catch (Exception ignored) {
-            // SVG/WEBP or inaccessible logos are skipped without preventing the PDF.
+            // Unsupported or inaccessible local logos are skipped without preventing the PDF.
         }
     }
 
@@ -351,16 +348,14 @@ public class GenerateCotizacionPdfUseCase {
             String path = uri.getPath();
             int filesIndex = path == null ? -1 : path.indexOf("/files/");
             if (filesIndex >= 0) {
-                Path localPath = Paths.get(publicFilesRootDir).toAbsolutePath().normalize()
+                Path storageRoot = Paths.get(publicFilesRootDir).toAbsolutePath().normalize();
+                Path localPath = storageRoot
                         .resolve(path.substring(filesIndex + "/files/".length())).normalize();
-                if (localPath.startsWith(Paths.get(publicFilesRootDir).toAbsolutePath().normalize()) && Files.isRegularFile(localPath)) {
+                if (localPath.startsWith(storageRoot)
+                        && Files.isRegularFile(localPath)
+                        && Files.size(localPath) <= 2L * 1024L * 1024L) {
                     return Files.readAllBytes(localPath);
                 }
-            }
-            if ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme())) {
-                HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
-                HttpResponse<byte[]> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
-                return response.statusCode() >= 200 && response.statusCode() < 300 ? response.body() : null;
             }
         } catch (Exception ignored) {
             return null;

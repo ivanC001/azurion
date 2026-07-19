@@ -45,23 +45,40 @@ management:
 
 security:
   jwt:
-    secret: ${JWT_SECRET:replace_this_with_very_long_secure_secret_32_chars_minimum}
+    secret: ${JWT_SECRET:}
     issuer: ${JWT_ISSUER:azurion}
     expiration-minutes: ${JWT_EXP_MIN:120}
 
 azurion:
   security:
-    disable-auth-for-dev: ${DISABLE_AUTH_FOR_DEV:false}
-    email-secret-key: ${AZURION_EMAIL_SECRET_KEY:dev-email-secret-change-me-32-bytes-minimum}
+    email-secret-key: ${AZURION_EMAIL_SECRET_KEY:}
+    email-secret-key-previous: ${AZURION_EMAIL_SECRET_KEY_PREVIOUS:}
+    crm-secret-key: ${AZURION_CRM_SECRET_KEY:}
+    bootstrap-admin:
+      username: ${AZURION_BOOTSTRAP_ADMIN_USERNAME:}
+      password: ${AZURION_BOOTSTRAP_ADMIN_PASSWORD:}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+    rate-limit:
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      auth-requests-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:10}
+      public-requests-per-minute: ${RATE_LIMIT_PUBLIC_PER_MINUTE:60}
+      max-clients: ${RATE_LIMIT_MAX_CLIENTS:10000}
+  whatsapp:
+    graph-base-url: ${WHATSAPP_GRAPH_BASE_URL:https://graph.facebook.com}
+    graph-api-version: ${WHATSAPP_GRAPH_API_VERSION:v25.0}
+    connect-timeout-millis: ${WHATSAPP_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-millis: ${WHATSAPP_READ_TIMEOUT_MS:15000}
   multitenancy:
     default-schema: public
     tenant-header: X-Tenant-Id
-    public-endpoints: /v1/auth/register,/v1/auth/public/login,/v1/auth/tenant/login,/v1/auth/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/facturador/callback/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html,/actuator/health,/actuator/info,/files/**
+    run-migrations-on-startup: ${TENANT_MIGRATIONS_ON_STARTUP:true}
+    public-endpoints: /v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/facturador/callback/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html,/actuator/health,/actuator/info,/files/**
   storage:
     public-files:
       root-dir: ${AZURION_PUBLIC_FILES_DIR:${user.dir}/storage/public-files}
+    private-files:
+      root-dir: ${AZURION_PRIVATE_FILES_DIR:${user.dir}/storage/private-files}
   facturador:
     base-url: ${FACTURADOR_BASE_URL:http://127.0.0.1:8000}
     api-prefix: ${FACTURADOR_API_PREFIX:/api}
@@ -82,6 +99,11 @@ azurion:
       header-nonce: ${FACTURADOR_CALLBACK_HEADER_NONCE:X-Nonce}
       timestamp-tolerance-seconds: ${FACTURADOR_CALLBACK_TOLERANCE_SECONDS:300}
       nonce-ttl-seconds: ${FACTURADOR_CALLBACK_NONCE_TTL_SECONDS:600}
+    outbox:
+      enabled: ${FACTURADOR_OUTBOX_ENABLED:true}
+      initial-delay-millis: ${FACTURADOR_OUTBOX_INITIAL_DELAY_MS:5000}
+      poll-delay-millis: ${FACTURADOR_OUTBOX_POLL_DELAY_MS:2000}
+      cleanup-cron: ${FACTURADOR_OUTBOX_CLEANUP_CRON:0 30 3 * * *}
 
 springdoc:
   api-docs:

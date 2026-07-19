@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/saas/ubigeos")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','ADMIN_EMPRESA','SALES')")
+@PreAuthorize("isAuthenticated()")
 public class UbigeoController {
 
     private final SearchUbigeosUseCase searchUbigeosUseCase;

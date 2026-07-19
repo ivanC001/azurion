@@ -30,6 +30,13 @@ public class TenantEmailConfigService {
                 .orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isCurrentTenantEmailActive() {
+        return repository.findByTenantId(currentTenant())
+                .map(TenantEmailConfig::isActivo)
+                .orElse(false);
+    }
+
     @Transactional
     public EmailConfigResponse saveOrUpdateConfig(EmailConfigRequest request) {
         String tenantId = currentTenant();

@@ -26,7 +26,6 @@ public class EmpresaModuloAdminAccessService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getAuthorities().stream().noneMatch(authority ->
                 "ROLE_ADMIN_EMPRESA".equals(authority.getAuthority())
-                        || "ROLE_ADMIN".equals(authority.getAuthority())
                         || "EMPRESA_MODULOS_READ".equals(authority.getAuthority()))) {
             throw new AccessDeniedException("No tiene permisos para ver los modulos contratados de la empresa");
         }

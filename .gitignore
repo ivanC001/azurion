@@ -34,3 +34,7 @@ build/
 
 # Local environment files
 .env
+*.log
+/logs/
+/storage/public-files/
+/storage/private-files/

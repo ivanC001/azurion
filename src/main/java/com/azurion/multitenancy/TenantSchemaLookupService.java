@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
+import com.azurion.shared.exception.BusinessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -33,7 +34,7 @@ public class TenantSchemaLookupService {
         );
 
         if (schema == null || schema.isBlank()) {
-            return TenantContext.DEFAULT_TENANT;
+            throw new BusinessException("TENANT_NO_ENCONTRADO", "El tenant solicitado no existe o esta inactivo");
         }
 
         cache.put(tenantId, new CacheItem(schema, Instant.now().plusSeconds(TTL_SECONDS)));

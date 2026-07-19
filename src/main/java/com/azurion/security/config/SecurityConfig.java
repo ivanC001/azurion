@@ -2,6 +2,7 @@ package com.azurion.security.config;
 
 import com.azurion.multitenancy.TenantFilter;
 import com.azurion.security.jwt.JwtAuthenticationFilter;
+import com.azurion.security.ratelimit.RateLimitFilter;
 import com.azurion.shared.audit.AuditTrailFilter;
 import java.util.Arrays;
 import java.util.List;
@@ -10,9 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -30,13 +29,11 @@ public class SecurityConfig {
 
     private final TenantFilter tenantFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final AuditTrailFilter auditTrailFilter;
 
-    @Value("${azurion.multitenancy.public-endpoints:/v1/auth/register,/v1/auth/public/login,/v1/auth/tenant/login,/v1/auth/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/facturador/callback/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html,/actuator/health,/actuator/info,/files/**}")
+    @Value("${azurion.multitenancy.public-endpoints:/v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/facturador/callback/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html,/actuator/health,/actuator/info,/files/**}")
     private String publicEndpointsProperty;
-
-    @Value("${azurion.security.disable-auth-for-dev:false}")
-    private boolean disableAuthForDev;
 
     @Value("${azurion.security.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*}")
     private String corsAllowedOriginsProperty;
@@ -60,20 +57,13 @@ public class SecurityConfig {
                         })
                 );
 
-        if (disableAuthForDev) {
-            http
-                    .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                    .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
-                    .addFilterAfter(auditTrailFilter, TenantFilter.class);
-            return http.build();
-        }
-
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(resolvePublicEndpoints()).permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(tenantFilter, RateLimitFilter.class)
                 .addFilterAfter(jwtAuthenticationFilter, TenantFilter.class)
                 .addFilterAfter(auditTrailFilter, JwtAuthenticationFilter.class);
 
@@ -103,11 +93,6 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
     }
 
     private String[] resolvePublicEndpoints() {
