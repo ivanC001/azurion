@@ -28,7 +28,14 @@ public class TenantSchemaLookupService {
         }
 
         String schema = jdbcTemplate.query(
-                "SELECT schema_name FROM public.schemas_empresas WHERE tenant_id = ? AND active = TRUE",
+                """
+                SELECT registry.schema_name
+                  FROM public.schemas_empresas registry
+                  JOIN public.empresas empresa ON empresa.tenant_id = registry.tenant_id
+                 WHERE registry.tenant_id = ?
+                   AND registry.active = TRUE
+                   AND empresa.activo = TRUE
+                """,
                 rs -> rs.next() ? rs.getString(1) : null,
                 tenantId
         );

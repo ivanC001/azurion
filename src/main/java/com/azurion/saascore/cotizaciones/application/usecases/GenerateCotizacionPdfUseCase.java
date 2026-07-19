@@ -73,7 +73,7 @@ public class GenerateCotizacionPdfUseCase {
                     Base64.getEncoder().encodeToString(output.toByteArray())
             );
         } catch (IOException exception) {
-            throw new BusinessException("COTIZACION_PDF_ERROR", "No se pudo generar el PDF de cotizacion");
+            throw BusinessException.internal("COTIZACION_PDF_ERROR", "No se pudo generar el PDF de cotizacion");
         }
     }
 

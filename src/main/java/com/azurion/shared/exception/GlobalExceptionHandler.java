@@ -4,49 +4,100 @@ import com.azurion.shared.api.ApiError;
 import jakarta.validation.ConstraintViolationException;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final String GENERIC_OPERATION_ERROR =
+            "No se pudo completar la operacion en este momento. Intenta nuevamente.";
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiError> handleBusiness(BusinessException ex) {
-        return ResponseEntity.badRequest().body(new ApiError(
-                ex.getCode(),
-                ex.getMessage(),
-                List.of(),
-                OffsetDateTime.now()
-        ));
+        if (!ErrorExposurePolicy.isUserActionable(ex)) {
+            log.error("Internal business failure code={} traceId={}", ex.getCode(), traceId(), ex);
+            return response(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "OPERATION_FAILED",
+                    GENERIC_OPERATION_ERROR,
+                    List.of(),
+                    false
+            );
+        }
+
+        return response(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), List.of(), true);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
-                .map(err -> err.getField() + ": " + err.getDefaultMessage())
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
 
-        return ResponseEntity.badRequest().body(new ApiError(
+        return response(
+                HttpStatus.BAD_REQUEST,
                 "VALIDATION_ERROR",
-                "Validation failed",
+                "Revisa los datos ingresados",
                 details,
-                OffsetDateTime.now()
-        ));
+                true
+        );
+    }
+
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ApiError> handleBinding(BindException ex) {
+        List<String> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .toList();
+
+        return response(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Revisa los datos ingresados",
+                details,
+                true
+        );
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiError> handleMethodValidation(HandlerMethodValidationException ex) {
+        List<String> details = ex.getAllValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> {
+                            String parameter = result.getMethodParameter().getParameterName();
+                            String message = error.getDefaultMessage();
+                            return (parameter == null ? "parametro" : parameter) + ": " + message;
+                        }))
+                .toList();
+
+        return response(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Revisa los datos ingresados",
+                details,
+                true
+        );
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -55,52 +106,57 @@ public class GlobalExceptionHandler {
                 .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
                 .toList();
 
-        return ResponseEntity.badRequest().body(new ApiError(
+        return response(
+                HttpStatus.BAD_REQUEST,
                 "VALIDATION_ERROR",
-                "Constraint violation",
+                "Revisa los datos ingresados",
                 details,
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError(
+        return response(
+                HttpStatus.FORBIDDEN,
                 "ACCESS_DENIED",
-                "You do not have permission for this operation",
+                "No tienes permiso para realizar esta operacion",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiError(
+        return response(
+                HttpStatus.UNAUTHORIZED,
                 "AUTH_ERROR",
-                "Invalid username or password",
+                "Usuario o contrasena incorrectos",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleInvalidJson(HttpMessageNotReadableException ex) {
-        return ResponseEntity.badRequest().body(new ApiError(
+        return response(
+                HttpStatus.BAD_REQUEST,
                 "INVALID_JSON",
-                "Request body is not valid JSON",
+                "Los datos enviados no tienen un formato valido",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiError> handleArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        return ResponseEntity.badRequest().body(new ApiError(
+        return response(
+                HttpStatus.BAD_REQUEST,
                 "INVALID_PARAMETER",
                 "El parametro '" + ex.getName() + "' tiene un formato invalido",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -112,75 +168,124 @@ public class GlobalExceptionHandler {
         } else if (cause != null && cause.contains("uk_productos_codigo_not_null")) {
             message = "Ya existe un producto con ese codigo";
         } else if (cause != null && cause.contains("value too long")) {
-            message = "Uno de los datos ingresados supera el tamaño permitido";
+            message = "Uno de los datos ingresados supera el tamano permitido";
         }
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
-                "DATA_CONFLICT",
-                message,
-                List.of(),
-                OffsetDateTime.now()
-        ));
+
+        log.warn("Data integrity violation traceId={} cause={}", traceId(), cause);
+        return response(HttpStatus.CONFLICT, "DATA_CONFLICT", message, List.of(), true);
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ApiError> handleMissingHeader(MissingRequestHeaderException ex) {
-        return ResponseEntity.badRequest().body(new ApiError(
+        return response(
+                HttpStatus.BAD_REQUEST,
                 "MISSING_HEADER",
-                "Required header is missing: " + ex.getHeaderName(),
+                "Falta el dato requerido: " + ex.getHeaderName(),
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParameter(MissingServletRequestParameterException ex) {
+        return response(
+                HttpStatus.BAD_REQUEST,
+                "MISSING_PARAMETER",
+                "Falta el parametro requerido: " + ex.getParameterName(),
+                List.of(),
+                true
+        );
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException ex) {
+        return response(
+                HttpStatus.BAD_REQUEST,
+                "MISSING_REQUEST_PART",
+                "Falta el archivo o dato requerido: " + ex.getRequestPartName(),
+                List.of(),
+                true
+        );
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError(
+        return response(
+                HttpStatus.NOT_FOUND,
                 "NOT_FOUND",
-                "Endpoint or resource not found",
+                "No se encontro el recurso solicitado",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiError> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new ApiError(
+        return response(
+                HttpStatus.METHOD_NOT_ALLOWED,
                 "METHOD_NOT_ALLOWED",
-                "HTTP method not allowed for this endpoint",
+                "La operacion solicitada no esta disponible",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ApiError(
+        return response(
+                HttpStatus.PAYLOAD_TOO_LARGE,
                 "FILE_TOO_LARGE",
                 "El archivo supera el limite permitido de 8 MB",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                true
+        );
     }
 
     @ExceptionHandler(MultipartException.class)
     public ResponseEntity<ApiError> handleMultipart(MultipartException ex) {
-        log.warn("Invalid multipart request: {}", ex.getMessage());
-        return ResponseEntity.badRequest().body(new ApiError(
+        log.error("Multipart processing failure traceId={}", traceId(), ex);
+        return response(
+                HttpStatus.BAD_REQUEST,
                 "INVALID_MULTIPART_REQUEST",
-                "No se pudo procesar el archivo adjunto",
+                "No se pudo procesar el archivo adjunto. Verifica el archivo e intenta nuevamente.",
                 List.of(),
-                OffsetDateTime.now()
-        ));
+                false
+        );
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnknown(Exception ex) {
-        log.error("Unhandled exception", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiError(
+        log.error("Unhandled exception traceId={}", traceId(), ex);
+        return response(
+                HttpStatus.INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",
-                "Unexpected server error",
+                GENERIC_OPERATION_ERROR,
                 List.of(),
-                OffsetDateTime.now()
+                false
+        );
+    }
+
+    private ResponseEntity<ApiError> response(
+            HttpStatus status,
+            String code,
+            String message,
+            List<String> details,
+            boolean userActionable
+    ) {
+        return ResponseEntity.status(status).body(new ApiError(
+                code,
+                message,
+                details,
+                OffsetDateTime.now(),
+                userActionable,
+                traceId()
         ));
+    }
+
+    private String traceId() {
+        String currentTraceId = MDC.get("traceId");
+        return currentTraceId == null || currentTraceId.isBlank()
+                ? UUID.randomUUID().toString()
+                : currentTraceId;
     }
 }

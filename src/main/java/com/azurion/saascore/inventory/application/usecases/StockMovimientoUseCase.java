@@ -45,7 +45,9 @@ public class StockMovimientoUseCase {
         if (request.almacenDestinoId() != null) {
             authorizationService.validarAlmacen(usuarioId, request.almacenDestinoId());
         }
-        Producto producto = productoRepository.findById(request.productoId())
+        // The product lock serializes stock-row/lote creation and cost recalculation
+        // for the same product across warehouses within the tenant schema.
+        Producto producto = productoRepository.findByIdForUpdate(request.productoId())
                 .orElseThrow(() -> new BusinessException("PRODUCTO_NO_ENCONTRADO", "Producto no encontrado"));
         validateProductoMovible(producto);
 

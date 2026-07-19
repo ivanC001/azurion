@@ -48,12 +48,12 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(401);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.getWriter().write("{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication is required\"}");
+                            response.getWriter().write("{\"code\":\"AUTH_ERROR\",\"message\":\"Debes iniciar sesion para continuar\",\"details\":[],\"userActionable\":true}");
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(403);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.getWriter().write("{\"code\":\"ACCESS_DENIED\",\"message\":\"Insufficient permissions\"}");
+                            response.getWriter().write("{\"code\":\"ACCESS_DENIED\",\"message\":\"No tienes permiso para realizar esta operacion\",\"details\":[],\"userActionable\":true}");
                         })
                 );
 
@@ -81,7 +81,7 @@ public class SecurityConfig {
         cors.setAllowedOriginPatterns(allowedOrigins);
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("*"));
-        cors.setExposedHeaders(List.of("Authorization"));
+        cors.setExposedHeaders(List.of("Authorization", "X-Correlation-Id"));
         cors.setAllowCredentials(true);
         cors.setMaxAge(3600L);
 

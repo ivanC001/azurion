@@ -62,7 +62,7 @@ public class SmtpEmailTransportService {
                     rootCause(ex).getClass().getSimpleName(),
                     sanitizeError(rootCause(ex))
             );
-            throw new BusinessException("EMAIL_SEND_ERROR", sanitizeError(ex));
+            throw BusinessException.internal("EMAIL_SEND_ERROR", sanitizeError(ex));
         }
     }
 

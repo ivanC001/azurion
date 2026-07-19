@@ -7,6 +7,8 @@ public record ApiError(
         String code,
         String message,
         List<String> details,
-        OffsetDateTime timestamp
+        OffsetDateTime timestamp,
+        boolean userActionable,
+        String traceId
 ) {
 }

@@ -46,4 +46,13 @@ public class VentaFacturacionOutbox extends BaseEntity {
 
     @Column(name = "last_error", length = 1000)
     private String lastError;
+
+    @Column(name = "lease_owner", length = 120)
+    private String leaseOwner;
+
+    @Column(name = "lease_until")
+    private LocalDateTime leaseUntil;
+
+    @Column(name = "heartbeat_at")
+    private LocalDateTime heartbeatAt;
 }

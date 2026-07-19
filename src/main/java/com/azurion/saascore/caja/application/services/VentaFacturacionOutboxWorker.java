@@ -12,6 +12,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -26,6 +31,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 public class VentaFacturacionOutboxWorker {
 
     private static final int MAX_ATTEMPTS = 5;
+    private static final Duration LEASE_DURATION = Duration.ofMinutes(2);
+    private static final long HEARTBEAT_SECONDS = 30;
     private static final List<Duration> RETRY_DELAYS = List.of(
             Duration.ofMinutes(1),
             Duration.ofMinutes(5),
@@ -36,8 +43,11 @@ public class VentaFacturacionOutboxWorker {
     private final VentaFacturacionOutboxRepository outboxRepository;
     private final ProcessVentaFacturacionAsyncUseCase processUseCase;
     private final ObjectMapper objectMapper;
-    @Qualifier("eventExecutor")
-    private final Executor eventExecutor;
+    @Qualifier("facturacionExecutor")
+    private final Executor facturacionExecutor;
+    @Qualifier("facturacionHeartbeatExecutor")
+    private final ScheduledExecutorService heartbeatExecutor;
+    private final String workerId = UUID.randomUUID().toString();
 
     @Scheduled(
             initialDelayString = "${azurion.facturador.outbox.initial-delay-millis:5000}",
@@ -45,14 +55,14 @@ public class VentaFacturacionOutboxWorker {
     )
     public void poll() {
         LocalDateTime now = LocalDateTime.now();
-        outboxRepository.recoverStuck(now.minusMinutes(10), now);
+        outboxRepository.recoverExpiredLeases(now);
         for (VentaFacturacionOutbox candidate : outboxRepository
                 .findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByIdAsc(List.of("PENDING", "RETRY"), now)) {
-            if (outboxRepository.claim(candidate.getId(), now) != 1) {
+            if (outboxRepository.claim(candidate.getId(), workerId, now, now.plus(LEASE_DURATION)) != 1) {
                 continue;
             }
-            outboxRepository.findById(candidate.getId())
-                    .ifPresent(job -> eventExecutor.execute(() -> process(job)));
+            outboxRepository.findByIdAndStatusAndLeaseOwner(candidate.getId(), "PROCESSING", workerId)
+                    .ifPresent(this::submit);
         }
     }
 
@@ -64,10 +74,32 @@ public class VentaFacturacionOutboxWorker {
         }
     }
 
+    private void submit(VentaFacturacionOutbox job) {
+        try {
+            facturacionExecutor.execute(() -> process(job));
+        } catch (RejectedExecutionException error) {
+            LocalDateTime now = LocalDateTime.now();
+            outboxRepository.markFailedAttempt(
+                    job.getId(), workerId, "RETRY", now.plusSeconds(30),
+                    "Pool de facturacion temporalmente saturado", now
+            );
+            log.warn("Pool de facturacion saturado; tarea {} reprogramada", job.getExternalId());
+        }
+    }
+
     private void process(VentaFacturacionOutbox job) {
+        ScheduledFuture<?> heartbeat = heartbeatExecutor.scheduleAtFixedRate(
+                () -> renewLease(job),
+                HEARTBEAT_SECONDS,
+                HEARTBEAT_SECONDS,
+                TimeUnit.SECONDS
+        );
         try {
             processUseCase.execute(toTask(job));
-            outboxRepository.markCompleted(job.getId(), LocalDateTime.now());
+            int updated = outboxRepository.markCompleted(job.getId(), workerId, LocalDateTime.now());
+            if (updated != 1) {
+                log.error("La tarea {} termino sin conservar la propiedad del lease", job.getExternalId());
+            }
         } catch (Exception error) {
             int attempts = job.getAttempts() == null ? 1 : job.getAttempts();
             boolean exhausted = attempts >= MAX_ATTEMPTS;
@@ -77,6 +109,7 @@ public class VentaFacturacionOutboxWorker {
                     : now.plus(RETRY_DELAYS.get(Math.min(attempts - 1, RETRY_DELAYS.size() - 1)));
             outboxRepository.markFailedAttempt(
                     job.getId(),
+                    workerId,
                     exhausted ? "FAILED" : "RETRY",
                     nextAttempt,
                     trimError(error),
@@ -88,6 +121,20 @@ public class VentaFacturacionOutboxWorker {
                     attempts,
                     exhausted ? "FAILED" : "RETRY"
             );
+        } finally {
+            heartbeat.cancel(false);
+        }
+    }
+
+    private void renewLease(VentaFacturacionOutbox job) {
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            int updated = outboxRepository.heartbeat(job.getId(), workerId, now, now.plus(LEASE_DURATION));
+            if (updated != 1) {
+                log.error("No se pudo renovar el lease de la tarea {}", job.getExternalId());
+            }
+        } catch (RuntimeException error) {
+            log.error("Fallo el heartbeat de la tarea {}", job.getExternalId(), error);
         }
     }
 

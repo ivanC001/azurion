@@ -59,7 +59,7 @@ public class EmailSecretEncryptionService {
             buffer.put(encrypted);
             return PREFIX + Base64.getEncoder().encodeToString(buffer.array());
         } catch (Exception ex) {
-            throw new BusinessException("EMAIL_SECRET_ENCRYPT_ERROR", "No se pudo cifrar la clave SMTP.");
+            throw BusinessException.internal("EMAIL_SECRET_ENCRYPT_ERROR", "No se pudo cifrar la clave SMTP.");
         }
     }
 
@@ -88,7 +88,7 @@ public class EmailSecretEncryptionService {
             }
             throw new IllegalArgumentException("Ninguna clave configurada pudo descifrar el valor");
         } catch (Exception ex) {
-            throw new BusinessException("EMAIL_SECRET_DECRYPT_ERROR", "No se pudo descifrar la clave SMTP.");
+            throw BusinessException.internal("EMAIL_SECRET_DECRYPT_ERROR", "No se pudo descifrar la clave SMTP.");
         }
     }
 
@@ -109,7 +109,7 @@ public class EmailSecretEncryptionService {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ex) {
-            throw new BusinessException("EMAIL_SECRET_KEY_ERROR", "No se pudo preparar la clave de cifrado SMTP.");
+            throw BusinessException.internal("EMAIL_SECRET_KEY_ERROR", "No se pudo preparar la clave de cifrado SMTP.");
         }
     }
 }

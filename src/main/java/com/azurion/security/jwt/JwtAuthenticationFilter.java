@@ -59,7 +59,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.clearContext();
                 response.setStatus(HttpStatus.UNAUTHORIZED.value());
                 response.setContentType("application/json");
-                response.getWriter().write("{\"code\":\"AUTH_ERROR\",\"message\":\"Invalid JWT token\"}");
+                response.getWriter().write("{\"code\":\"AUTH_ERROR\",\"message\":\"Tu sesion no es valida o ha vencido\",\"details\":[],\"userActionable\":true}");
                 return;
             }
         }

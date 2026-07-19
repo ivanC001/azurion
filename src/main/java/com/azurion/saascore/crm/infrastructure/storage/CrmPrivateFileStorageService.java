@@ -120,7 +120,7 @@ public class CrmPrivateFileStorageService {
                     file == null ? 0 : file.getSize(),
                     ex
             );
-            throw new BusinessException("CRM_ARCHIVO_SAVE_ERROR", "No se pudo guardar el archivo");
+            throw BusinessException.internal("CRM_ARCHIVO_SAVE_ERROR", "No se pudo guardar el archivo");
         }
     }
 
@@ -134,7 +134,7 @@ public class CrmPrivateFileStorageService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (IOException ex) {
-            throw new BusinessException("CRM_ARCHIVO_READ_ERROR", "No se pudo leer el archivo");
+            throw BusinessException.internal("CRM_ARCHIVO_READ_ERROR", "No se pudo leer el archivo");
         }
     }
 

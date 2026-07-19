@@ -50,7 +50,7 @@ public class CrmSecretEncryptionService {
             buffer.put(encrypted);
             return PREFIX + Base64.getEncoder().encodeToString(buffer.array());
         } catch (Exception ex) {
-            throw new BusinessException("CRM_SECRET_ENCRYPT_ERROR", "No se pudo cifrar la credencial CRM");
+            throw BusinessException.internal("CRM_SECRET_ENCRYPT_ERROR", "No se pudo cifrar la credencial CRM");
         }
     }
 
@@ -70,7 +70,7 @@ public class CrmSecretEncryptionService {
             cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
             return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
         } catch (Exception ex) {
-            throw new BusinessException("CRM_SECRET_DECRYPT_ERROR", "No se pudo descifrar la credencial CRM");
+            throw BusinessException.internal("CRM_SECRET_DECRYPT_ERROR", "No se pudo descifrar la credencial CRM");
         }
     }
 
@@ -78,7 +78,7 @@ public class CrmSecretEncryptionService {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ex) {
-            throw new BusinessException("CRM_SECRET_KEY_ERROR", "No se pudo preparar la clave de cifrado CRM");
+            throw BusinessException.internal("CRM_SECRET_KEY_ERROR", "No se pudo preparar la clave de cifrado CRM");
         }
     }
 }

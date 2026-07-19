@@ -26,7 +26,9 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +65,8 @@ public class RegistrarCompraUseCase {
             throw new BusinessException("SUCURSAL_INACTIVA", "La sucursal del almacen esta inactiva y no permite ingresos");
         }
 
+        Map<Long, Producto> productosBloqueados = lockProductos(request.detalles());
+
         Compra compra = new Compra();
         compra.setProveedorId(request.proveedorId());
         compra.setProveedorDocumento(trim(request.proveedorDocumento()));
@@ -81,7 +85,7 @@ public class RegistrarCompraUseCase {
         List<CompraDetalle> detalles = new ArrayList<>();
         BigDecimal totalCompra = BigDecimal.ZERO;
         for (CompraDetalleRequest detalleRequest : request.detalles()) {
-            CompraDetalle detalle = registrarDetalle(savedCompra, almacen, detalleRequest);
+            CompraDetalle detalle = registrarDetalle(savedCompra, almacen, detalleRequest, productosBloqueados);
             detalles.add(detalle);
             totalCompra = totalCompra.add(detalle.getTotal());
         }
@@ -91,9 +95,13 @@ public class RegistrarCompraUseCase {
         return CompraInventoryMapper.toResponse(compraConTotal, detalles);
     }
 
-    private CompraDetalle registrarDetalle(Compra compra, Almacen almacen, CompraDetalleRequest request) {
-        Producto producto = productoRepository.findById(request.productoId())
-                .orElseThrow(() -> new BusinessException("PRODUCTO_NO_ENCONTRADO", "Producto no encontrado: " + request.productoId()));
+    private CompraDetalle registrarDetalle(
+            Compra compra,
+            Almacen almacen,
+            CompraDetalleRequest request,
+            Map<Long, Producto> productosBloqueados
+    ) {
+        Producto producto = productosBloqueados.get(request.productoId());
 
         BigDecimal cantidad = positive(request.cantidad(), "DETALLE_CANTIDAD_INVALIDA", "La cantidad debe ser mayor a cero");
         BigDecimal costoUnitario = positive(request.costoUnitario(), "DETALLE_COSTO_INVALIDO", "El costo unitario debe ser mayor a cero");
@@ -128,6 +136,23 @@ public class RegistrarCompraUseCase {
         actualizarCostosProducto(producto, cantidad, saldoAnterior, saldoNuevo, costoUnitario, precioVenta);
         registrarKardex(compra, savedDetalle, producto, almacen, lote, cantidad, saldoAnterior, saldoNuevo, costoUnitario, precioVenta);
         return savedDetalle;
+    }
+
+    private Map<Long, Producto> lockProductos(List<CompraDetalleRequest> detalles) {
+        Map<Long, Producto> productos = new LinkedHashMap<>();
+        detalles.stream()
+                .map(CompraDetalleRequest::productoId)
+                .distinct()
+                .sorted()
+                .forEach(productoId -> productos.put(
+                        productoId,
+                        productoRepository.findByIdForUpdate(productoId)
+                                .orElseThrow(() -> new BusinessException(
+                                        "PRODUCTO_NO_ENCONTRADO",
+                                        "Producto no encontrado: " + productoId
+                                ))
+                ));
+        return productos;
     }
 
     private BigDecimal resolvePrecioVenta(Producto producto, BigDecimal precioVenta) {
