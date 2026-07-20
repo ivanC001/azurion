@@ -14,6 +14,7 @@ import com.azurion.saascore.clientes.application.usecases.RegistrarClienteAbonoU
 import com.azurion.saascore.clientes.application.usecases.UpdateClienteUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/v1/saas/clientes")
@@ -51,6 +53,16 @@ public class ClienteController {
     @PreAuthorize("hasAuthority('CLIENTES_READ')")
     public ApiResponse<List<ClienteResponse>> list() {
         return ApiResponse.ok(listClientesUseCase.execute(), "Clientes");
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAuthority('CLIENTES_READ')")
+    public ApiResponse<PageResponse<ClienteResponse>> page(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listClientesUseCase.page(q, page, size), "Clientes paginados");
     }
 
     @GetMapping("/{id}")

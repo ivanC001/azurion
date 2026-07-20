@@ -75,6 +75,7 @@ public class WhatsappIntegrationService {
         if (!"whatsapp_business_account".equals(root.path("object").asText())) {
             return new WhatsappWebhookResult(0, 0, 0);
         }
+        config.setLastWebhookAt(OffsetDateTime.now(ZoneOffset.UTC));
 
         Counters counters = new Counters();
         for (JsonNode entry : root.path("entry")) {
@@ -92,6 +93,9 @@ public class WhatsappIntegrationService {
                     processStatus(status, counters);
                 }
             }
+        }
+        if (counters.processed > 0) {
+            config.setLastInboundMessageAt(OffsetDateTime.now(ZoneOffset.UTC));
         }
         return new WhatsappWebhookResult(counters.processed, counters.duplicates, counters.statuses);
     }

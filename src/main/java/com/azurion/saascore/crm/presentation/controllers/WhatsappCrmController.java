@@ -61,6 +61,15 @@ public class WhatsappCrmController {
         );
     }
 
+    @PostMapping("/whatsapp/configuracion/suscribir")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<WhatsappConnectionStatusResponse> subscribeApp() {
+        return ApiResponse.ok(
+                whatsappConfigurationService.subscribeApp(),
+                "Aplicacion suscrita a la cuenta de WhatsApp Business"
+        );
+    }
+
     @GetMapping("/whatsapp/conversaciones")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
     public ApiResponse<List<CrmWhatsappConversationResponse>> listConversations(

@@ -4,6 +4,7 @@ import com.azurion.shared.api.ApiError;
 import jakarta.validation.ConstraintViolationException;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -36,6 +37,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiError> handleBusiness(BusinessException ex) {
+        if (ex.getStatus() != HttpStatus.BAD_REQUEST) {
+            if (!ex.isUserActionable() || ex.getStatus().is5xxServerError()) {
+                log.error("Protected business failure code={} status={} traceId={}",
+                        ex.getCode(), ex.getStatus().value(), traceId(), ex);
+                String message = ex.getStatus().is5xxServerError()
+                        ? GENERIC_OPERATION_ERROR
+                        : protectedMessage(ex.getStatus());
+                String code = ex.getStatus().is5xxServerError() ? "OPERATION_FAILED" : ex.getCode();
+                return response(ex.getStatus(), code, message, List.of(), false);
+            }
+            return response(ex.getStatus(), ex.getCode(), ex.getMessage(), List.of(), true);
+        }
+
         if (!ErrorExposurePolicy.isUserActionable(ex)) {
             log.error("Internal business failure code={} traceId={}", ex.getCode(), traceId(), ex);
             return response(
@@ -47,7 +61,39 @@ public class GlobalExceptionHandler {
             );
         }
 
-        return response(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), List.of(), true);
+        return response(resolveBusinessStatus(ex), ex.getCode(), ex.getMessage(), List.of(), true);
+    }
+
+    private String protectedMessage(HttpStatus status) {
+        if (status == HttpStatus.UNAUTHORIZED) {
+            return "No fue posible autenticar la solicitud";
+        }
+        if (status == HttpStatus.FORBIDDEN) {
+            return "La solicitud no esta autorizada";
+        }
+        return GENERIC_OPERATION_ERROR;
+    }
+
+    private HttpStatus resolveBusinessStatus(BusinessException exception) {
+        if (exception.getStatus() != HttpStatus.BAD_REQUEST) {
+            return exception.getStatus();
+        }
+        String code = exception.getCode() == null
+                ? ""
+                : exception.getCode().toUpperCase(Locale.ROOT);
+        if (code.endsWith("_NO_ENCONTRADO") || code.endsWith("_NOT_FOUND")) {
+            return HttpStatus.NOT_FOUND;
+        }
+        if (code.contains("ACCESO_DENEGADO") || code.contains("MODULO_NO_ACTIVO")) {
+            return HttpStatus.FORBIDDEN;
+        }
+        if (code.contains("_DUPLICADO")
+                || code.contains("_YA_EXISTE")
+                || code.contains("_EN_PROCESO")
+                || code.contains("STOCK_INSUFICIENTE")) {
+            return HttpStatus.CONFLICT;
+        }
+        return HttpStatus.BAD_REQUEST;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

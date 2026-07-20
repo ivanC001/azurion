@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -26,6 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProcessFacturadorVentaCallbackUseCase {
 
     private final EmpresaRepository empresaRepository;
@@ -184,7 +186,16 @@ public class ProcessFacturadorVentaCallbackUseCase {
 
             CallbackProcessResult result = output.get();
             if (result != null && result.realtimeEvent() != null) {
-                ventaStatusRealtimeStreamService.publish(result.realtimeEvent());
+                try {
+                    ventaStatusRealtimeStreamService.publish(result.realtimeEvent());
+                } catch (RuntimeException realtimeFailure) {
+                    log.warn(
+                            "Callback persisted but realtime notification failed tenant={} externalId={}",
+                            result.tenantId(),
+                            result.externalId(),
+                            realtimeFailure
+                    );
+                }
             }
             return result;
         } finally {

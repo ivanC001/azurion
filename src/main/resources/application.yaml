@@ -5,8 +5,8 @@ spring:
     name: azurion-backend
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/azurion}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASS:postgres}
+    username: ${DB_USER}
+    password: ${DB_PASS}
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:30}
       minimum-idle: ${DB_POOL_MIN:5}
@@ -69,6 +69,8 @@ azurion:
       auth-requests-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:10}
       public-requests-per-minute: ${RATE_LIMIT_PUBLIC_PER_MINUTE:60}
       max-clients: ${RATE_LIMIT_MAX_CLIENTS:10000}
+      distributed-enabled: ${RATE_LIMIT_DISTRIBUTED_ENABLED:true}
+      cleanup-delay-millis: ${RATE_LIMIT_CLEANUP_DELAY_MS:60000}
       trusted-proxies: ${RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1,::1}
   email:
     transport:
@@ -86,7 +88,7 @@ azurion:
     default-schema: public
     tenant-header: X-Tenant-Id
     run-migrations-on-startup: ${TENANT_MIGRATIONS_ON_STARTUP:true}
-    public-endpoints: /v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/facturador/callback/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html,/actuator/health,/actuator/info,/files/**
+    public-endpoints: ${PUBLIC_ENDPOINTS:/v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/facturador/callback/**,/actuator/health,/files/**}
   storage:
     public-files:
       root-dir: ${AZURION_PUBLIC_FILES_DIR:${user.dir}/storage/public-files}
@@ -120,6 +122,8 @@ azurion:
 
 springdoc:
   api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html

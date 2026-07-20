@@ -357,7 +357,12 @@ public class FacturadorClient {
                 .header(HEADER_SIGNATURE, signature);
 
         if ("POST".equals(normalizedMethod)) {
-            builder.header("Content-Type", "application/json")
+            String idempotencyKey = extractIdempotencyKey(body);
+            builder.header("Content-Type", "application/json");
+            if (idempotencyKey != null) {
+                builder.header("Idempotency-Key", idempotencyKey);
+            }
+            builder
                     .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
         } else {
             builder.GET();
@@ -369,6 +374,27 @@ public class FacturadorClient {
 
         HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         return new SignedCallResult(response.statusCode(), parseBody(response.body()));
+    }
+
+    private String extractIdempotencyKey(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(body);
+            String externalId = payload.path("external_id").asText("").trim();
+            if (externalId.isBlank()) {
+                externalId = payload.path("externalId").asText("").trim();
+            }
+            return externalId.isBlank() ? null : trimHeaderValue(externalId, 180);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String trimHeaderValue(String value, int maxLength) {
+        String safe = value.replace("\r", "").replace("\n", "").trim();
+        return safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
     }
 
     private String normalizePath(String endpointPath) {

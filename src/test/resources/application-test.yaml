@@ -25,6 +25,8 @@ azurion:
   security:
     email-secret-key: test-email-secret-with-at-least-32-bytes-long
     crm-secret-key: test-crm-secret-with-at-least-32-bytes-long
+    rate-limit:
+      distributed-enabled: false
   multitenancy:
     run-migrations-on-startup: false
   facturador:

@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
+@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Duration WINDOW = Duration.ofMinutes(1);
@@ -21,11 +23,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/v1/auth/public/login",
             "/v1/auth/tenant/login"
     );
+    private static final Set<String> CALLBACK_PREFIXES = Set.of(
+            "/v1/facturador/callback/"
+    );
 
     private final boolean enabled;
     private final int authLimit;
     private final int publicLimit;
+    private final boolean distributedEnabled;
     private final RequestRateLimiter rateLimiter;
+    private final DistributedRequestRateLimiter distributedRateLimiter;
     private final ClientIpResolver clientIpResolver;
 
     public RateLimitFilter(
@@ -33,12 +40,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
             @Value("${azurion.security.rate-limit.auth-requests-per-minute:10}") int authLimit,
             @Value("${azurion.security.rate-limit.public-requests-per-minute:60}") int publicLimit,
             @Value("${azurion.security.rate-limit.max-clients:10000}") int maxClients,
+            @Value("${azurion.security.rate-limit.distributed-enabled:true}") boolean distributedEnabled,
+            DistributedRequestRateLimiter distributedRateLimiter,
             ClientIpResolver clientIpResolver
     ) {
         this.enabled = enabled;
         this.authLimit = positive(authLimit, "auth-requests-per-minute");
         this.publicLimit = positive(publicLimit, "public-requests-per-minute");
+        this.distributedEnabled = distributedEnabled;
         this.rateLimiter = new RequestRateLimiter(positive(maxClients, "max-clients"));
+        this.distributedRateLimiter = distributedRateLimiter;
         this.clientIpResolver = clientIpResolver;
     }
 
@@ -48,7 +59,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return true;
         }
         String path = request.getServletPath();
-        return !AUTH_PATHS.contains(path) && !isPublicCrmPath(path);
+        return !AUTH_PATHS.contains(path) && !isProtectedPublicPath(path);
     }
 
     @Override
@@ -57,10 +68,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         boolean authRequest = AUTH_PATHS.contains(path);
         int limit = authRequest ? authLimit : publicLimit;
-        String bucket = authRequest ? "auth" : "public-crm";
+        String bucket = authRequest ? "auth" : bucketFor(path);
         String client = clientIpResolver.resolve(request);
 
-        RequestRateLimiter.Decision decision = rateLimiter.tryAcquire(bucket + ':' + client, limit, WINDOW);
+        String key = bucket + ':' + client;
+        RequestRateLimiter.Decision decision = acquire(key, limit);
         if (!decision.allowed()) {
             response.setStatus(429);
             response.setHeader("Retry-After", Long.toString(decision.retryAfterSeconds()));
@@ -71,11 +83,36 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean isPublicCrmPath(String path) {
+    private boolean isProtectedPublicPath(String path) {
         return path.equals("/v1/public/crm/leads")
                 || path.equals("/public/crm/leads")
                 || path.startsWith("/v1/public/crm/catalogo/")
-                || path.startsWith("/public/crm/catalogo/");
+                || path.startsWith("/public/crm/catalogo/")
+                || path.startsWith("/v1/public/crm/whatsapp/")
+                || path.startsWith("/public/crm/whatsapp/")
+                || CALLBACK_PREFIXES.stream().anyMatch(path::startsWith);
+    }
+
+    private RequestRateLimiter.Decision acquire(String key, int limit) {
+        if (!distributedEnabled) {
+            return rateLimiter.tryAcquire(key, limit, WINDOW);
+        }
+        try {
+            return distributedRateLimiter.tryAcquire(key, limit, WINDOW);
+        } catch (RuntimeException storageFailure) {
+            log.error("Rate limiter distribuido no disponible; se usa proteccion local temporal", storageFailure);
+            return rateLimiter.tryAcquire(key, limit, WINDOW);
+        }
+    }
+
+    private String bucketFor(String path) {
+        if (CALLBACK_PREFIXES.stream().anyMatch(path::startsWith)) {
+            return "facturador-callback";
+        }
+        if (path.contains("/whatsapp/")) {
+            return "public-whatsapp";
+        }
+        return "public-crm";
     }
 
     private static int positive(int value, String property) {

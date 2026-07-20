@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UsuarioTenantRolRepository extends JpaRepository<UsuarioTenantRol, Long> {
 
+    boolean existsByUsuarioGlobalIdAndTenantIdIgnoreCaseAndActivoTrue(Long usuarioGlobalId, String tenantId);
+
     List<UsuarioTenantRol> findByUsuarioGlobalIdAndTenantIdIgnoreCaseAndActivoTrue(Long usuarioGlobalId, String tenantId);
 
     Optional<UsuarioTenantRol> findByUsuarioGlobalIdAndTenantIdIgnoreCaseAndRolCodigoIgnoreCaseAndActivoTrue(

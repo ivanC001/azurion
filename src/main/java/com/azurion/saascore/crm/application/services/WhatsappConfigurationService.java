@@ -6,6 +6,7 @@ import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.ConnectionCheck;
+import com.azurion.shared.exception.BusinessException;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -38,10 +39,24 @@ public class WhatsappConfigurationService {
         return new WhatsappVerifyTokenResponse(verifyToken, OffsetDateTime.now(ZoneOffset.UTC));
     }
 
-    @Transactional
     public WhatsappConnectionStatusResponse testConnection() {
-        CrmCanalTokenConfig config = configRepository.findByCanal(CHANNEL).orElseGet(this::newConfig);
+        CrmCanalTokenConfig config = requireConfig();
         ConnectionCheck check = cloudApiClient.testConnection(config);
+        applyConnectionCheck(config, check);
+        configRepository.save(config);
+        return toStatus(config, check.permissions());
+    }
+
+    public WhatsappConnectionStatusResponse subscribeApp() {
+        CrmCanalTokenConfig config = requireConfig();
+        cloudApiClient.subscribeApp(config);
+        ConnectionCheck check = cloudApiClient.testConnection(config);
+        applyConnectionCheck(config, check);
+        configRepository.save(config);
+        return toStatus(config, check.permissions());
+    }
+
+    private void applyConnectionCheck(CrmCanalTokenConfig config, ConnectionCheck check) {
         config.setLastConnectionTestAt(check.checkedAt());
         config.setLastConnectionOk(check.metaAccessValid());
         config.setLastConnectionMessage(truncate(check.message(), 500));
@@ -50,8 +65,6 @@ public class WhatsappConfigurationService {
         config.setMetaVerifiedName(check.verifiedName());
         config.setMetaQualityRating(check.qualityRating());
         config.setMetaTokenExpiresAt(check.tokenExpiresAt());
-        configRepository.save(config);
-        return toStatus(config, check.permissions());
     }
 
     @Transactional(readOnly = true)
@@ -91,8 +104,18 @@ public class WhatsappConfigurationService {
                 permissions == null ? List.of() : List.copyOf(permissions),
                 message,
                 config.getLastConnectionTestAt(),
-                config.getWebhookVerifiedAt()
+                config.getWebhookVerifiedAt(),
+                config.getLastWebhookAt(),
+                config.getLastInboundMessageAt()
         );
+    }
+
+    private CrmCanalTokenConfig requireConfig() {
+        return configRepository.findByCanal(CHANNEL)
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_NO_CONFIGURADO",
+                        "Guarda primero la configuracion de WhatsApp"
+                ));
     }
 
     private boolean isConfigurationComplete(CrmCanalTokenConfig config) {

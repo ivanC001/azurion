@@ -6,6 +6,7 @@ import com.azurion.saascore.almacenes.application.usecases.CreateAlmacenUseCase;
 import com.azurion.saascore.almacenes.application.usecases.ListAlmacenesUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping({"/v1/saas/almacenes", "/v1/saas/inventory/almacenes"})
@@ -35,5 +37,14 @@ public class AlmacenController {
     @PreAuthorize("hasAuthority('INVENTORY_READ')")
     public ApiResponse<List<AlmacenResponse>> list() {
         return ApiResponse.ok(listAlmacenesUseCase.execute(), "Almacenes");
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ApiResponse<PageResponse<AlmacenResponse>> page(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listAlmacenesUseCase.page(page, size), "Almacenes paginados");
     }
 }

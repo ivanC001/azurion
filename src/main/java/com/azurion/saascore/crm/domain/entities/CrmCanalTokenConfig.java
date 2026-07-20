@@ -44,6 +44,12 @@ public class CrmCanalTokenConfig extends BaseEntity {
     @Column(name = "webhook_verified_at")
     private OffsetDateTime webhookVerifiedAt;
 
+    @Column(name = "last_webhook_at")
+    private OffsetDateTime lastWebhookAt;
+
+    @Column(name = "last_inbound_message_at")
+    private OffsetDateTime lastInboundMessageAt;
+
     @Column(name = "last_connection_test_at")
     private OffsetDateTime lastConnectionTestAt;
 

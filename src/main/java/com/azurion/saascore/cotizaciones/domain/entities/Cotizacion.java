@@ -84,6 +84,18 @@ public class Cotizacion extends BaseEntity {
     @Column(name = "decision_siguiente", length = 30)
     private String decisionSiguiente;
 
+    @Column(name = "email_send_status", length = 20)
+    private String emailSendStatus;
+
+    @Column(name = "email_send_token", length = 80)
+    private String emailSendToken;
+
+    @Column(name = "email_send_started_at")
+    private OffsetDateTime emailSendStartedAt;
+
+    @Column(name = "email_send_error", length = 500)
+    private String emailSendError;
+
     @Column(name = "convertida_en")
     private OffsetDateTime convertidaEn;
 

@@ -1,29 +1,29 @@
 package com.azurion.saascore.facturacion.infrastructure.security;
 
 import com.azurion.saascore.facturacion.infrastructure.config.FacturadorCallbackProperties;
+import com.azurion.saascore.facturacion.domain.entities.FacturadorCallbackNonce;
+import com.azurion.saascore.facturacion.domain.repositories.FacturadorCallbackNonceRepository;
 import com.azurion.shared.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 
 @Component
 @RequiredArgsConstructor
 public class FacturadorCallbackVerifier {
 
     private static final Pattern NONCE_PATTERN = Pattern.compile("^[a-zA-Z0-9._:-]{8,120}$");
-    private static final int MAX_NONCE_CACHE_SIZE = 10_000;
-
     private final FacturadorCallbackProperties properties;
-    private final Map<String, Long> usedNoncesByKey = new ConcurrentHashMap<>();
+    private final FacturadorCallbackNonceRepository nonceRepository;
 
     public void verify(HttpServletRequest request, String rawBody) {
         if (!properties.isEnabled()) {
@@ -33,7 +33,7 @@ public class FacturadorCallbackVerifier {
         String configuredApiKey = normalize(properties.getApiKey());
         String configuredSecret = normalize(properties.getSecret());
         if (configuredApiKey == null || configuredSecret == null) {
-            throw new BusinessException("FACTURADOR_CALLBACK_CONFIG_ERROR", "Callback de facturador no esta configurado correctamente.");
+            throw BusinessException.internal("FACTURADOR_CALLBACK_CONFIG_ERROR", "Callback de facturador no esta configurado correctamente.");
         }
 
         String headerApiKey = normalizeHeader(properties.getHeaderApiKey(), "X-API-Key");
@@ -47,22 +47,22 @@ public class FacturadorCallbackVerifier {
         String providedNonce = normalize(request.getHeader(headerNonce));
 
         if (providedApiKey == null || providedSignature == null || providedTimestamp == null || providedNonce == null) {
-            throw new BusinessException("FACTURADOR_CALLBACK_HEADERS_MISSING", "Faltan headers de autenticacion para callback de facturador.");
+            throw BusinessException.unauthorized("FACTURADOR_CALLBACK_HEADERS_MISSING", "Faltan headers de autenticacion para callback de facturador.");
         }
 
         if (!constantEquals(configuredApiKey, providedApiKey)) {
-            throw new BusinessException("FACTURADOR_CALLBACK_API_KEY_INVALID", "API key invalida para callback de facturador.");
+            throw BusinessException.unauthorized("FACTURADOR_CALLBACK_API_KEY_INVALID", "API key invalida para callback de facturador.");
         }
 
         long timestampSeconds = parseTimestampSeconds(providedTimestamp);
         long nowSeconds = Instant.now().getEpochSecond();
         int tolerance = Math.max(10, properties.getTimestampToleranceSeconds());
         if (Math.abs(nowSeconds - timestampSeconds) > tolerance) {
-            throw new BusinessException("FACTURADOR_CALLBACK_TIMESTAMP_EXPIRED", "Timestamp de callback fuera de rango.");
+            throw new BusinessException("FACTURADOR_CALLBACK_TIMESTAMP_EXPIRED", "Timestamp de callback fuera de rango.", HttpStatus.UNAUTHORIZED);
         }
 
         if (!NONCE_PATTERN.matcher(providedNonce).matches()) {
-            throw new BusinessException("FACTURADOR_CALLBACK_NONCE_INVALID", "Nonce invalido para callback de facturador.");
+            throw BusinessException.unauthorized("FACTURADOR_CALLBACK_NONCE_INVALID", "Nonce invalido para callback de facturador.");
         }
 
         String requestUri = resolveRequestUri(request);
@@ -83,30 +83,25 @@ public class FacturadorCallbackVerifier {
                 || constantEquals(expectedHex, providedSignature.toLowerCase());
 
         if (!valid) {
-            throw new BusinessException("FACTURADOR_CALLBACK_SIGNATURE_INVALID", "Firma HMAC invalida para callback de facturador.");
+            throw BusinessException.unauthorized("FACTURADOR_CALLBACK_SIGNATURE_INVALID", "Firma HMAC invalida para callback de facturador.");
         }
 
         assertFreshNonce(configuredApiKey, providedNonce, timestampSeconds, nowSeconds);
     }
 
     private void assertFreshNonce(String apiKey, String nonce, long timestampSeconds, long nowSeconds) {
-        clearExpiredNonces(nowSeconds);
-        if (usedNoncesByKey.size() > MAX_NONCE_CACHE_SIZE) {
-            usedNoncesByKey.clear();
-        }
-
         int nonceTtl = Math.max(30, properties.getNonceTtlSeconds());
-        long expiresAt = nowSeconds + nonceTtl;
-        String nonceKey = apiKey + ":" + nonce + ":" + timestampSeconds;
+        Instant now = Instant.ofEpochSecond(nowSeconds);
+        nonceRepository.deleteExpired(now);
 
-        Long previous = usedNoncesByKey.putIfAbsent(nonceKey, expiresAt);
-        if (previous != null && previous >= nowSeconds) {
-            throw new BusinessException("FACTURADOR_CALLBACK_REPLAY", "Callback duplicado detectado (nonce ya utilizado).");
+        FacturadorCallbackNonce claimed = new FacturadorCallbackNonce();
+        claimed.setNonceKeyHash(sha256Hex(apiKey + ":" + nonce + ":" + timestampSeconds));
+        claimed.setExpiresAt(now.plusSeconds(nonceTtl));
+        try {
+            nonceRepository.saveAndFlush(claimed);
+        } catch (DataIntegrityViolationException duplicate) {
+            throw BusinessException.conflict("FACTURADOR_CALLBACK_REPLAY", "Callback duplicado detectado (nonce ya utilizado).");
         }
-    }
-
-    private void clearExpiredNonces(long nowSeconds) {
-        usedNoncesByKey.entrySet().removeIf(entry -> entry.getValue() < nowSeconds);
     }
 
     private String resolveRequestUri(HttpServletRequest request) {
@@ -120,14 +115,14 @@ public class FacturadorCallbackVerifier {
 
     private long parseTimestampSeconds(String raw) {
         if (!raw.matches("^\\d{10,13}$")) {
-            throw new BusinessException("FACTURADOR_CALLBACK_TIMESTAMP_INVALID", "Timestamp de callback invalido.");
+            throw BusinessException.unauthorized("FACTURADOR_CALLBACK_TIMESTAMP_INVALID", "Timestamp de callback invalido.");
         }
         long numeric = Long.parseLong(raw);
         if (raw.length() == 13) {
             numeric = numeric / 1000L;
         }
         if (numeric <= 0) {
-            throw new BusinessException("FACTURADOR_CALLBACK_TIMESTAMP_INVALID", "Timestamp de callback invalido.");
+            throw BusinessException.unauthorized("FACTURADOR_CALLBACK_TIMESTAMP_INVALID", "Timestamp de callback invalido.");
         }
         return numeric;
     }
@@ -152,7 +147,7 @@ public class FacturadorCallbackVerifier {
             }
             return sb.toString();
         } catch (Exception exception) {
-            throw new BusinessException("FACTURADOR_CALLBACK_HASH_ERROR", "No se pudo calcular hash del callback.");
+            throw BusinessException.internal("FACTURADOR_CALLBACK_HASH_ERROR", "No se pudo calcular hash del callback.");
         }
     }
 
@@ -163,7 +158,7 @@ public class FacturadorCallbackVerifier {
             byte[] signature = mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(signature);
         } catch (Exception exception) {
-            throw new BusinessException("FACTURADOR_CALLBACK_SIGN_ERROR", "No se pudo validar la firma del callback.");
+            throw BusinessException.internal("FACTURADOR_CALLBACK_SIGN_ERROR", "No se pudo validar la firma del callback.");
         }
     }
 
@@ -178,7 +173,7 @@ public class FacturadorCallbackVerifier {
             }
             return sb.toString();
         } catch (Exception exception) {
-            throw new BusinessException("FACTURADOR_CALLBACK_SIGN_ERROR", "No se pudo validar la firma del callback.");
+            throw BusinessException.internal("FACTURADOR_CALLBACK_SIGN_ERROR", "No se pudo validar la firma del callback.");
         }
     }
 

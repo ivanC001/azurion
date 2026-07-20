@@ -8,6 +8,7 @@ import com.azurion.saascore.inventory.application.usecases.ListProductosUseCase;
 import com.azurion.saascore.inventory.application.usecases.UpdateProductoUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,17 @@ public class InventoryProductoController {
     @PreAuthorize("hasAuthority('PRODUCTOS_READ')")
     public ApiResponse<List<ProductoResponse>> list(@RequestParam(required = false) Long almacenId) {
         return ApiResponse.ok(listProductosUseCase.execute(almacenId), "Productos");
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAuthority('PRODUCTOS_READ')")
+    public ApiResponse<PageResponse<ProductoResponse>> page(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(required = false) Long almacenId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listProductosUseCase.page(q, almacenId, page, size), "Productos paginados");
     }
 
     @PutMapping("/{id}")

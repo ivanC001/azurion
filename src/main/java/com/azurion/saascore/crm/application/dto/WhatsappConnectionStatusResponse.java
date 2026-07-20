@@ -17,6 +17,8 @@ public record WhatsappConnectionStatusResponse(
         List<String> permissions,
         String message,
         OffsetDateTime testedAt,
-        OffsetDateTime webhookVerifiedAt
+        OffsetDateTime webhookVerifiedAt,
+        OffsetDateTime lastWebhookAt,
+        OffsetDateTime lastInboundMessageAt
 ) {
 }

@@ -7,6 +7,7 @@ import com.azurion.saascore.facturacion.application.usecases.ListGuiasRemisionUs
 import com.azurion.saascore.facturacion.application.usecases.RegistrarGuiaRemisionUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,16 @@ public class GuiaRemisionController {
     @PreAuthorize("hasAuthority('FACTURACION_READ')")
     public ApiResponse<List<GuiaRemisionResponse>> listar(@RequestParam(required = false) String q) {
         return ApiResponse.ok(listGuiasRemisionUseCase.execute(q), "Guias de remision");
+    }
+
+    @GetMapping("/remision/page")
+    @PreAuthorize("hasAuthority('FACTURACION_READ')")
+    public ApiResponse<PageResponse<GuiaRemisionResponse>> page(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listGuiasRemisionUseCase.page(q, page, size), "Guias paginadas");
     }
 
     @PostMapping("/remision")

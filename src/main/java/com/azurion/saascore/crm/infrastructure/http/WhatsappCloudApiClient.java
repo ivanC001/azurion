@@ -150,6 +150,56 @@ public class WhatsappCloudApiClient {
         }
     }
 
+    public void subscribeApp(CrmCanalTokenConfig config) {
+        String accessToken = secretEncryptionService.decrypt(config.getAccessToken());
+        if (!hasText(accessToken) || !hasText(config.getWabaId())) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONFIG_INCOMPLETA",
+                    "Configura el Access token y WABA ID antes de suscribir la aplicacion"
+            );
+        }
+
+        String wabaId = validatePathSegment(config.getWabaId(), "WABA ID");
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(graphBaseUrl + "/" + graphApiVersion + "/" + wabaId + "/subscribed_apps"))
+                    .timeout(readTimeout)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode responseJson = parseResponse(response.body());
+            if (response.statusCode() < 200 || response.statusCode() >= 300
+                    || !responseJson.path("success").asBoolean(false)) {
+                throw new BusinessException(
+                        "CRM_WHATSAPP_SUSCRIPCION_RECHAZADA",
+                        metaError(responseJson, "Meta no pudo suscribir la aplicacion al WABA")
+                                + " (HTTP " + response.statusCode() + ")"
+                );
+            }
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "CRM_WHATSAPP_SUSCRIPCION_INTERRUMPIDA",
+                    "La suscripcion de WhatsApp fue interrumpida"
+            );
+        } catch (Exception ex) {
+            log.warn(
+                    "No se pudo suscribir WhatsApp wabaId={} errorType={} detail={}",
+                    config.getWabaId(),
+                    ex.getClass().getSimpleName(),
+                    safeDetail(ex)
+            );
+            throw new BusinessException(
+                    "CRM_WHATSAPP_NO_DISPONIBLE",
+                    "No se pudo conectar con Meta para suscribir la aplicacion"
+            );
+        }
+    }
+
     public ConnectionCheck testConnection(CrmCanalTokenConfig config) {
         OffsetDateTime checkedAt = OffsetDateTime.now(ZoneOffset.UTC);
         String accessToken = secretEncryptionService.decrypt(config.getAccessToken());

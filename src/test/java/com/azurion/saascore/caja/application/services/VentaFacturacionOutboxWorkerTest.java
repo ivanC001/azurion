@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -25,8 +26,7 @@ class VentaFacturacionOutboxWorkerTest {
 
     private final VentaFacturacionOutboxRepository repository = mock(VentaFacturacionOutboxRepository.class);
     private final ProcessVentaFacturacionAsyncUseCase processUseCase = mock(ProcessVentaFacturacionAsyncUseCase.class);
-    @SuppressWarnings("unchecked")
-    private final ScheduledFuture<Object> heartbeat = mock(ScheduledFuture.class);
+    private final ScheduledFuture<?> heartbeat = mock(ScheduledFuture.class);
     private final ScheduledExecutorService heartbeatExecutor = mock(ScheduledExecutorService.class);
     private final VentaFacturacionOutboxWorker worker = new VentaFacturacionOutboxWorker(
             repository,
@@ -37,7 +37,7 @@ class VentaFacturacionOutboxWorkerTest {
     );
 
     VentaFacturacionOutboxWorkerTest() {
-        when(heartbeatExecutor.scheduleAtFixedRate(any(), anyLong(), anyLong(), any())).thenReturn(heartbeat);
+        doReturn(heartbeat).when(heartbeatExecutor).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
     }
 
     @Test
@@ -47,6 +47,7 @@ class VentaFacturacionOutboxWorkerTest {
                 .thenReturn(List.of(job));
         when(repository.claim(eq(job.getId()), anyString(), any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(1);
         when(repository.findByIdAndStatusAndLeaseOwner(eq(job.getId()), eq("PROCESSING"), anyString())).thenReturn(Optional.of(job));
+        when(repository.markCompleted(eq(job.getId()), anyString(), any(LocalDateTime.class))).thenReturn(1);
 
         worker.poll();
 

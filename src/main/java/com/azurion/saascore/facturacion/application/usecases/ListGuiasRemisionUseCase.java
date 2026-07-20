@@ -3,6 +3,8 @@ package com.azurion.saascore.facturacion.application.usecases;
 import com.azurion.saascore.facturacion.application.dto.GuiaRemisionResponse;
 import com.azurion.saascore.facturacion.domain.entities.GuiaRemision;
 import com.azurion.saascore.facturacion.domain.repositories.GuiaRemisionRepository;
+import com.azurion.shared.api.PageRequestSupport;
+import com.azurion.shared.api.PageResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -17,27 +19,16 @@ public class ListGuiasRemisionUseCase {
 
     @Transactional(readOnly = true)
     public List<GuiaRemisionResponse> execute(String query) {
-        String normalized = query == null ? "" : query.trim().toLowerCase();
-        return guiaRemisionRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).stream()
-                .filter(guia -> normalized.isBlank() || matches(guia, normalized))
-                .map(this::toResponse)
-                .toList();
+        return page(query, 0, PageRequestSupport.MAX_SIZE).content();
     }
 
-    private boolean matches(GuiaRemision guia, String query) {
-        return contains(guia.getExternalId(), query)
-                || contains(guia.getSucursalOrigenNombre(), query)
-                || contains(guia.getSucursalDestinoNombre(), query)
-                || contains(guia.getMotivoTraslado(), query)
-                || contains(guia.getTransportista(), query)
-                || contains(guia.getResponsableNombre(), query)
-                || contains(guia.getFacturacionEstado(), query)
-                || contains(guia.getFacturadorSunatEstado(), query)
-                || contains(guia.getFacturadorMensaje(), query);
-    }
-
-    private boolean contains(String value, String query) {
-        return value != null && value.toLowerCase().contains(query);
+    @Transactional(readOnly = true)
+    public PageResponse<GuiaRemisionResponse> page(String query, int page, int size) {
+        var result = guiaRemisionRepository.search(
+                query == null ? "" : query.trim(),
+                PageRequestSupport.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
+        );
+        return PageResponse.from(result, result.getContent().stream().map(this::toResponse).toList());
     }
 
     public GuiaRemisionResponse toResponse(GuiaRemision guia) {

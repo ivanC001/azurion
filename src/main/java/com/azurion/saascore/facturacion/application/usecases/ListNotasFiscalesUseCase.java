@@ -4,6 +4,8 @@ import com.azurion.saascore.facturacion.application.dto.NotaFiscalResponse;
 import com.azurion.saascore.facturacion.application.mappers.NotaFiscalMapper;
 import com.azurion.saascore.facturacion.domain.entities.NotaFiscal;
 import com.azurion.saascore.facturacion.domain.repositories.NotaFiscalRepository;
+import com.azurion.shared.api.PageRequestSupport;
+import com.azurion.shared.api.PageResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -18,30 +20,17 @@ public class ListNotasFiscalesUseCase {
 
     @Transactional(readOnly = true)
     public List<NotaFiscalResponse> execute(String tipoDocumento, String query) {
-        String tipo = normalizeTipo(tipoDocumento);
-        String normalizedQuery = query == null ? "" : query.trim().toLowerCase();
-
-        return notaFiscalRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).stream()
-                .filter(nota -> tipo.equals(nota.getTipoDocumento()))
-                .filter(nota -> normalizedQuery.isBlank() || matches(nota, normalizedQuery))
-                .map(NotaFiscalMapper::toResponse)
-                .toList();
+        return page(tipoDocumento, query, 0, PageRequestSupport.MAX_SIZE).content();
     }
 
-    private boolean matches(NotaFiscal nota, String query) {
-        return contains(nota.getExternalId(), query)
-                || contains(nota.getVentaExternalId(), query)
-                || contains(nota.getVentaNumeroDocumento(), query)
-                || contains(nota.getClienteNombre(), query)
-                || contains(nota.getClienteDocumento(), query)
-                || contains(nota.getMotivoDescripcion(), query)
-                || contains(nota.getFacturacionEstado(), query)
-                || contains(nota.getFacturadorSunatEstado(), query)
-                || contains(nota.getFacturadorMensaje(), query);
-    }
-
-    private boolean contains(String value, String query) {
-        return value != null && value.toLowerCase().contains(query);
+    @Transactional(readOnly = true)
+    public PageResponse<NotaFiscalResponse> page(String tipoDocumento, String query, int page, int size) {
+        var result = notaFiscalRepository.search(
+                normalizeTipo(tipoDocumento),
+                query == null ? "" : query.trim(),
+                PageRequestSupport.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
+        );
+        return PageResponse.from(result, result.getContent().stream().map(NotaFiscalMapper::toResponse).toList());
     }
 
     private String normalizeTipo(String tipoDocumento) {

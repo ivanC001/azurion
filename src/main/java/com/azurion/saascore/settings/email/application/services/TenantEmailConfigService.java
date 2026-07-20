@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ public class TenantEmailConfigService {
     private final TenantEmailConfigRepository repository;
     private final EmailSecretEncryptionService encryptionService;
     private final SmtpEmailTransportService smtpTransport;
+    private final PlatformTransactionManager transactionManager;
 
     @Transactional(readOnly = true)
     public EmailConfigResponse getCurrentTenantConfig() {
@@ -85,10 +88,10 @@ public class TenantEmailConfigService {
         return toResponse(repository.save(config));
     }
 
-    @Transactional(noRollbackFor = BusinessException.class)
     public EmailConfigResponse testEmailConfig(TestEmailRequest request) {
-        TenantEmailConfig config = repository.findByTenantId(currentTenant())
-                .orElseThrow(() -> new BusinessException("EMAIL_CONFIG_NOT_FOUND", "Configura el correo SMTP antes de enviar la prueba."));
+        String tenantId = currentTenant();
+        TenantEmailConfig config = inTransaction(() -> repository.findByTenantId(tenantId)
+                .orElseThrow(() -> new BusinessException("EMAIL_CONFIG_NOT_FOUND", "Configura el correo SMTP antes de enviar la prueba.")));
         try {
             smtpTransport.send(
                     config,
@@ -97,19 +100,29 @@ public class TenantEmailConfigService {
                     "Tu configuracion de correo SMTP quedo verificada para enviar mensajes desde Azurion CRM.",
                     List.of()
             );
-            config.setVerificado(true);
-            config.setActivo(true);
-            config.setEstado(TenantEmailConfigStatus.VERIFICADO);
-            config.setFechaVerificacion(LocalDateTime.now());
-            config.setUltimoError(null);
+            return inTransaction(() -> updateVerification(config.getId(), true, null));
         } catch (BusinessException ex) {
-            config.setVerificado(false);
-            config.setEstado(TenantEmailConfigStatus.ERROR);
-            config.setUltimoError(trimToMax(ex.getMessage(), 1000));
-            repository.save(config);
+            inTransaction(() -> updateVerification(config.getId(), false, ex.getMessage()));
             throw ex;
         }
-        return toResponse(repository.save(config));
+    }
+
+    private EmailConfigResponse updateVerification(Long configId, boolean verified, String error) {
+        TenantEmailConfig current = repository.findById(configId)
+                .orElseThrow(() -> BusinessException.internal(
+                        "EMAIL_CONFIG_DISAPPEARED",
+                        "La configuracion de correo ya no existe."
+                ));
+        current.setVerificado(verified);
+        current.setActivo(verified || current.isActivo());
+        current.setEstado(verified ? TenantEmailConfigStatus.VERIFICADO : TenantEmailConfigStatus.ERROR);
+        current.setFechaVerificacion(verified ? LocalDateTime.now() : null);
+        current.setUltimoError(verified ? null : trimToMax(error, 1000));
+        return toResponse(repository.save(current));
+    }
+
+    private <T> T inTransaction(java.util.function.Supplier<T> action) {
+        return new TransactionTemplate(transactionManager).execute(status -> action.get());
     }
 
     @Transactional

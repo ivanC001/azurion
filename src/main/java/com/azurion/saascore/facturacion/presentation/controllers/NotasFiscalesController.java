@@ -7,6 +7,7 @@ import com.azurion.saascore.facturacion.application.usecases.ListNotasFiscalesUs
 import com.azurion.saascore.facturacion.application.usecases.RegistrarNotaFiscalUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,16 @@ public class NotasFiscalesController {
         return ApiResponse.ok(listNotasFiscalesUseCase.execute("07", q), "Notas de credito");
     }
 
+    @GetMapping("/credito/page")
+    @PreAuthorize("hasAuthority('FACTURACION_READ')")
+    public ApiResponse<PageResponse<NotaFiscalResponse>> pageCredito(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listNotasFiscalesUseCase.page("07", q, page, size), "Notas de credito paginadas");
+    }
+
     @PostMapping("/credito")
     @PreAuthorize("hasAuthority('NOTA_CREDITO_CREATE')")
     public ApiResponse<RegistrarNotaFiscalResponse> registrarCredito(@Valid @RequestBody RegistrarNotaFiscalRequest request) {
@@ -43,6 +54,16 @@ public class NotasFiscalesController {
     @PreAuthorize("hasAuthority('FACTURACION_READ')")
     public ApiResponse<List<NotaFiscalResponse>> listarDebito(@RequestParam(required = false) String q) {
         return ApiResponse.ok(listNotasFiscalesUseCase.execute("08", q), "Notas de debito");
+    }
+
+    @GetMapping("/debito/page")
+    @PreAuthorize("hasAuthority('FACTURACION_READ')")
+    public ApiResponse<PageResponse<NotaFiscalResponse>> pageDebito(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listNotasFiscalesUseCase.page("08", q, page, size), "Notas de debito paginadas");
     }
 
     @PostMapping("/debito")

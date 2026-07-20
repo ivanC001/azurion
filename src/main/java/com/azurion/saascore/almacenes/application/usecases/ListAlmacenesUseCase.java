@@ -2,10 +2,13 @@ package com.azurion.saascore.almacenes.application.usecases;
 
 import com.azurion.saascore.almacenes.application.dto.AlmacenResponse;
 import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
+import com.azurion.shared.api.PageRequestSupport;
+import com.azurion.shared.api.PageResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Sort;
 
 @Service
 @RequiredArgsConstructor
@@ -15,7 +18,13 @@ public class ListAlmacenesUseCase {
 
     @Transactional(readOnly = true)
     public List<AlmacenResponse> execute() {
-        return almacenRepository.findAll().stream()
+        return page(0, PageRequestSupport.MAX_SIZE).content();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<AlmacenResponse> page(int page, int size) {
+        var result = almacenRepository.findAll(PageRequestSupport.of(page, size, Sort.by("nombre").ascending()));
+        List<AlmacenResponse> content = result.getContent().stream()
                 .map(a -> new AlmacenResponse(
                         a.getId(),
                         a.getCodigo(),
@@ -29,5 +38,6 @@ public class ListAlmacenesUseCase {
                         a.isActivo()
                 ))
                 .toList();
+        return PageResponse.from(result, content);
     }
 }

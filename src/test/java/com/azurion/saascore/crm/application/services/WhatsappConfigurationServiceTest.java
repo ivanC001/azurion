@@ -97,6 +97,39 @@ class WhatsappConfigurationServiceTest {
     }
 
     @Test
+    void subscribesTheAppAndRefreshesTheConnectionStatus() {
+        config.setActivo(true);
+        config.setAccessToken("encrypted-access");
+        config.setVerifyToken("encrypted-verify");
+        config.setAppId("123");
+        config.setAppSecret("encrypted-secret");
+        config.setWabaId("456");
+        config.setPhoneNumberId("789");
+        config.setWebhookVerifiedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        OffsetDateTime checkedAt = OffsetDateTime.now(ZoneOffset.UTC);
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(cloudApiClient.testConnection(config)).thenReturn(new ConnectionCheck(
+                true,
+                true,
+                "+51 999 888 777",
+                "Azurion",
+                "GREEN",
+                null,
+                List.of("whatsapp_business_messaging", "whatsapp_business_management"),
+                "Credenciales validas y aplicacion suscrita al WABA",
+                checkedAt
+        ));
+
+        WhatsappConnectionStatusResponse response = service.subscribeApp();
+
+        verify(cloudApiClient).subscribeApp(config);
+        verify(cloudApiClient).testConnection(config);
+        verify(configRepository).save(config);
+        assertTrue(response.wabaSuscrita());
+        assertTrue(response.conectado());
+    }
+
+    @Test
     void stopsReportingConnectedWhenTheMetaTokenExpires() {
         config.setActivo(true);
         config.setAccessToken("encrypted-access");

@@ -7,6 +7,7 @@ import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.saascore.cotizaciones.application.dto.SendCotizacionEmailResponse;
 import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
+import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
@@ -17,9 +18,13 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -30,30 +35,80 @@ public class SendCotizacionEmailUseCase {
     private final UpdateCotizacionEstadoUseCase updateCotizacionEstadoUseCase;
     private final CrmOportunidadRepository oportunidadRepository;
     private final EmailSenderService emailSenderService;
+    private final PlatformTransactionManager transactionManager;
+    private final CotizacionRepository cotizacionRepository;
 
-    @Transactional
     public SendCotizacionEmailResponse execute(Long id) {
-        Cotizacion cotizacion = getCotizacionUseCase.find(id);
-        String destinatario = resolveRecipient(cotizacion);
-        CotizacionPdfResponse pdf = generateCotizacionPdfUseCase.execute(id);
+        String sendToken = UUID.randomUUID().toString();
+        claimSend(id, sendToken);
+        EmailContent content;
+        boolean smtpStarted = false;
+        try {
+            content = prepareEmail(id);
+            CotizacionPdfResponse pdf = generateCotizacionPdfUseCase.execute(id);
 
-        emailSenderService.sendEmail(
-                TenantContext.getTenantId(),
-                destinatario,
-                subject(cotizacion),
-                body(cotizacion),
-                List.of(new EmailAttachment(
-                        pdf.fileName(),
-                        pdf.contentType(),
-                        Base64.getDecoder().decode(pdf.base64().getBytes(StandardCharsets.UTF_8))
-                ))
-        );
+            smtpStarted = true;
+            emailSenderService.sendEmail(
+                    TenantContext.getTenantId(),
+                    content.destinatario(),
+                    content.subject(),
+                    content.body(),
+                    List.of(new EmailAttachment(
+                            pdf.fileName(),
+                            pdf.contentType(),
+                            Base64.getDecoder().decode(pdf.base64().getBytes(StandardCharsets.UTF_8))
+                    ))
+            );
+            if (cotizacionRepository.markEmailSent(id, sendToken, LocalDateTime.now()) != 1) {
+                throw BusinessException.internal("COTIZACION_EMAIL_LEASE_LOST", "No se pudo confirmar el envio de la cotizacion.");
+            }
+        } catch (RuntimeException error) {
+            if (smtpStarted) {
+                cotizacionRepository.markEmailUncertain(id, sendToken, trimError(error), LocalDateTime.now());
+            } else {
+                cotizacionRepository.markEmailFailed(id, sendToken, trimError(error), LocalDateTime.now());
+            }
+            throw error;
+        }
 
         CotizacionResponse updated = updateCotizacionEstadoUseCase.execute(
                 id,
                 new UpdateCotizacionEstadoRequest("ENVIADA", "CORREO", null, null, null)
         );
-        return new SendCotizacionEmailResponse(updated, destinatario);
+        return new SendCotizacionEmailResponse(updated, content.destinatario());
+    }
+
+    private void claimSend(Long id, String sendToken) {
+        if (cotizacionRepository.claimEmailSend(id, sendToken, OffsetDateTime.now(), LocalDateTime.now()) == 1) {
+            return;
+        }
+        Cotizacion quote = getCotizacionUseCase.find(id);
+        if ("SENT".equals(quote.getEmailSendStatus())) {
+            throw new BusinessException("COTIZACION_EMAIL_YA_ENVIADO", "La cotizacion ya fue enviada por correo.");
+        }
+        if ("UNKNOWN".equals(quote.getEmailSendStatus())) {
+            throw BusinessException.conflict(
+                    "COTIZACION_EMAIL_ESTADO_INCIERTO",
+                    "El envio anterior tiene un resultado incierto y debe revisarse antes de reenviar."
+            );
+        }
+        throw new BusinessException("COTIZACION_EMAIL_EN_PROCESO", "La cotizacion ya se esta enviando. Espera la confirmacion.");
+    }
+
+    private EmailContent prepareEmail(Long id) {
+        EmailContent content = new TransactionTemplate(transactionManager).execute(status -> {
+            Cotizacion cotizacion = getCotizacionUseCase.find(id);
+            return new EmailContent(resolveRecipient(cotizacion), subject(cotizacion), body(cotizacion));
+        });
+        if (content == null) {
+            throw BusinessException.internal("COTIZACION_EMAIL_PREPARATION_ERROR", "No se pudo preparar el correo de cotizacion.");
+        }
+        return content;
+    }
+
+    private String trimError(RuntimeException error) {
+        String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        return message.length() <= 500 ? message : message.substring(0, 500);
     }
 
     private String resolveRecipient(Cotizacion cotizacion) {
@@ -106,5 +161,8 @@ public class SendCotizacionEmailUseCase {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private record EmailContent(String destinatario, String subject, String body) {
     }
 }

@@ -118,6 +118,8 @@ class WhatsappIntegrationServiceTest {
 
         assertEquals(1, result.mensajesProcesados());
         assertEquals(0, result.mensajesDuplicados());
+        assertNotNull(config.getLastWebhookAt());
+        assertNotNull(config.getLastInboundMessageAt());
         ArgumentCaptor<CrmProspecto> prospectCaptor = ArgumentCaptor.forClass(CrmProspecto.class);
         verify(prospectoRepository).save(prospectCaptor.capture());
         assertEquals("Ana Perez", prospectCaptor.getValue().getNombre());
