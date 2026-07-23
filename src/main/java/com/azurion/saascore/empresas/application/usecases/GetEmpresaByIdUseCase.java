@@ -1,6 +1,7 @@
 package com.azurion.saascore.empresas.application.usecases;
 
 import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
+import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -16,14 +17,6 @@ public class GetEmpresaByIdUseCase {
         var empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("EMPRESA_NO_ENCONTRADA", "Empresa no encontrada"));
 
-        return new EmpresaResponse(
-                empresa.getId(),
-                empresa.getRuc(),
-                empresa.getRazonSocial(),
-                empresa.getTenantId(),
-                empresa.getSchemaName(),
-                empresa.getLogoPanelUrl(),
-                empresa.isActivo()
-        );
+        return EmpresaMapper.toResponse(empresa);
     }
 }

@@ -3,6 +3,7 @@ package com.azurion.saascore.crm.application.services;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
+import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
@@ -54,6 +55,7 @@ public class WhatsappIntegrationService {
     private final CrmSecretEncryptionService secretEncryptionService;
     private final WhatsappCloudApiClient cloudApiClient;
     private final ObjectMapper objectMapper;
+    private final CrmLeadAssignmentService leadAssignmentService;
 
     @Transactional
     public String verifyWebhook(String mode, String verifyToken, String challenge) {
@@ -123,6 +125,26 @@ public class WhatsappIntegrationService {
                 .filter(item -> matchesConversation(item, normalizedQuery))
                 .map(this::toConversationResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public WhatsappUnreadSummaryResponse getUnreadSummary() {
+        long unreadMessages = conversationRepository.sumUnreadMessages();
+        long unreadConversations = conversationRepository.countByNoLeidosGreaterThan(0);
+        CrmWhatsappConversation latest = conversationRepository
+                .findFirstByNoLeidosGreaterThanOrderByUltimoMensajeEnDescIdDesc(0)
+                .orElse(null);
+        if (latest == null) {
+            return new WhatsappUnreadSummaryResponse(0, 0, null, null, null, null);
+        }
+        return new WhatsappUnreadSummaryResponse(
+                unreadMessages,
+                unreadConversations,
+                latest.getProspecto().getId(),
+                latest.getProspecto().getNombre(),
+                latest.getUltimoMensaje(),
+                latest.getUltimoMensajeEn()
+        );
     }
 
     @Transactional
@@ -276,7 +298,7 @@ public class WhatsappIntegrationService {
             prospecto.setFechaEstimadaCompra("DESCONOCIDO");
             prospecto.setScoreCalificacion(0);
             prospecto.setTemperatura("FRIO");
-            prospecto.setResponsableId(PUBLIC_WHATSAPP_OWNER);
+            leadAssignmentService.assignAutomatically(prospecto, PUBLIC_WHATSAPP_OWNER);
             prospecto.setMetadataJson(buildLeadMetadata(type, metaMessageId, messageTime));
         } else if (hasText(contactName)
                 && sender.equals(prospecto.getNombre())

@@ -14,6 +14,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CrmOportunidadRepository extends JpaRepository<CrmOportunidad, Long>, JpaSpecificationExecutor<CrmOportunidad> {
 
+    boolean existsByProspecto_Id(Long prospectoId);
+
     @EntityGraph(attributePaths = {"prospecto", "cliente", "etapaPipeline"})
     List<CrmOportunidad> findAllByOrderByIdDesc();
 

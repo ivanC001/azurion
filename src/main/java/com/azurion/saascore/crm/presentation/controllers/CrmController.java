@@ -21,8 +21,11 @@ import com.azurion.saascore.crm.application.dto.CrmOportunidadHistorialResponse;
 import com.azurion.saascore.crm.application.dto.CrmPipelineColumnResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoInteresResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoResponse;
+import com.azurion.saascore.crm.application.dto.CrmLeadAssignmentConfigResponse;
+import com.azurion.saascore.crm.application.dto.CrmLandingConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmReporteBucketResponse;
 import com.azurion.saascore.crm.application.dto.CrmReportesResponse;
+import com.azurion.saascore.crm.application.dto.CrmSentEmailResponse;
 import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.MarcarPerdidaRequest;
 import com.azurion.saascore.crm.application.dto.RealizarCrmActividadRequest;
@@ -35,6 +38,10 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmCatalogoItemRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
+import com.azurion.saascore.crm.application.dto.UpdateCrmLeadAssignmentConfigRequest;
+import com.azurion.saascore.crm.application.dto.SaveCrmLandingConfigRequest;
+import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
+import com.azurion.saascore.crm.application.services.CrmLandingConfigurationService;
 import com.azurion.saascore.crm.application.usecases.CrmUseCaseService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.settings.email.application.services.TenantEmailConfigService;
@@ -49,6 +56,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -64,6 +72,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrmController {
 
     private final CrmUseCaseService crmUseCaseService;
+    private final CrmLeadAssignmentService leadAssignmentService;
+    private final CrmLandingConfigurationService landingConfigurationService;
     private final TenantEmailConfigService tenantEmailConfigService;
 
     @GetMapping("/configuracion/monedas")
@@ -90,12 +100,54 @@ public class CrmController {
         return ApiResponse.ok(crmUseCaseService.saveCanalTokenConfig(request), "Integracion CRM guardada");
     }
 
+    @GetMapping("/configuracion/landings")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<List<CrmLandingConfigResponse>> listLandingConfigurations() {
+        return ApiResponse.ok(landingConfigurationService.list(), "Landings CRM configuradas");
+    }
+
+    @PostMapping("/configuracion/landings")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<CrmLandingConfigResponse> createLandingConfiguration(
+            @Valid @RequestBody SaveCrmLandingConfigRequest request) {
+        return ApiResponse.ok(landingConfigurationService.create(request), "Landing CRM creada");
+    }
+
+    @PutMapping("/configuracion/landings/{id}")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<CrmLandingConfigResponse> updateLandingConfiguration(
+            @PathVariable Long id,
+            @Valid @RequestBody SaveCrmLandingConfigRequest request) {
+        return ApiResponse.ok(landingConfigurationService.update(id, request), "Landing CRM actualizada");
+    }
+
+    @PostMapping("/configuracion/landings/{id}/regenerar-key")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<CrmLandingConfigResponse> regenerateLandingKey(@PathVariable Long id) {
+        return ApiResponse.ok(
+                landingConfigurationService.regenerateKey(id),
+                "Landing key regenerada; actualiza las landings que usaban la clave anterior"
+        );
+    }
+
     @GetMapping("/bandeja/canales")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
     public ApiResponse<List<CrmInboxChannelResponse>> listInboxChannels() {
         return ApiResponse.ok(
                 crmUseCaseService.listInboxChannels(tenantEmailConfigService.isCurrentTenantEmailActive()),
                 "Canales disponibles en la bandeja CRM"
+        );
+    }
+
+    @GetMapping("/bandeja/correo/enviados")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
+    public ApiResponse<PageResponse<CrmSentEmailResponse>> pageSentEmails(
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(
+                crmUseCaseService.pageSentEmails(query, page, size),
+                "Correos enviados desde el CRM"
         );
     }
 
@@ -197,6 +249,26 @@ public class CrmController {
     @PreAuthorize("hasAnyAuthority('CRM_ASSIGN','CRM_VIEW_ALL','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN')")
     public ApiResponse<RepartirCrmProspectosResponse> repartirProspectos(@Valid @RequestBody RepartirCrmProspectosRequest request) {
         return ApiResponse.ok(crmUseCaseService.repartirProspectos(request), "Prospectos CRM repartidos");
+    }
+
+    @GetMapping("/prospectos/reparto-configuracion")
+    @PreAuthorize("hasAnyAuthority('CRM_ASSIGN','CRM_VIEW_ALL','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN')")
+    public ApiResponse<CrmLeadAssignmentConfigResponse> getLeadAssignmentConfiguration() {
+        return ApiResponse.ok(leadAssignmentService.getConfiguration(), "Configuracion de reparto de leads");
+    }
+
+    @PutMapping("/prospectos/reparto-configuracion")
+    @PreAuthorize("hasAnyAuthority('CRM_ASSIGN','CRM_VIEW_ALL','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN')")
+    public ApiResponse<CrmLeadAssignmentConfigResponse> updateLeadAssignmentConfiguration(
+            @Valid @RequestBody UpdateCrmLeadAssignmentConfigRequest request) {
+        return ApiResponse.ok(leadAssignmentService.updateConfiguration(request), "Configuracion de reparto actualizada");
+    }
+
+    @DeleteMapping("/prospectos/{id}")
+    @PreAuthorize("hasAnyAuthority('CRM_DELETE','ROLE_ADMIN_GENERAL','ROLE_PLATFORM_ADMIN')")
+    public ApiResponse<Void> deleteProspecto(@PathVariable Long id) {
+        crmUseCaseService.deleteProspecto(id);
+        return ApiResponse.ok(null, "Prospecto CRM eliminado");
     }
 
     @PostMapping("/prospectos/{id}/convertir-cliente")

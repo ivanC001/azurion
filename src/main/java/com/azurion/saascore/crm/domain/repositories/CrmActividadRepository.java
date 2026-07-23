@@ -14,6 +14,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CrmActividadRepository extends JpaRepository<CrmActividad, Long>, JpaSpecificationExecutor<CrmActividad> {
 
+    void deleteByProspecto_Id(Long prospectoId);
+
     @EntityGraph(attributePaths = {"prospecto", "oportunidad", "cliente"})
     List<CrmActividad> findAllByOrderByFechaProgramadaAscIdDesc();
 

@@ -34,6 +34,7 @@ import com.azurion.saascore.crm.application.dto.CrmProspectoInteresResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoResponse;
 import com.azurion.saascore.crm.application.dto.CrmReporteBucketResponse;
 import com.azurion.saascore.crm.application.dto.CrmReportesResponse;
+import com.azurion.saascore.crm.application.dto.CrmSentEmailResponse;
 import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.MarcarPerdidaRequest;
 import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
@@ -50,6 +51,7 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
+import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
@@ -80,6 +82,7 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URI;
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.LocalDate;
@@ -159,6 +162,7 @@ public class CrmUseCaseService {
     private final LandingLeadValidationService landingLeadValidationService;
     private final CrmProspectoInteresRepository prospectoInteresRepository;
     private final CrmSecretEncryptionService crmSecretEncryptionService;
+    private final CrmLeadAssignmentService leadAssignmentService;
 
     @Transactional(readOnly = true)
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
@@ -222,6 +226,16 @@ public class CrmUseCaseService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public PageResponse<CrmSentEmailResponse> pageSentEmails(String query, int page, int size) {
+        String normalizedQuery = normalizeSearch(query);
+        Page<Cotizacion> result = cotizacionRepository.findSentEmails(
+                normalizedQuery == null ? "" : normalizedQuery,
+                safePageable(page, size, Sort.by(Sort.Order.desc("fechaEnvio"), Sort.Order.desc("id")))
+        );
+        return PageResponse.from(result, result.getContent().stream().map(this::toSentEmailResponse).toList());
+    }
+
     @Transactional
     public CrmCanalTokenConfigResponse saveCanalTokenConfig(UpdateCrmCanalTokenConfigRequest request) {
         String canal = requireEnum(request.canal(), Set.of("WEB", "WHATSAPP", "INSTAGRAM", "FACEBOOK"), "CRM_CANAL_INVALIDO");
@@ -233,6 +247,12 @@ public class CrmUseCaseService {
                         || hasText(request.wabaId())
         );
         boolean whatsappVerifyTokenChanged = "WHATSAPP".equals(canal) && hasText(request.verifyToken());
+        boolean metaWebhookChanged = Set.of("FACEBOOK", "INSTAGRAM").contains(canal) && (
+                hasText(request.verifyToken())
+                        || hasText(request.webhookUrl())
+                        || hasText(request.appId())
+                        || hasText(request.appSecret())
+        );
         CrmCanalTokenConfig config = canalTokenConfigRepository.findByCanal(canal)
                 .orElseGet(() -> {
                     CrmCanalTokenConfig item = new CrmCanalTokenConfig();
@@ -261,8 +281,11 @@ public class CrmUseCaseService {
             if (whatsappVerifyTokenChanged) {
                 config.setWebhookVerifiedAt(null);
             }
+        } else if (metaWebhookChanged) {
+            config.setWebhookVerifiedAt(null);
         }
         validateWhatsappConfig(config);
+        validateMetaWebhookConfig(config);
         return toCanalTokenConfigResponse(canalTokenConfigRepository.save(config));
     }
 
@@ -353,7 +376,11 @@ public class CrmUseCaseService {
         }
         prospecto.setNivelInteres("FRIO");
         recalculateQualification(prospecto);
-        prospecto.setResponsableId(firstNonBlank(leadContext.responsableId(), prospecto.getResponsableId(), PUBLIC_LEAD_OWNER));
+        if (isNew && !hasText(leadContext.responsableId())) {
+            leadAssignmentService.assignAutomatically(prospecto, PUBLIC_LEAD_OWNER);
+        } else {
+            prospecto.setResponsableId(firstNonBlank(leadContext.responsableId(), prospecto.getResponsableId(), PUBLIC_LEAD_OWNER));
+        }
         prospecto.setObservacion(trim(request.mensaje()));
         CrmProspecto saved = prospectoRepository.save(prospecto);
         boolean nuevoInteres = upsertPublicLeadInterest(saved, catalogoItem, request, leadContext);
@@ -645,6 +672,31 @@ public class CrmUseCaseService {
                 asignados,
                 CrmMapper.toProspectoResponses(saved)
         );
+    }
+
+    @Transactional
+    public void deleteProspecto(Long id) {
+        if (!hasAuthority("CRM_DELETE") && !canViewAll()) {
+            throw new BusinessException("CRM_ELIMINACION_NO_PERMITIDA", "No tienes permisos para eliminar prospectos");
+        }
+        CrmProspecto prospecto = findProspecto(id);
+        if (prospecto.getClienteId() != null
+                || prospecto.getOportunidadId() != null
+                || oportunidadRepository.existsByProspecto_Id(id)) {
+            throw new BusinessException(
+                    "CRM_PROSPECTO_CON_HISTORIAL",
+                    "Este prospecto ya avanzo en el CRM y no puede eliminarse; marcalo como descartado o perdido"
+            );
+        }
+        if (!Set.of("NUEVO", "DESCARTADO", "NO_INTERESADO").contains(prospecto.getEstado())) {
+            throw new BusinessException(
+                    "CRM_PROSPECTO_YA_GESTIONADO",
+                    "Solo se pueden eliminar prospectos nuevos, descartados o no interesados"
+            );
+        }
+
+        actividadRepository.deleteByProspecto_Id(id);
+        prospectoRepository.delete(prospecto);
     }
 
     @Transactional
@@ -1096,11 +1148,12 @@ public class CrmUseCaseService {
     public Map<String, Object> reporteConversiones() {
         boolean viewAll = canViewAll();
         String current = currentUserKey();
-        long prospectos = viewAll ? prospectoRepository.count() : prospectoRepository.findByResponsableIdOrderByIdDesc(current).size();
+        List<CrmOportunidad> oportunidadesScope = scopedOportunidades();
+        long prospectos = viewAll ? prospectoRepository.count() : prospectoRepository.countByResponsableId(current);
         long convertidos = viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO");
-        long oportunidades = scopedOportunidades().size();
-        long ganadas = scopedOportunidades().stream().filter(item -> "GANADA".equals(item.getEstado())).count();
-        long cotizadas = scopedOportunidades().stream().filter(item -> "COTIZADO".equals(item.getEtapa()) || "GANADA".equals(item.getEstado())).count();
+        long oportunidades = oportunidadesScope.size();
+        long ganadas = oportunidadesScope.stream().filter(item -> "GANADA".equals(item.getEstado())).count();
+        long cotizadas = oportunidadesScope.stream().filter(item -> "COTIZADO".equals(item.getEtapa()) || "GANADA".equals(item.getEstado())).count();
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("prospectoCliente", conversion(convertidos, prospectos));
         response.put("oportunidadGanada", conversion(ganadas, oportunidades));
@@ -1196,12 +1249,6 @@ public class CrmUseCaseService {
         return hasAnyNegotiation(oportunidad) || oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
                 "NEGOCIACION".equals(quote.getEstado())
                         || "ACEPTADA".equals(quote.getEstado()));
-    }
-
-    private boolean hasAcceptedSaleQuote(CrmOportunidad oportunidad) {
-        return oportunidadQuotes(oportunidad).stream().anyMatch(quote ->
-                "CONVERTIDA".equals(quote.getEstado())
-                        || ("ACEPTADA".equals(quote.getEstado()) && "VENTA".equals(quote.getDecisionSiguiente())));
     }
 
     private boolean hasAnyNegotiation(CrmOportunidad oportunidad) {
@@ -1769,11 +1816,6 @@ public class CrmUseCaseService {
     private String normalizeSearch(String value) {
         String normalized = trim(value);
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizeSearchLike(String value) {
-        String normalized = normalizeSearch(value);
-        return normalized == null ? "" : normalized;
     }
 
     private String normalizeFilter(String value) {
@@ -2444,6 +2486,82 @@ public class CrmUseCaseService {
         if (!hasText(config.getAppId())) {
             throw new BusinessException("CRM_WHATSAPP_APP_ID_REQUERIDO", "Configura el App ID de Meta");
         }
+    }
+
+    private void validateMetaWebhookConfig(CrmCanalTokenConfig config) {
+        if (!Set.of("FACEBOOK", "INSTAGRAM").contains(config.getCanal()) || !config.isActivo()) {
+            return;
+        }
+        String channelName = "FACEBOOK".equals(config.getCanal()) ? "Facebook" : "Instagram";
+        if (!hasText(config.getAccessToken())) {
+            throw new BusinessException("CRM_META_ACCESS_TOKEN_REQUERIDO", "Configura el access token de " + channelName);
+        }
+        if (!hasText(config.getVerifyToken())) {
+            throw new BusinessException("CRM_META_VERIFY_TOKEN_REQUERIDO", "Configura el verify token del webhook de " + channelName);
+        }
+        if (!hasText(config.getAppId())) {
+            throw new BusinessException("CRM_META_APP_ID_REQUERIDO", "Configura el App ID de Meta para " + channelName);
+        }
+        if (!hasText(config.getAppSecret())) {
+            throw new BusinessException("CRM_META_APP_SECRET_REQUERIDO", "Configura el App secret de Meta para " + channelName);
+        }
+        if (!isPublicHttpsUrl(config.getWebhookUrl())) {
+            throw new BusinessException(
+                    "CRM_META_WEBHOOK_HTTPS_REQUERIDO",
+                    "El webhook de " + channelName + " debe usar una URL publica HTTPS"
+            );
+        }
+    }
+
+    private boolean isPublicHttpsUrl(String value) {
+        if (!hasText(value)) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(value.trim());
+            String host = uri.getHost();
+            return "https".equalsIgnoreCase(uri.getScheme())
+                    && hasText(host)
+                    && !Set.of("localhost", "127.0.0.1", "::1").contains(host.toLowerCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    private CrmSentEmailResponse toSentEmailResponse(Cotizacion quote) {
+        Cliente recipient = quote.getCliente();
+        String recipientName = recipient == null ? null : recipient.getNombre();
+        String recipientEmail = recipient == null ? null : recipient.getEmail();
+        if (quote.getCrmOportunidadId() != null && (!hasText(recipientName) || !hasText(recipientEmail))) {
+            CrmOportunidad opportunity = oportunidadRepository.findById(quote.getCrmOportunidadId()).orElse(null);
+            if (opportunity != null) {
+                Cliente opportunityClient = opportunity.getCliente();
+                CrmProspecto prospect = opportunity.getProspecto();
+                recipientName = firstNonBlank(
+                        recipientName,
+                        opportunityClient == null ? null : opportunityClient.getNombre(),
+                        prospect == null ? null : prospect.getNombre(),
+                        "Destinatario CRM"
+                );
+                recipientEmail = firstNonBlank(
+                        recipientEmail,
+                        opportunityClient == null ? null : opportunityClient.getEmail(),
+                        prospect == null ? null : prospect.getCorreo()
+                );
+            }
+        }
+        return new CrmSentEmailResponse(
+                quote.getId(),
+                quote.getCrmOportunidadId(),
+                firstNonBlank(recipientName, "Destinatario CRM"),
+                recipientEmail,
+                "Cotizacion COT-" + String.format(Locale.ROOT, "%03d", quote.getId()),
+                quote.getMoneda(),
+                quote.getTotal(),
+                quote.getEstado(),
+                quote.getUsuarioNombre(),
+                quote.getFechaEnvio()
+        );
     }
 
     private void resetWhatsappConnectionStatus(CrmCanalTokenConfig config) {

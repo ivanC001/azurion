@@ -32,7 +32,7 @@ public class SecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final AuditTrailFilter auditTrailFilter;
 
-    @Value("${azurion.multitenancy.public-endpoints:/v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/facturador/callback/**,/actuator/health,/files/**}")
+    @Value("${azurion.multitenancy.public-endpoints:/v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/public/crm/meta/**,/public/crm/meta/**,/v1/facturador/callback/**,/actuator/health,/files/**}")
     private String publicEndpointsProperty;
 
     @Value("${azurion.security.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*}")

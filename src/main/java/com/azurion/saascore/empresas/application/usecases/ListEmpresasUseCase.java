@@ -1,6 +1,7 @@
 package com.azurion.saascore.empresas.application.usecases;
 
 import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
+import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -14,15 +15,7 @@ public class ListEmpresasUseCase {
 
     public List<EmpresaResponse> execute() {
         return empresaRepository.findAll().stream()
-                .map(e -> new EmpresaResponse(
-                        e.getId(),
-                        e.getRuc(),
-                        e.getRazonSocial(),
-                        e.getTenantId(),
-                        e.getSchemaName(),
-                        e.getLogoPanelUrl(),
-                        e.isActivo()
-                ))
+                .map(EmpresaMapper::toResponse)
                 .toList();
     }
 }

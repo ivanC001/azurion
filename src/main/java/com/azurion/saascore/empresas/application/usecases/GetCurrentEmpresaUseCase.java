@@ -2,6 +2,7 @@ package com.azurion.saascore.empresas.application.usecases;
 
 import com.azurion.multitenancy.TenantContext;
 import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
+import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.shared.exception.BusinessException;
@@ -29,14 +30,6 @@ public class GetCurrentEmpresaUseCase {
     }
 
     public EmpresaResponse toResponse(Empresa empresa) {
-        return new EmpresaResponse(
-                empresa.getId(),
-                empresa.getRuc(),
-                empresa.getRazonSocial(),
-                empresa.getTenantId(),
-                empresa.getSchemaName(),
-                empresa.getLogoPanelUrl(),
-                empresa.isActivo()
-        );
+        return EmpresaMapper.toResponse(empresa);
     }
 }

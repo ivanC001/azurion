@@ -19,6 +19,7 @@ import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
+import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
@@ -105,6 +106,9 @@ class CrmUseCaseServiceTest {
     @Mock
     CrmSecretEncryptionService crmSecretEncryptionService;
 
+    @Mock
+    CrmLeadAssignmentService leadAssignmentService;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -126,7 +130,8 @@ class CrmUseCaseServiceTest {
                 currencyConfigRepository,
                 landingLeadValidationService,
                 prospectoInteresRepository,
-                crmSecretEncryptionService
+                crmSecretEncryptionService,
+                leadAssignmentService
         );
     }
 
@@ -216,6 +221,32 @@ class CrmUseCaseServiceTest {
         assertEquals("20", first.getResponsableId());
         assertEquals("20", second.getResponsableId());
         assertEquals("30", third.getResponsableId());
+    }
+
+    @Test
+    void administradorEliminaLeadNuevoSinHistorialComercial() {
+        authenticate("CRM_DELETE");
+        CrmProspecto prospecto = prospecto(21L);
+        when(prospectoRepository.findById(21L)).thenReturn(Optional.of(prospecto));
+        when(oportunidadRepository.existsByProspecto_Id(21L)).thenReturn(false);
+
+        service.deleteProspecto(21L);
+
+        verify(actividadRepository).deleteByProspecto_Id(21L);
+        verify(prospectoRepository).delete(prospecto);
+    }
+
+    @Test
+    void noEliminaProspectoQueYaTieneOportunidad() {
+        authenticate("CRM_DELETE");
+        CrmProspecto prospecto = prospecto(22L);
+        prospecto.setOportunidadId(90L);
+        when(prospectoRepository.findById(22L)).thenReturn(Optional.of(prospecto));
+
+        BusinessException error = assertThrows(BusinessException.class, () -> service.deleteProspecto(22L));
+
+        assertEquals("CRM_PROSPECTO_CON_HISTORIAL", error.getCode());
+        verify(prospectoRepository, never()).delete(prospecto);
     }
 
     @Test

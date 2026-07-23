@@ -8,6 +8,7 @@ import com.azurion.saascore.crm.application.dto.UpdateWhatsappConversationNoteRe
 import com.azurion.saascore.crm.application.dto.UpdateWhatsappConversationStatusRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappConnectionStatusResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappVerifyTokenResponse;
+import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.services.WhatsappConfigurationService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
@@ -80,6 +81,15 @@ public class WhatsappCrmController {
         return ApiResponse.ok(
                 whatsappIntegrationService.listConversations(query, estado, soloNoLeidas, soloMias),
                 "Bandeja de conversaciones de WhatsApp"
+        );
+    }
+
+    @GetMapping("/whatsapp/notificaciones")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
+    public ApiResponse<WhatsappUnreadSummaryResponse> unreadNotifications() {
+        return ApiResponse.ok(
+                whatsappIntegrationService.getUnreadSummary(),
+                "Mensajes de WhatsApp pendientes de lectura"
         );
     }
 

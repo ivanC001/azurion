@@ -90,6 +90,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 || path.startsWith("/public/crm/catalogo/")
                 || path.startsWith("/v1/public/crm/whatsapp/")
                 || path.startsWith("/public/crm/whatsapp/")
+                || path.startsWith("/v1/public/crm/meta/")
+                || path.startsWith("/public/crm/meta/")
                 || CALLBACK_PREFIXES.stream().anyMatch(path::startsWith);
     }
 

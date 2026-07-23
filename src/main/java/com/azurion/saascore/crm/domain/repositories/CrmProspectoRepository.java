@@ -22,6 +22,8 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
 
     long countByResponsableIdAndEstado(String responsableId, String estado);
 
+    long countByResponsableId(String responsableId);
+
     long countByCanalIngreso(String canalIngreso);
 
     long countByCanalIngresoNot(String canalIngreso);

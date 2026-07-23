@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
+import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
@@ -56,6 +57,8 @@ class WhatsappIntegrationServiceTest {
     private CrmSecretEncryptionService secretEncryptionService;
     @Mock
     private WhatsappCloudApiClient cloudApiClient;
+    @Mock
+    private CrmLeadAssignmentService leadAssignmentService;
 
     private WhatsappIntegrationService service;
     private CrmCanalTokenConfig config;
@@ -70,7 +73,8 @@ class WhatsappIntegrationServiceTest {
                 messageRepository,
                 secretEncryptionService,
                 cloudApiClient,
-                new ObjectMapper()
+                new ObjectMapper(),
+                leadAssignmentService
         );
         config = new CrmCanalTokenConfig();
         config.setCanal("WHATSAPP");

@@ -4,6 +4,8 @@ import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -82,4 +84,37 @@ public interface CotizacionRepository extends JpaRepository<Cotizacion, Long> {
 
     @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
     List<Cotizacion> findByCrmOportunidadIdOrderByFechaEmisionDescIdDesc(Long crmOportunidadId);
+
+    @EntityGraph(attributePaths = {"cliente", "sucursal"})
+    @Query(value = """
+            select quote
+             from Cotizacion quote
+              left join quote.cliente client
+             where upper(coalesce(quote.canalEnvio, '')) = 'CORREO'
+               and upper(coalesce(quote.emailSendStatus, '')) = 'SENT'
+               and quote.fechaEnvio is not null
+               and (
+                    :query = ''
+                    or lower(coalesce(client.nombre, '')) like concat('%', :query, '%')
+                    or lower(coalesce(client.email, '')) like concat('%', :query, '%')
+                    or lower(coalesce(client.numeroDocumento, '')) like concat('%', :query, '%')
+                    or lower(coalesce(quote.observacion, '')) like concat('%', :query, '%')
+               )
+            """,
+            countQuery = """
+            select count(quote)
+             from Cotizacion quote
+              left join quote.cliente client
+             where upper(coalesce(quote.canalEnvio, '')) = 'CORREO'
+               and upper(coalesce(quote.emailSendStatus, '')) = 'SENT'
+               and quote.fechaEnvio is not null
+               and (
+                    :query = ''
+                    or lower(coalesce(client.nombre, '')) like concat('%', :query, '%')
+                    or lower(coalesce(client.email, '')) like concat('%', :query, '%')
+                    or lower(coalesce(client.numeroDocumento, '')) like concat('%', :query, '%')
+                    or lower(coalesce(quote.observacion, '')) like concat('%', :query, '%')
+               )
+            """)
+    Page<Cotizacion> findSentEmails(@Param("query") String query, Pageable pageable);
 }

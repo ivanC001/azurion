@@ -91,7 +91,8 @@ public class TenantModuleMigrationPlanner {
             "V62__crm_whatsapp_connection_status.sql",
             "V63__cotizacion_email_send_guard.sql",
             "V64__paged_collection_indexes.sql",
-            "V65__crm_whatsapp_delivery_status.sql"
+            "V65__crm_whatsapp_delivery_status.sql",
+            "V66__crm_lead_assignment_config.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -275,7 +276,8 @@ public class TenantModuleMigrationPlanner {
                 "V60__disable_known_seeded_tenant_credentials.sql",
                 "V61__crm_opportunity_resources.sql",
                 "V62__crm_whatsapp_connection_status.sql",
-                "V65__crm_whatsapp_delivery_status.sql"
+                "V65__crm_whatsapp_delivery_status.sql",
+                "V66__crm_lead_assignment_config.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

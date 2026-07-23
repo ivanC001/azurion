@@ -2,8 +2,10 @@ package com.azurion.saascore.crm.application.services;
 
 import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
+import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmLandingConfig;
 import com.azurion.saascore.crm.domain.entities.LandingProductMode;
+import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLandingCatalogItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLandingConfigRepository;
@@ -18,11 +20,13 @@ import org.springframework.stereotype.Service;
 public class LandingLeadValidationService {
 
     private final CrmCatalogoItemRepository catalogoItemRepository;
+    private final CrmCanalTokenConfigRepository canalTokenConfigRepository;
     private final CrmLandingConfigRepository landingConfigRepository;
     private final CrmLandingCatalogItemRepository landingCatalogItemRepository;
 
     public LandingLeadContext validate(PublicCrmLeadRequest request) {
         validateAntispam(request);
+        validateWebChannelEnabled();
         validateContact(request);
 
         String landingKey = trim(request.landingKey());
@@ -62,6 +66,18 @@ public class LandingLeadValidationService {
                 firstNonBlank(request.campania(), landing.getCampania()),
                 trim(landing.getResponsableId())
         );
+    }
+
+    private void validateWebChannelEnabled() {
+        boolean enabled = canalTokenConfigRepository.findByCanal("WEB")
+                .map(CrmCanalTokenConfig::isActivo)
+                .orElse(false);
+        if (!enabled) {
+            throw new BusinessException(
+                    "CRM_CANAL_WEB_INACTIVO",
+                    "La recepcion de leads web esta desactivada en Configuracion CRM"
+            );
+        }
     }
 
     private CrmCatalogoItem validateRequiredProduct(PublicCrmLeadRequest request, CrmLandingConfig landing) {

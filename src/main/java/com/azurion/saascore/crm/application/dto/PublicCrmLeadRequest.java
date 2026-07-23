@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record PublicCrmLeadRequest(
-        @JsonAlias({"Ruc_tenant", "rucTenant", "tenantId"}) @Size(max = 30) String rucTenant,
+        @JsonAlias({"Ruc_tenant", "rucTenant", "tenantId"}) @Size(max = 40) String rucTenant,
         @Size(max = 120) String landingKey,
         String tipoPersona,
         String tipoDocumento,

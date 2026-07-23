@@ -5,12 +5,15 @@ import com.azurion.saascore.configuracion.domain.entities.EmpresaModulo;
 import com.azurion.saascore.configuracion.domain.repositories.EmpresaModuloRepository;
 import com.azurion.saascore.empresas.application.dto.CreateEmpresaRequest;
 import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
+import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.modulos.domain.entities.Modulo;
 import com.azurion.saascore.modulos.domain.repositories.ModuloRepository;
 import com.azurion.shared.exception.BusinessException;
 import java.time.LocalDate;
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -33,13 +36,22 @@ public class CreateEmpresaUseCase {
     @Transactional
     public EmpresaResponse execute(CreateEmpresaRequest request) {
         validateEmpresaDoesNotExist(request);
+        validateRegionalConfiguration(request);
         List<String> normalizedModuleCodes = validateAndNormalizeModules(request.moduloCodigos());
 
         tenantProvisioningService.createTenantSchema(request.tenantId(), request.schemaName(), normalizedModuleCodes);
 
         Empresa empresa = new Empresa();
-        empresa.setRuc(request.ruc());
-        empresa.setRazonSocial(request.razonSocial());
+        empresa.setRuc(request.ruc().trim().toUpperCase(Locale.ROOT));
+        empresa.setRazonSocial(request.razonSocial().trim());
+        empresa.setTipoDocumentoFiscal(defaultValue(request.tipoDocumentoFiscal(), "RUC").toUpperCase(Locale.ROOT));
+        empresa.setNombreComercial(trim(request.nombreComercial()));
+        empresa.setPaisCodigo(defaultValue(request.paisCodigo(), "PE").toUpperCase(Locale.ROOT));
+        empresa.setPaisNombre(defaultValue(request.paisNombre(), "Peru"));
+        empresa.setMonedaCodigo(defaultValue(request.monedaCodigo(), "PEN").toUpperCase(Locale.ROOT));
+        empresa.setMonedaSimbolo(defaultValue(request.monedaSimbolo(), "S/"));
+        empresa.setZonaHoraria(defaultValue(request.zonaHoraria(), "America/Lima"));
+        empresa.setIdioma(defaultValue(request.idioma(), "es-PE"));
         empresa.setTenantId(request.tenantId());
         empresa.setSchemaName(request.schemaName());
         empresa.setActivo(true);
@@ -47,20 +59,12 @@ public class CreateEmpresaUseCase {
         Empresa saved = empresaRepository.save(empresa);
         syncInitialModules(saved, normalizedModuleCodes);
 
-        return new EmpresaResponse(
-                saved.getId(),
-                saved.getRuc(),
-                saved.getRazonSocial(),
-                saved.getTenantId(),
-                saved.getSchemaName(),
-                saved.getLogoPanelUrl(),
-                saved.isActivo()
-        );
+        return EmpresaMapper.toResponse(saved);
     }
 
     private void validateEmpresaDoesNotExist(CreateEmpresaRequest request) {
-        empresaRepository.findByRuc(request.ruc()).ifPresent(existing -> {
-            throw new BusinessException("EMPRESA_RUC_EXISTS", "Ya existe una empresa con RUC: " + request.ruc());
+        empresaRepository.findByRucIgnoreCase(request.ruc().trim()).ifPresent(existing -> {
+            throw new BusinessException("EMPRESA_DOCUMENTO_FISCAL_EXISTS", "Ya existe una empresa con identificador fiscal: " + request.ruc());
         });
         empresaRepository.findByTenantId(request.tenantId()).ifPresent(existing -> {
             throw new BusinessException("EMPRESA_TENANT_EXISTS", "Ya existe una empresa con tenant: " + request.tenantId());
@@ -68,6 +72,24 @@ public class CreateEmpresaUseCase {
         empresaRepository.findBySchemaName(request.schemaName()).ifPresent(existing -> {
             throw new BusinessException("EMPRESA_SCHEMA_EXISTS", "Ya existe una empresa con schema: " + request.schemaName());
         });
+    }
+
+    private String defaultValue(String value, String fallback) {
+        String normalized = trim(value);
+        return normalized == null ? fallback : normalized;
+    }
+
+    private String trim(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void validateRegionalConfiguration(CreateEmpresaRequest request) {
+        String zoneId = defaultValue(request.zonaHoraria(), "America/Lima");
+        try {
+            ZoneId.of(zoneId);
+        } catch (DateTimeException exception) {
+            throw new BusinessException("EMPRESA_ZONA_HORARIA_INVALIDA", "Selecciona una zona horaria valida");
+        }
     }
 
     private List<String> validateAndNormalizeModules(List<String> moduloCodigos) {

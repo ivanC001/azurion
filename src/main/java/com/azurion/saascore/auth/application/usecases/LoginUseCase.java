@@ -137,14 +137,13 @@ public class LoginUseCase {
             value = TenantContext.getTenantId();
         }
         if (value == null || value.isBlank() || TenantContext.DEFAULT_TENANT.equalsIgnoreCase(value)) {
-            throw new BusinessException("TENANT_INVALIDO", "RUC de empresa es obligatorio para login de empresa");
+            throw new BusinessException("TENANT_INVALIDO", "El identificador fiscal o tenant de la empresa es obligatorio");
         }
 
         String normalized = value.trim();
-        if (normalized.matches("^[0-9]{11}$")) {
-            Empresa empresa = empresaRepository.findByRuc(normalized)
-                    .orElseThrow(() -> new BusinessException("TENANT_NO_ENCONTRADO", "Empresa no existe para el RUC indicado"));
-            return empresa.getTenantId();
+        var empresaByFiscalId = empresaRepository.findByRucIgnoreCase(normalized);
+        if (empresaByFiscalId.isPresent()) {
+            return empresaByFiscalId.get().getTenantId();
         }
 
         return normalized;

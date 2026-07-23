@@ -35,7 +35,7 @@ public class CrmLandingConfig extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "modo_producto", nullable = false, length = 30)
-    private LandingProductMode modoProducto = LandingProductMode.REQUERIDO;
+    private LandingProductMode modoProducto = LandingProductMode.OPCIONAL;
 
     @Column(name = "crear_seguimiento", nullable = false)
     private boolean crearSeguimiento = true;
