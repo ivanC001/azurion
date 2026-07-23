@@ -21,6 +21,15 @@ Administrador de plataforma: `POST /api/v1/auth/public/login`.
 
 Usuario de empresa: `POST /api/v1/auth/tenant/login`.
 
+Cada tenant nuevo recibe una cuenta administrativa inicial activa:
+
+- usuario: `admin`
+- contrasena temporal: `admin1`
+- rol: `ADMIN_EMPRESA`
+
+El administrador general o el administrador del tenant debe cambiar esta contrasena
+desde la gestion de usuarios antes de entregar el acceso definitivo.
+
 ```json
 {
   "username": "platform.admin",

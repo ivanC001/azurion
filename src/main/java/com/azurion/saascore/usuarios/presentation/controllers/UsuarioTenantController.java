@@ -42,28 +42,28 @@ public class UsuarioTenantController {
     private final TenantScopeValidator tenantScopeValidator;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<UsuarioTenantResponse> create(@Valid @RequestBody CreateUsuarioTenantRequest request) {
         tenantScopeValidator.requireTenantContext();
         return ApiResponse.ok(createUsuarioTenantUseCase.execute(request), "Usuario creado");
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('USUARIOS_READ') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAuthority('USUARIOS_READ') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<List<UsuarioTenantResponse>> list() {
         tenantScopeValidator.requireTenantContext();
         return ApiResponse.ok(listUsuariosTenantUseCase.execute(), "Usuarios");
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('USUARIOS_READ') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAuthority('USUARIOS_READ') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<UsuarioTenantResponse> getById(@PathVariable Long id) {
         tenantScopeValidator.requireTenantContext();
         return ApiResponse.ok(getUsuarioTenantByIdUseCase.execute(id), "Usuario");
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<UsuarioTenantResponse> update(@PathVariable Long id,
                                                      @Valid @RequestBody UpdateUsuarioTenantRequest request) {
         tenantScopeValidator.requireTenantContext();
@@ -71,7 +71,7 @@ public class UsuarioTenantController {
     }
 
     @PutMapping("/{id}/password")
-    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<String> updatePassword(@PathVariable Long id,
                                               @Valid @RequestBody UpdateUsuarioPasswordRequest request) {
         tenantScopeValidator.requireTenantContext();
@@ -80,7 +80,7 @@ public class UsuarioTenantController {
     }
 
     @PutMapping("/{id}/roles")
-    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<UsuarioTenantResponse> syncRoles(@PathVariable Long id,
                                                         @Valid @RequestBody SyncUsuarioRolesRequest request) {
         tenantScopeValidator.requireTenantContext();
@@ -91,7 +91,7 @@ public class UsuarioTenantController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_GENERAL','PLATFORM_ADMIN')")
+    @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
     public ApiResponse<String> delete(@PathVariable Long id) {
         tenantScopeValidator.requireTenantContext();
         deleteUsuarioTenantUseCase.execute(id);

@@ -24,7 +24,8 @@ public class TenantModuleMigrationPlanner {
             "V38__module_contract_permissions.sql",
             "V56__separate_erp_crm_role_scopes.sql",
             "V57__retire_generic_crm_permissions.sql",
-            "V60__disable_known_seeded_tenant_credentials.sql"
+            "V60__disable_known_seeded_tenant_credentials.sql",
+            "V67__activate_default_tenant_admin.sql"
     );
 
     private static final List<String> ALL_TENANT_MIGRATIONS = List.of(
@@ -92,7 +93,8 @@ public class TenantModuleMigrationPlanner {
             "V63__cotizacion_email_send_guard.sql",
             "V64__paged_collection_indexes.sql",
             "V65__crm_whatsapp_delivery_status.sql",
-            "V66__crm_lead_assignment_config.sql"
+            "V66__crm_lead_assignment_config.sql",
+            "V67__activate_default_tenant_admin.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();

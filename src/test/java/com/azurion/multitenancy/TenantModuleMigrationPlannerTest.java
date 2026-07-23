@@ -16,6 +16,7 @@ class TenantModuleMigrationPlannerTest {
         assertTrue(plan.scriptNames().contains("V62__crm_whatsapp_connection_status.sql"));
         assertTrue(plan.scriptNames().contains("V63__cotizacion_email_send_guard.sql"));
         assertTrue(plan.scriptNames().contains("V65__crm_whatsapp_delivery_status.sql"));
+        assertTrue(plan.scriptNames().contains("V67__activate_default_tenant_admin.sql"));
     }
 
     @Test
@@ -25,5 +26,6 @@ class TenantModuleMigrationPlannerTest {
         assertTrue(plan.scriptNames().contains("V62__crm_whatsapp_connection_status.sql"));
         assertTrue(plan.scriptNames().contains("V64__paged_collection_indexes.sql"));
         assertTrue(plan.scriptNames().contains("V65__crm_whatsapp_delivery_status.sql"));
+        assertTrue(plan.scriptNames().contains("V67__activate_default_tenant_admin.sql"));
     }
 }
