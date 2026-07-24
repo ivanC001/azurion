@@ -30,6 +30,7 @@ public class CreatePlanUseCase {
         plan.setCodigo(request.codigo().trim().toUpperCase());
         plan.setDescripcion(request.descripcion());
         plan.setLimiteMensualBolsa(request.limiteMensualBolsa());
+        plan.setLimiteUsuarios(request.limiteUsuarios());
         plan.setPrecioMensual(request.precioMensual());
         plan.setEstado("ACTIVO");
 

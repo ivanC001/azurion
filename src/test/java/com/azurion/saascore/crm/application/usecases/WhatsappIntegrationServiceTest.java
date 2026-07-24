@@ -2,6 +2,7 @@ package com.azurion.saascore.crm.application.usecases;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
+import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
@@ -16,19 +18,29 @@ import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmWhatsappConversation;
+import com.azurion.saascore.crm.domain.entities.CrmWhatsappConversationNote;
 import com.azurion.saascore.crm.domain.entities.CrmWhatsappMessage;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappConversationRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmWhatsappConversationNoteRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappMessageRepository;
+import com.azurion.saascore.cotizaciones.application.usecases.GenerateCotizacionPdfUseCase;
+import com.azurion.saascore.cotizaciones.application.usecases.UpdateCotizacionEstadoUseCase;
+import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.SendResult;
+import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
+import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
+import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
+import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +64,15 @@ class WhatsappIntegrationServiceTest {
     @Mock
     private CrmWhatsappConversationRepository conversationRepository;
     @Mock
+    private CrmWhatsappConversationNoteRepository conversationNoteRepository;
+    @Mock
     private CrmWhatsappMessageRepository messageRepository;
+    @Mock
+    private CotizacionRepository cotizacionRepository;
+    @Mock
+    private GenerateCotizacionPdfUseCase generateCotizacionPdfUseCase;
+    @Mock
+    private UpdateCotizacionEstadoUseCase updateCotizacionEstadoUseCase;
     @Mock
     private CrmSecretEncryptionService secretEncryptionService;
     @Mock
@@ -70,7 +90,11 @@ class WhatsappIntegrationServiceTest {
                 prospectoRepository,
                 actividadRepository,
                 conversationRepository,
+                conversationNoteRepository,
                 messageRepository,
+                cotizacionRepository,
+                generateCotizacionPdfUseCase,
+                updateCotizacionEstadoUseCase,
                 secretEncryptionService,
                 cloudApiClient,
                 new ObjectMapper(),
@@ -225,6 +249,80 @@ class WhatsappIntegrationServiceTest {
         assertNotNull(message.getLeidoEn());
         verify(messageRepository).saveAll(List.of(message));
         verify(cloudApiClient).markAsRead(config, "wamid.inbound-read");
+    }
+
+    @Test
+    void rejectsFourthInternalNote() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        CrmWhatsappConversation conversation = new CrmWhatsappConversation();
+        conversation.setId(7L);
+        conversation.setProspecto(prospecto);
+        when(conversationRepository.findForUpdateByProspectoId(44L)).thenReturn(Optional.of(conversation));
+        when(conversationNoteRepository.findAllByConversation_IdOrderBySlotAsc(7L))
+                .thenReturn(List.of(note(conversation, 1), note(conversation, 2), note(conversation, 3)));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.createConversationNote(44L, "Una nota adicional")
+        );
+
+        assertEquals("CRM_WHATSAPP_NOTAS_LIMITE", exception.getCode());
+        verify(conversationNoteRepository, never()).save(any());
+    }
+
+    @Test
+    void sendsQuoteAsWhatsappDocumentAndMarksItSent() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setNombre("Luis");
+        prospecto.setTelefono("+51 999 888 777");
+        prospecto.setEstado("NUEVO");
+        prospecto.setNivelInteres("FRIO");
+        Cotizacion quote = new Cotizacion();
+        quote.setId(12L);
+        quote.setCrmOportunidadId(90L);
+        byte[] pdfBytes = "%PDF-test".getBytes(StandardCharsets.UTF_8);
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(cotizacionRepository.findByIdAndCrmProspectoId(12L, 44L)).thenReturn(Optional.of(quote));
+        when(generateCotizacionPdfUseCase.execute(12L)).thenReturn(new CotizacionPdfResponse(
+                "cotizacion-12.pdf",
+                "application/pdf",
+                Base64.getEncoder().encodeToString(pdfBytes)
+        ));
+        when(cloudApiClient.uploadMedia(eq(config), any(byte[].class), eq("cotizacion-12.pdf"), eq("application/pdf")))
+                .thenReturn("media-12");
+        when(cloudApiClient.sendDocument(
+                eq(config),
+                eq("51999888777"),
+                eq("media-12"),
+                eq("cotizacion-12.pdf"),
+                eq("Adjunto")
+        )).thenReturn(new SendResult("wamid.quote-12", "51999888777", "{\"messages\":[{\"id\":\"wamid.quote-12\"}]}"));
+        when(messageRepository.save(any(CrmWhatsappMessage.class))).thenAnswer(invocation -> {
+            CrmWhatsappMessage message = invocation.getArgument(0);
+            message.setId(55L);
+            return message;
+        });
+
+        var response = service.sendQuote(44L, 12L, new SendWhatsappQuoteRequest("Adjunto"));
+
+        assertEquals("document", response.mensaje().tipoMensaje());
+        assertEquals("wamid.quote-12", response.mensaje().metaMessageId());
+        verify(updateCotizacionEstadoUseCase).execute(
+                12L,
+                new UpdateCotizacionEstadoRequest("ENVIADA", "WHATSAPP", null, null, null)
+        );
+        verify(actividadRepository).save(any());
+    }
+
+    private CrmWhatsappConversationNote note(CrmWhatsappConversation conversation, int slot) {
+        CrmWhatsappConversationNote note = new CrmWhatsappConversationNote();
+        note.setConversation(conversation);
+        note.setSlot(slot);
+        note.setContenido("Nota " + slot);
+        return note;
     }
 
     private String signature(String payload) throws Exception {

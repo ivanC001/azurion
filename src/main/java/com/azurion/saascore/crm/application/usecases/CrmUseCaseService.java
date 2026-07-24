@@ -67,6 +67,7 @@ import com.azurion.saascore.crm.domain.entities.CrmProspectoInteres;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository.CrmCatalogoUsageProjection;
 import com.azurion.saascore.crm.domain.repositories.CrmCurrencyConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
@@ -408,7 +409,10 @@ public class CrmUseCaseService {
         List<CrmCatalogoItem> items = tipoItem == null || tipoItem.isBlank()
                 ? catalogoItemRepository.findAllByOrderByIdDesc()
                 : catalogoItemRepository.findByTipoItemOrderByIdDesc(resolveTipoComercial(tipoItem));
-        return CrmMapper.toCatalogoItemResponses(items);
+        Map<Long, CrmCatalogoUsageProjection> usageByItem = catalogoUsageByItem();
+        return items.stream()
+                .map(item -> toCatalogoItemResponse(item, usageByItem.get(item.getId())))
+                .toList();
     }
 
     @Transactional
@@ -423,7 +427,8 @@ public class CrmUseCaseService {
         item.setPublicEnabled(request.publicEnabled() == null || request.publicEnabled());
         item.setLandingSlug(normalizeSlug(firstNonBlank(request.landingSlug(), request.nombre())));
         item.setPublicToken(generatePublicToken());
-        return CrmMapper.toCatalogoItemResponse(catalogoItemRepository.save(item));
+        CrmCatalogoItem saved = catalogoItemRepository.saveAndFlush(item);
+        return toCatalogoItemResponse(saved, catalogoUsageByItem().get(saved.getId()));
     }
 
     @Transactional
@@ -444,7 +449,28 @@ public class CrmUseCaseService {
         if (!hasText(item.getPublicToken())) {
             item.setPublicToken(generatePublicToken());
         }
-        return CrmMapper.toCatalogoItemResponse(catalogoItemRepository.save(item));
+        CrmCatalogoItem saved = catalogoItemRepository.saveAndFlush(item);
+        return toCatalogoItemResponse(saved, catalogoUsageByItem().get(saved.getId()));
+    }
+
+    private Map<Long, CrmCatalogoUsageProjection> catalogoUsageByItem() {
+        return catalogoItemRepository.summarizeUsage().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CrmCatalogoUsageProjection::getCatalogoItemId,
+                        usage -> usage
+                ));
+    }
+
+    private CrmCatalogoItemResponse toCatalogoItemResponse(
+            CrmCatalogoItem item,
+            CrmCatalogoUsageProjection usage
+    ) {
+        return CrmMapper.toCatalogoItemResponse(
+                item,
+                usage == null || usage.getProspectosCount() == null ? 0 : usage.getProspectosCount(),
+                usage == null || usage.getOportunidadesCount() == null ? 0 : usage.getOportunidadesCount(),
+                usage == null || usage.getLandingsCount() == null ? 0 : usage.getLandingsCount()
+        );
     }
 
     @Transactional(readOnly = true)

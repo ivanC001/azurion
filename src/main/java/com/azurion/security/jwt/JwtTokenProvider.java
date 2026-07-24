@@ -25,7 +25,22 @@ public class JwtTokenProvider {
     public String generateToken(String username, Long userId, String tenantId, List<String> roles,
                                 List<String> permissions, List<String> modules) {
         Instant now = Instant.now();
-        Instant expiry = now.plus(properties.expiration());
+        return generateToken(
+                username,
+                userId,
+                tenantId,
+                roles,
+                permissions,
+                modules,
+                java.util.UUID.randomUUID().toString(),
+                now.plus(properties.expiration())
+        );
+    }
+
+    public String generateToken(String username, Long userId, String tenantId, List<String> roles,
+                                List<String> permissions, List<String> modules, String sessionId,
+                                Instant expiry) {
+        Instant now = Instant.now();
 
         return Jwts.builder()
                 .issuer(properties.getIssuer())
@@ -33,6 +48,7 @@ public class JwtTokenProvider {
                 .claim("uid", userId.toString())
                 .claim("userId", userId)
                 .claim("tenant", tenantId)
+                .claim("sid", sessionId)
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .claim("modules", modules)

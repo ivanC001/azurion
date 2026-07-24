@@ -1,9 +1,11 @@
 package com.azurion.saascore.empresas.presentation.controllers;
 
 import com.azurion.saascore.empresas.application.dto.CreateEmpresaRequest;
+import com.azurion.saascore.empresas.application.dto.EmpresaOperationalSummaryResponse;
 import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
 import com.azurion.saascore.empresas.application.usecases.CreateEmpresaUseCase;
 import com.azurion.saascore.empresas.application.usecases.GetEmpresaByIdUseCase;
+import com.azurion.saascore.empresas.application.usecases.ListEmpresaOperationalSummariesUseCase;
 import com.azurion.saascore.empresas.application.usecases.ListEmpresasUseCase;
 import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -25,6 +27,7 @@ public class EmpresaController {
 
     private final CreateEmpresaUseCase createEmpresaUseCase;
     private final ListEmpresasUseCase listEmpresasUseCase;
+    private final ListEmpresaOperationalSummariesUseCase listOperationalSummariesUseCase;
     private final GetEmpresaByIdUseCase getEmpresaByIdUseCase;
 
     @PostMapping
@@ -35,6 +38,14 @@ public class EmpresaController {
     @GetMapping
     public ApiResponse<List<EmpresaResponse>> list() {
         return ApiResponse.ok(listEmpresasUseCase.execute(), "Empresas");
+    }
+
+    @GetMapping("/resumen-operativo")
+    public ApiResponse<List<EmpresaOperationalSummaryResponse>> operationalSummary() {
+        return ApiResponse.ok(
+                listOperationalSummariesUseCase.execute(),
+                "Resumen operativo de empresas"
+        );
     }
 
     @GetMapping("/{id}")

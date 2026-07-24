@@ -5,6 +5,8 @@ import com.azurion.saascore.usuarios.application.dto.SyncUsuarioRolesRequest;
 import com.azurion.saascore.usuarios.application.dto.UpdateUsuarioPasswordRequest;
 import com.azurion.saascore.usuarios.application.dto.UpdateUsuarioTenantRequest;
 import com.azurion.saascore.usuarios.application.dto.UsuarioTenantResponse;
+import com.azurion.saascore.usuarios.application.dto.TenantUserQuotaResponse;
+import com.azurion.saascore.usuarios.application.services.TenantUserLimitService;
 import com.azurion.saascore.usuarios.application.services.TenantScopeValidator;
 import com.azurion.saascore.usuarios.application.usecases.CreateUsuarioTenantUseCase;
 import com.azurion.saascore.usuarios.application.usecases.DeleteUsuarioTenantUseCase;
@@ -40,6 +42,7 @@ public class UsuarioTenantController {
     private final SyncUsuarioTenantRolesUseCase syncUsuarioTenantRolesUseCase;
     private final DeleteUsuarioTenantUseCase deleteUsuarioTenantUseCase;
     private final TenantScopeValidator tenantScopeValidator;
+    private final TenantUserLimitService tenantUserLimitService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('USUARIOS_WRITE') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
@@ -53,6 +56,13 @@ public class UsuarioTenantController {
     public ApiResponse<List<UsuarioTenantResponse>> list() {
         tenantScopeValidator.requireTenantContext();
         return ApiResponse.ok(listUsuariosTenantUseCase.execute(), "Usuarios");
+    }
+
+    @GetMapping("/quota")
+    @PreAuthorize("hasAuthority('USUARIOS_READ') or hasAnyRole('ADMIN_EMPRESA','ADMIN_GENERAL','PLATFORM_ADMIN')")
+    public ApiResponse<TenantUserQuotaResponse> quota() {
+        tenantScopeValidator.requireTenantContext();
+        return ApiResponse.ok(tenantUserLimitService.currentQuota(), "Cupo de usuarios");
     }
 
     @GetMapping("/{id}")

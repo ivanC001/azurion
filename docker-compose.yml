@@ -12,6 +12,20 @@ services:
     volumes:
       - azurion_pg_data:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: azurion-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - azurion_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   azurion-api:
     build:
       context: .
@@ -19,6 +33,7 @@ services:
     container_name: azurion-api
     depends_on:
       - postgres
+      - redis
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/azurion
       DB_USER: postgres
@@ -26,6 +41,12 @@ services:
       JWT_SECRET: replace_this_with_very_long_secure_secret_32_chars_minimum
       JWT_ISSUER: azurion
       JWT_EXP_MIN: 120
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-}
+      SPRING_DATA_REDIS_DATABASE: ${SPRING_DATA_REDIS_DATABASE:-0}
+      AUTH_SESSION_STORE: redis
+      REDIS_HEALTH_ENABLED: "true"
       AZURION_PRIVATE_FILES_DIR: /app/data/private-files
       AZURION_PUBLIC_FILES_DIR: /app/data/public-files
       MULTIPART_MAX_FILE_SIZE: 8MB
@@ -47,7 +68,16 @@ services:
       - azurion_app_data:/app/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - azurion-shared
 
 volumes:
   azurion_pg_data:
+  azurion_redis_data:
   azurion_app_data:
+
+networks:
+  azurion-shared:
+    external: true
+    name: ${AZURION_SHARED_DOCKER_NETWORK:-azurion-facturador_default}

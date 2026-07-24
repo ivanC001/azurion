@@ -176,6 +176,15 @@ public final class CrmMapper {
     }
 
     public static CrmCatalogoItemResponse toCatalogoItemResponse(CrmCatalogoItem item) {
+        return toCatalogoItemResponse(item, 0, 0, 0);
+    }
+
+    public static CrmCatalogoItemResponse toCatalogoItemResponse(
+            CrmCatalogoItem item,
+            long prospectosCount,
+            long oportunidadesCount,
+            long landingsCount
+    ) {
         return new CrmCatalogoItemResponse(
                 item.getId(),
                 item.getTipoItem(),
@@ -188,7 +197,10 @@ public final class CrmMapper {
                 item.isPublicEnabled(),
                 item.getLandingSlug(),
                 item.getCreatedAt(),
-                item.getUpdatedAt()
+                item.getUpdatedAt(),
+                prospectosCount,
+                oportunidadesCount,
+                landingsCount
         );
     }
 

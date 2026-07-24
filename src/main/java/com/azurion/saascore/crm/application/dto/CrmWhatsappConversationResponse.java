@@ -1,6 +1,7 @@
 package com.azurion.saascore.crm.application.dto;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public record CrmWhatsappConversationResponse(
         Long id,
@@ -21,6 +22,7 @@ public record CrmWhatsappConversationResponse(
         String ultimoMensaje,
         String ultimaDireccion,
         OffsetDateTime ultimoMensajeEn,
-        String notaInterna
+        String notaInterna,
+        List<CrmWhatsappInternalNoteResponse> notasInternas
 ) {
 }

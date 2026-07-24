@@ -5,6 +5,11 @@ import jakarta.validation.constraints.NotBlank;
 public record LoginRequest(
         @NotBlank String username,
         @NotBlank String password,
-        String tenantId
+        String tenantId,
+        @NotBlank String deviceId,
+        String deviceName
 ) {
+    public LoginRequest(String username, String password, String tenantId) {
+        this(username, password, tenantId, null, null);
+    }
 }

@@ -8,6 +8,7 @@ import com.azurion.saascore.usuarios.application.dto.UsuarioTenantResponse;
 import com.azurion.saascore.usuarios.application.mappers.UsuariosMapper;
 import com.azurion.saascore.usuarios.application.services.RoleCodeSupport;
 import com.azurion.saascore.usuarios.application.services.TenantRoleAssignmentAuthorizer;
+import com.azurion.saascore.usuarios.application.services.TenantUserLimitService;
 import com.azurion.saascore.usuarios.application.services.UsuarioSucursalScopeService;
 import com.azurion.saascore.usuarios.domain.entities.UsuarioRol;
 import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
@@ -29,6 +30,7 @@ public class CreateUsuarioTenantUseCase {
     private final PasswordEncoder passwordEncoder;
     private final TenantRoleAssignmentAuthorizer tenantRoleAssignmentAuthorizer;
     private final UsuarioSucursalScopeService usuarioSucursalScopeService;
+    private final TenantUserLimitService tenantUserLimitService;
 
     @Transactional
     public UsuarioTenantResponse execute(CreateUsuarioTenantRequest request) {
@@ -36,6 +38,7 @@ public class CreateUsuarioTenantUseCase {
         if (usuarioTenantRepository.existsByUsernameIgnoreCase(username)) {
             throw new BusinessException("USUARIO_DUPLICADO", "Ya existe un usuario con ese username");
         }
+        tenantUserLimitService.assertCanActivateAnotherUser();
 
         UsuarioTenant usuario = new UsuarioTenant();
         usuario.setUsername(username);

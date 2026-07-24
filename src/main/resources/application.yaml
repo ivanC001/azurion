@@ -32,6 +32,16 @@ spring:
       max-file-size: ${MULTIPART_MAX_FILE_SIZE:8MB}
       max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:10MB}
       file-size-threshold: 0B
+  data:
+    redis:
+      repositories:
+        enabled: false
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      database: ${SPRING_DATA_REDIS_DATABASE:0}
+      connect-timeout: ${SPRING_DATA_REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:2s}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -43,6 +53,9 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  health:
+    redis:
+      enabled: ${REDIS_HEALTH_ENABLED:false}
   endpoint:
     health:
       probes:
@@ -62,6 +75,10 @@ azurion:
     bootstrap-admin:
       username: ${AZURION_BOOTSTRAP_ADMIN_USERNAME:}
       password: ${AZURION_BOOTSTRAP_ADMIN_PASSWORD:}
+    sessions:
+      store: ${AUTH_SESSION_STORE:memory}
+      replacement-token-ttl: ${AUTH_REPLACEMENT_TOKEN_TTL:2m}
+      activity-touch-interval: ${AUTH_ACTIVITY_TOUCH_INTERVAL:30s}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
     rate-limit:
@@ -88,7 +105,7 @@ azurion:
     default-schema: public
     tenant-header: X-Tenant-Id
     run-migrations-on-startup: ${TENANT_MIGRATIONS_ON_STARTUP:true}
-    public-endpoints: ${PUBLIC_ENDPOINTS:/v1/auth/public/login,/v1/auth/tenant/login,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/public/crm/meta/**,/public/crm/meta/**,/v1/facturador/callback/**,/actuator/health,/files/**}
+    public-endpoints: ${PUBLIC_ENDPOINTS:/v1/auth/public/login,/v1/auth/tenant/login,/v1/auth/session/replace,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/public/crm/meta/**,/public/crm/meta/**,/v1/facturador/callback/**,/actuator/health,/files/**}
   storage:
     public-files:
       root-dir: ${AZURION_PUBLIC_FILES_DIR:${user.dir}/storage/public-files}

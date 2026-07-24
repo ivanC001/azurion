@@ -15,6 +15,9 @@ public record CrmCatalogoItemResponse(
         Boolean publicEnabled,
         String landingSlug,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        long prospectosCount,
+        long oportunidadesCount,
+        long landingsCount
 ) {
 }

@@ -35,4 +35,7 @@ public class Suscripcion extends BaseEntity {
 
     @Column(name = "fecha_fin")
     private LocalDate fechaFin;
+
+    @Column(name = "limite_usuarios")
+    private Integer limiteUsuarios;
 }

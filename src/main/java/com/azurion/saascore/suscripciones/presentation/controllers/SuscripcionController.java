@@ -3,10 +3,12 @@ package com.azurion.saascore.suscripciones.presentation.controllers;
 import com.azurion.saascore.suscripciones.application.dto.CreateSuscripcionRequest;
 import com.azurion.saascore.suscripciones.application.dto.SuscripcionResponse;
 import com.azurion.saascore.suscripciones.application.dto.UpdateSuscripcionEstadoRequest;
+import com.azurion.saascore.suscripciones.application.dto.UpdateEmpresaSubscriptionPlanRequest;
 import com.azurion.saascore.suscripciones.application.usecases.CreateSuscripcionUseCase;
 import com.azurion.saascore.suscripciones.application.usecases.GetSuscripcionByIdUseCase;
 import com.azurion.saascore.suscripciones.application.usecases.ListSuscripcionesUseCase;
 import com.azurion.saascore.suscripciones.application.usecases.UpdateSuscripcionEstadoUseCase;
+import com.azurion.saascore.suscripciones.application.usecases.UpdateEmpresaSubscriptionPlanUseCase;
 import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -31,6 +33,7 @@ public class SuscripcionController {
     private final ListSuscripcionesUseCase listSuscripcionesUseCase;
     private final GetSuscripcionByIdUseCase getSuscripcionByIdUseCase;
     private final UpdateSuscripcionEstadoUseCase updateSuscripcionEstadoUseCase;
+    private final UpdateEmpresaSubscriptionPlanUseCase updateEmpresaSubscriptionPlanUseCase;
 
     @PostMapping
     public ApiResponse<SuscripcionResponse> create(@Valid @RequestBody CreateSuscripcionRequest request) {
@@ -51,5 +54,16 @@ public class SuscripcionController {
     public ApiResponse<SuscripcionResponse> updateEstado(@PathVariable Long id,
                                                          @Valid @RequestBody UpdateSuscripcionEstadoRequest request) {
         return ApiResponse.ok(updateSuscripcionEstadoUseCase.execute(id, request), "Suscripcion actualizada");
+    }
+
+    @PutMapping("/empresa/{empresaId}/plan")
+    public ApiResponse<SuscripcionResponse> updateEmpresaPlan(
+            @PathVariable Long empresaId,
+            @Valid @RequestBody UpdateEmpresaSubscriptionPlanRequest request
+    ) {
+        return ApiResponse.ok(
+                updateEmpresaSubscriptionPlanUseCase.execute(empresaId, request),
+                "Plan y cupo de la empresa actualizados"
+        );
     }
 }

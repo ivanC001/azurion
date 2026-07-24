@@ -20,6 +20,7 @@ public final class PlanMapper {
                 plan.getCodigo(),
                 plan.getDescripcion(),
                 plan.getLimiteMensualBolsa(),
+                plan.getLimiteUsuarios(),
                 plan.getPrecioMensual(),
                 plan.getEstado(),
                 moduloCodigos

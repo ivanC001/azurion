@@ -2,6 +2,7 @@ package com.azurion.saascore.cotizaciones.domain.repositories;
 
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import java.util.List;
+import java.util.Optional;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import org.springframework.data.domain.Page;
@@ -84,6 +85,37 @@ public interface CotizacionRepository extends JpaRepository<Cotizacion, Long> {
 
     @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
     List<Cotizacion> findByCrmOportunidadIdOrderByFechaEmisionDescIdDesc(Long crmOportunidadId);
+
+    @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
+    @Query("""
+            select quote
+              from Cotizacion quote
+             where exists (
+                    select opportunity.id
+                      from CrmOportunidad opportunity
+                     where opportunity.id = quote.crmOportunidadId
+                       and opportunity.prospecto.id = :prospectoId
+             )
+             order by quote.fechaEmision desc, quote.id desc
+            """)
+    List<Cotizacion> findAllByCrmProspectoId(@Param("prospectoId") Long prospectoId);
+
+    @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
+    @Query("""
+            select quote
+              from Cotizacion quote
+             where quote.id = :quoteId
+               and exists (
+                    select opportunity.id
+                      from CrmOportunidad opportunity
+                     where opportunity.id = quote.crmOportunidadId
+                       and opportunity.prospecto.id = :prospectoId
+             )
+            """)
+    Optional<Cotizacion> findByIdAndCrmProspectoId(
+            @Param("quoteId") Long quoteId,
+            @Param("prospectoId") Long prospectoId
+    );
 
     @EntityGraph(attributePaths = {"cliente", "sucursal"})
     @Query(value = """

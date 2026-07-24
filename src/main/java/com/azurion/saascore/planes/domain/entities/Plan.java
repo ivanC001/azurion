@@ -26,6 +26,9 @@ public class Plan extends BaseEntity {
     @Column(name = "limite_mensual_bolsa", nullable = false)
     private Long limiteMensualBolsa;
 
+    @Column(name = "limite_usuarios", nullable = false)
+    private Integer limiteUsuarios;
+
     @Column(name = "precio_mensual", nullable = false, precision = 18, scale = 2)
     private BigDecimal precioMensual;
 

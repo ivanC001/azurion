@@ -12,6 +12,8 @@ public interface UsuarioTenantRepository extends JpaRepository<UsuarioTenant, Lo
 
     boolean existsByUsernameIgnoreCase(String username);
 
+    long countByActivoTrue();
+
     @EntityGraph(attributePaths = {"usuarioRoles", "usuarioRoles.rol"})
     List<UsuarioTenant> findAllByOrderByNombresAsc();
 

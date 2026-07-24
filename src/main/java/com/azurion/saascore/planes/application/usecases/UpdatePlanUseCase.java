@@ -5,9 +5,9 @@ import com.azurion.saascore.planes.application.dto.UpdatePlanRequest;
 import com.azurion.saascore.planes.application.mappers.PlanMapper;
 import com.azurion.saascore.modulos.application.services.PlatformModuleAuditService;
 import com.azurion.saascore.planes.domain.entities.Plan;
+import com.azurion.saascore.planes.domain.repositories.PlanModuloRepository;
 import com.azurion.saascore.planes.domain.repositories.PlanRepository;
 import com.azurion.shared.exception.BusinessException;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UpdatePlanUseCase {
 
     private final PlanRepository planRepository;
+    private final PlanModuloRepository planModuloRepository;
     private final AsignarModulosPlanUseCase asignarModulosPlanUseCase;
     private final PlatformModuleAuditService auditService;
 
@@ -28,12 +29,13 @@ public class UpdatePlanUseCase {
         plan.setNombre(request.nombre());
         plan.setDescripcion(request.descripcion());
         plan.setLimiteMensualBolsa(request.limiteMensualBolsa());
+        plan.setLimiteUsuarios(request.limiteUsuarios());
         plan.setPrecioMensual(request.precioMensual());
         plan.setEstado(request.estado().trim().toUpperCase());
 
         Plan saved = planRepository.save(plan);
         var moduloCodigos = request.moduloCodigos() == null
-                ? asignarModulosPlanUseCase.execute(saved.getId(), List.of())
+                ? planModuloRepository.findModuloCodigosByPlanId(saved.getId())
                 : asignarModulosPlanUseCase.execute(saved.getId(), request.moduloCodigos());
 
         auditService.record("/plans/" + id, "Actualizacion de plan " + saved.getCodigo());

@@ -1,11 +1,14 @@
 package com.azurion.shared.exception;
 
 import com.azurion.shared.api.ApiError;
+import com.azurion.security.session.ActiveSessionExistsException;
+import com.azurion.security.session.SessionStoreUnavailableException;
 import jakarta.validation.ConstraintViolationException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -34,6 +37,32 @@ public class GlobalExceptionHandler {
 
     private static final String GENERIC_OPERATION_ERROR =
             "No se pudo completar la operacion en este momento. Intenta nuevamente.";
+
+    @ExceptionHandler(ActiveSessionExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleActiveSession(ActiveSessionExistsException ex) {
+        var active = ex.getActiveSession();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "code", "ACTIVE_SESSION_EXISTS",
+                "message", ex.getMessage(),
+                "activeSession", Map.of(
+                        "deviceName", active.deviceName(),
+                        "lastActivityAt", active.lastActivityAt()
+                ),
+                "replacementToken", ex.getReplacementToken()
+        ));
+    }
+
+    @ExceptionHandler(SessionStoreUnavailableException.class)
+    public ResponseEntity<ApiError> handleSessionStoreUnavailable(SessionStoreUnavailableException ex) {
+        log.error("Redis session store unavailable traceId={}", traceId(), ex);
+        return response(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "SESSION_SERVICE_UNAVAILABLE",
+                "El servicio de sesiones no esta disponible. Intenta nuevamente en unos minutos.",
+                List.of(),
+                true
+        );
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiError> handleBusiness(BusinessException ex) {

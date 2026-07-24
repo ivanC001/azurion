@@ -6,6 +6,7 @@ import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -19,6 +20,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -109,6 +111,175 @@ public class WhatsappCloudApiClient {
             );
             throw new BusinessException("CRM_WHATSAPP_NO_DISPONIBLE", "No se pudo conectar con WhatsApp Cloud API");
         }
+    }
+
+    public String uploadMedia(
+            CrmCanalTokenConfig config,
+            byte[] content,
+            String fileName,
+            String contentType) {
+        String accessToken = secretEncryptionService.decrypt(config.getAccessToken());
+        if (!hasText(accessToken) || !hasText(config.getPhoneNumberId()) || content == null || content.length == 0) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONFIG_INCOMPLETA",
+                    "No se pudo preparar el archivo para WhatsApp"
+            );
+        }
+        String phoneNumberId = validatePathSegment(config.getPhoneNumberId(), "Phone number ID");
+        String safeFileName = sanitizeFileName(fileName);
+        String safeContentType = hasText(contentType) ? contentType.trim() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        String boundary = "azurion-" + UUID.randomUUID();
+        ByteArrayOutputStream multipart = new ByteArrayOutputStream(content.length + 1024);
+        writeMultipartField(multipart, boundary, "messaging_product", "whatsapp");
+        multipart.writeBytes(("--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"" + safeFileName + "\"\r\n"
+                + "Content-Type: " + safeContentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        multipart.writeBytes(content);
+        multipart.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(graphBaseUrl + "/" + graphApiVersion + "/" + phoneNumberId + "/media"))
+                    .timeout(readTimeout)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + boundary)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(multipart.toByteArray()))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode responseJson = parseResponse(response.body());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new BusinessException(
+                        "CRM_WHATSAPP_META_ERROR",
+                        metaError(responseJson, "Meta rechazo el archivo") + " (HTTP " + response.statusCode() + ")"
+                );
+            }
+            String mediaId = responseJson.path("id").asText(null);
+            if (!hasText(mediaId)) {
+                throw new BusinessException(
+                        "CRM_WHATSAPP_RESPUESTA_INVALIDA",
+                        "Meta no devolvio el identificador del archivo"
+                );
+            }
+            return mediaId;
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "CRM_WHATSAPP_ENVIO_INTERRUMPIDO",
+                    "La carga de la cotizacion a WhatsApp fue interrumpida"
+            );
+        } catch (Exception exception) {
+            log.warn(
+                    "No se pudo subir archivo a WhatsApp phoneNumberId={} errorType={} detail={}",
+                    config.getPhoneNumberId(),
+                    exception.getClass().getSimpleName(),
+                    safeDetail(exception)
+            );
+            throw new BusinessException(
+                    "CRM_WHATSAPP_NO_DISPONIBLE",
+                    "No se pudo cargar la cotizacion en WhatsApp Cloud API"
+            );
+        }
+    }
+
+    public SendResult sendDocument(
+            CrmCanalTokenConfig config,
+            String recipient,
+            String mediaId,
+            String fileName,
+            String caption) {
+        String accessToken = secretEncryptionService.decrypt(config.getAccessToken());
+        if (!hasText(accessToken)
+                || !hasText(config.getPhoneNumberId())
+                || !hasText(mediaId)
+                || !hasText(recipient)) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONFIG_INCOMPLETA",
+                    "No se pudo preparar el documento para WhatsApp"
+            );
+        }
+        String phoneNumberId = validatePathSegment(config.getPhoneNumberId(), "Phone number ID");
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", recipient);
+        payload.put("type", "document");
+        ObjectNode document = payload.putObject("document");
+        document.put("id", mediaId);
+        document.put("filename", sanitizeFileName(fileName));
+        if (hasText(caption)) {
+            document.put("caption", caption.trim());
+        }
+        return postMessage(config, phoneNumberId, accessToken, recipient, payload);
+    }
+
+    private SendResult postMessage(
+            CrmCanalTokenConfig config,
+            String phoneNumberId,
+            String accessToken,
+            String recipient,
+            ObjectNode payload) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(graphBaseUrl + "/" + graphApiVersion + "/" + phoneNumberId + "/messages"))
+                    .timeout(readTimeout)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode responseJson = parseResponse(response.body());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new BusinessException(
+                        "CRM_WHATSAPP_META_ERROR",
+                        metaError(responseJson, "Meta rechazo el mensaje") + " (HTTP " + response.statusCode() + ")"
+                );
+            }
+            String messageId = responseJson.path("messages").path(0).path("id").asText(null);
+            if (!hasText(messageId)) {
+                throw new BusinessException(
+                        "CRM_WHATSAPP_RESPUESTA_INVALIDA",
+                        "Meta no devolvio el identificador wamid"
+                );
+            }
+            String whatsappId = responseJson.path("contacts").path(0).path("wa_id").asText(recipient);
+            return new SendResult(messageId, whatsappId, response.body());
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "CRM_WHATSAPP_ENVIO_INTERRUMPIDO",
+                    "El envio a WhatsApp fue interrumpido"
+            );
+        } catch (Exception exception) {
+            log.warn(
+                    "No se pudo enviar documento por WhatsApp phoneNumberId={} errorType={} detail={}",
+                    config.getPhoneNumberId(),
+                    exception.getClass().getSimpleName(),
+                    safeDetail(exception)
+            );
+            throw new BusinessException(
+                    "CRM_WHATSAPP_NO_DISPONIBLE",
+                    "No se pudo conectar con WhatsApp Cloud API"
+            );
+        }
+    }
+
+    private void writeMultipartField(
+            ByteArrayOutputStream output,
+            String boundary,
+            String name,
+            String value) {
+        output.writeBytes(("--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n"
+                + value + "\r\n").getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String sanitizeFileName(String value) {
+        String sanitized = hasText(value) ? value.trim().replaceAll("[\\r\\n\"\\\\]", "_") : "documento.pdf";
+        return sanitized.length() <= 180 ? sanitized : sanitized.substring(sanitized.length() - 180);
     }
 
     public void markAsRead(CrmCanalTokenConfig config, String metaMessageId) {

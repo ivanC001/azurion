@@ -9,6 +9,7 @@ public record PlanResponse(
         String codigo,
         String descripcion,
         Long limiteMensualBolsa,
+        Integer limiteUsuarios,
         BigDecimal precioMensual,
         String estado,
         List<String> moduloCodigos

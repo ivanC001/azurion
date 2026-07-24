@@ -3,7 +3,10 @@ package com.azurion.saascore.crm.presentation.controllers;
 import com.azurion.saascore.crm.application.dto.AssignWhatsappConversationRequest;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
+import com.azurion.saascore.crm.application.dto.SaveWhatsappConversationNoteRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
+import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
+import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteResponse;
 import com.azurion.saascore.crm.application.dto.UpdateWhatsappConversationNoteRequest;
 import com.azurion.saascore.crm.application.dto.UpdateWhatsappConversationStatusRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappConnectionStatusResponse;
@@ -12,12 +15,14 @@ import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.services.WhatsappConfigurationService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
+import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -135,6 +140,40 @@ public class WhatsappCrmController {
         );
     }
 
+    @PostMapping("/whatsapp/conversaciones/{prospectoId}/notas")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<CrmWhatsappConversationResponse> createNote(
+            @PathVariable Long prospectoId,
+            @Valid @RequestBody SaveWhatsappConversationNoteRequest request) {
+        return ApiResponse.ok(
+                whatsappIntegrationService.createConversationNote(prospectoId, request.nota()),
+                "Nota interna agregada"
+        );
+    }
+
+    @PutMapping("/whatsapp/conversaciones/{prospectoId}/notas/{noteId}")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<CrmWhatsappConversationResponse> updateSavedNote(
+            @PathVariable Long prospectoId,
+            @PathVariable Long noteId,
+            @Valid @RequestBody SaveWhatsappConversationNoteRequest request) {
+        return ApiResponse.ok(
+                whatsappIntegrationService.updateSavedConversationNote(prospectoId, noteId, request.nota()),
+                "Nota interna actualizada"
+        );
+    }
+
+    @DeleteMapping("/whatsapp/conversaciones/{prospectoId}/notas/{noteId}")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<CrmWhatsappConversationResponse> deleteSavedNote(
+            @PathVariable Long prospectoId,
+            @PathVariable Long noteId) {
+        return ApiResponse.ok(
+                whatsappIntegrationService.deleteConversationNote(prospectoId, noteId),
+                "Nota interna eliminada"
+        );
+    }
+
     @GetMapping("/prospectos/{prospectoId}/whatsapp/mensajes")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
     public ApiResponse<List<CrmWhatsappMessageResponse>> listMessages(@PathVariable Long prospectoId) {
@@ -152,6 +191,27 @@ public class WhatsappCrmController {
         return ApiResponse.ok(
                 whatsappIntegrationService.sendMessage(prospectoId, request),
                 "Mensaje enviado a WhatsApp"
+        );
+    }
+
+    @GetMapping("/prospectos/{prospectoId}/whatsapp/cotizaciones")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
+    public ApiResponse<List<CotizacionResponse>> listQuotes(@PathVariable Long prospectoId) {
+        return ApiResponse.ok(
+                whatsappIntegrationService.listProspectQuotes(prospectoId),
+                "Cotizaciones vinculadas al prospecto"
+        );
+    }
+
+    @PostMapping("/prospectos/{prospectoId}/whatsapp/cotizaciones/{quoteId}/enviar")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<SendWhatsappQuoteResponse> sendQuote(
+            @PathVariable Long prospectoId,
+            @PathVariable Long quoteId,
+            @Valid @RequestBody SendWhatsappQuoteRequest request) {
+        return ApiResponse.ok(
+                whatsappIntegrationService.sendQuote(prospectoId, quoteId, request),
+                "Cotizacion enviada por WhatsApp"
         );
     }
 }

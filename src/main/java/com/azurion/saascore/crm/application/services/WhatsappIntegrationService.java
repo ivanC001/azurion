@@ -1,22 +1,35 @@
 package com.azurion.saascore.crm.application.services;
 
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
+import com.azurion.saascore.crm.application.dto.CrmWhatsappInternalNoteResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
+import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
+import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmWhatsappConversation;
+import com.azurion.saascore.crm.domain.entities.CrmWhatsappConversationNote;
 import com.azurion.saascore.crm.domain.entities.CrmWhatsappMessage;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappConversationRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmWhatsappConversationNoteRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappMessageRepository;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.SendResult;
+import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
+import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
+import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
+import com.azurion.saascore.cotizaciones.application.mappers.CotizacionMapper;
+import com.azurion.saascore.cotizaciones.application.usecases.GenerateCotizacionPdfUseCase;
+import com.azurion.saascore.cotizaciones.application.usecases.UpdateCotizacionEstadoUseCase;
+import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
+import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,10 +40,12 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +66,11 @@ public class WhatsappIntegrationService {
     private final CrmProspectoRepository prospectoRepository;
     private final CrmActividadRepository actividadRepository;
     private final CrmWhatsappConversationRepository conversationRepository;
+    private final CrmWhatsappConversationNoteRepository conversationNoteRepository;
     private final CrmWhatsappMessageRepository messageRepository;
+    private final CotizacionRepository cotizacionRepository;
+    private final GenerateCotizacionPdfUseCase generateCotizacionPdfUseCase;
+    private final UpdateCotizacionEstadoUseCase updateCotizacionEstadoUseCase;
     private final CrmSecretEncryptionService secretEncryptionService;
     private final WhatsappCloudApiClient cloudApiClient;
     private final ObjectMapper objectMapper;
@@ -191,8 +210,73 @@ public class WhatsappIntegrationService {
 
     @Transactional
     public CrmWhatsappConversationResponse updateConversationNote(Long prospectoId, String note) {
-        CrmWhatsappConversation conversation = requireConversation(prospectoId);
-        conversation.setNotaInterna(trimToNull(note));
+        CrmWhatsappConversation conversation = requireConversationForUpdate(prospectoId);
+        String content = trimToNull(note);
+        List<CrmWhatsappConversationNote> notes =
+                conversationNoteRepository.findAllByConversation_IdOrderBySlotAsc(conversation.getId());
+        CrmWhatsappConversationNote first = notes.stream()
+                .filter(item -> item.getSlot() == 1)
+                .findFirst()
+                .orElse(null);
+        if (content == null) {
+            if (first != null) {
+                conversationNoteRepository.delete(first);
+            }
+        } else if (first == null) {
+            first = new CrmWhatsappConversationNote();
+            first.setConversation(conversation);
+            first.setSlot(1);
+            first.setContenido(content);
+            conversationNoteRepository.save(first);
+        } else {
+            first.setContenido(content);
+            conversationNoteRepository.save(first);
+        }
+        conversation.setNotaInterna(content);
+        return toConversationResponse(conversationRepository.save(conversation));
+    }
+
+    @Transactional
+    public CrmWhatsappConversationResponse createConversationNote(Long prospectoId, String note) {
+        CrmWhatsappConversation conversation = requireConversationForUpdate(prospectoId);
+        List<CrmWhatsappConversationNote> notes =
+                conversationNoteRepository.findAllByConversation_IdOrderBySlotAsc(conversation.getId());
+        Set<Integer> occupiedSlots = notes.stream()
+                .map(CrmWhatsappConversationNote::getSlot)
+                .collect(java.util.stream.Collectors.toSet());
+        int availableSlot = java.util.stream.IntStream.rangeClosed(1, 3)
+                .filter(slot -> !occupiedSlots.contains(slot))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_NOTAS_LIMITE",
+                        "Solo puedes guardar hasta 3 notas internas por conversacion"
+                ));
+        CrmWhatsappConversationNote savedNote = new CrmWhatsappConversationNote();
+        savedNote.setConversation(conversation);
+        savedNote.setSlot(availableSlot);
+        savedNote.setContenido(note.trim());
+        conversationNoteRepository.save(savedNote);
+        syncLegacyNote(conversation);
+        return toConversationResponse(conversationRepository.save(conversation));
+    }
+
+    @Transactional
+    public CrmWhatsappConversationResponse updateSavedConversationNote(Long prospectoId, Long noteId, String note) {
+        CrmWhatsappConversation conversation = requireConversationForUpdate(prospectoId);
+        CrmWhatsappConversationNote savedNote = requireConversationNote(conversation.getId(), noteId);
+        savedNote.setContenido(note.trim());
+        conversationNoteRepository.save(savedNote);
+        syncLegacyNote(conversation);
+        return toConversationResponse(conversationRepository.save(conversation));
+    }
+
+    @Transactional
+    public CrmWhatsappConversationResponse deleteConversationNote(Long prospectoId, Long noteId) {
+        CrmWhatsappConversation conversation = requireConversationForUpdate(prospectoId);
+        CrmWhatsappConversationNote savedNote = requireConversationNote(conversation.getId(), noteId);
+        conversationNoteRepository.delete(savedNote);
+        conversationNoteRepository.flush();
+        syncLegacyNote(conversation);
         return toConversationResponse(conversationRepository.save(conversation));
     }
 
@@ -219,6 +303,77 @@ public class WhatsappIntegrationService {
         updateConversation(prospecto, saved, false);
         createWhatsappActivity(prospecto, body, saved.getMensajeEn(), false);
         return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CotizacionResponse> listProspectQuotes(Long prospectoId) {
+        requireProspecto(prospectoId);
+        return CotizacionMapper.toResponses(cotizacionRepository.findAllByCrmProspectoId(prospectoId));
+    }
+
+    @Transactional
+    public SendWhatsappQuoteResponse sendQuote(
+            Long prospectoId,
+            Long quoteId,
+            SendWhatsappQuoteRequest request) {
+        CrmProspecto prospecto = requireProspecto(prospectoId);
+        CrmCanalTokenConfig config = requireActiveConfig();
+        Cotizacion quote = cotizacionRepository.findByIdAndCrmProspectoId(quoteId, prospectoId)
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_COTIZACION_NO_ENCONTRADA",
+                        "La cotizacion no pertenece a este prospecto"
+                ));
+        String recipient = normalizePhone(prospecto.getTelefono());
+        String caption = trimToNull(request.mensaje());
+        if (caption == null) {
+            caption = "Hola " + firstNonBlank(prospecto.getNombre(), "")
+                    + ", adjuntamos la cotizacion COT-" + String.format(Locale.ROOT, "%06d", quote.getId()) + ".";
+        }
+
+        CotizacionPdfResponse pdf = generateCotizacionPdfUseCase.execute(quote.getId());
+        byte[] pdfBytes;
+        try {
+            pdfBytes = Base64.getDecoder().decode(pdf.base64());
+        } catch (IllegalArgumentException exception) {
+            throw BusinessException.internal(
+                    "CRM_WHATSAPP_COTIZACION_PDF_INVALIDA",
+                    "No se pudo preparar el PDF de la cotizacion"
+            );
+        }
+        String mediaId = cloudApiClient.uploadMedia(
+                config,
+                pdfBytes,
+                pdf.fileName(),
+                pdf.contentType()
+        );
+        SendResult sendResult = cloudApiClient.sendDocument(
+                config,
+                recipient,
+                mediaId,
+                pdf.fileName(),
+                caption
+        );
+
+        CrmWhatsappMessage message = new CrmWhatsappMessage();
+        message.setProspecto(prospecto);
+        message.setMetaMessageId(sendResult.metaMessageId());
+        message.setDireccion("SALIENTE");
+        message.setRemitente(config.getPhoneNumberId());
+        message.setDestinatario(sendResult.whatsappId());
+        message.setTipoMensaje("document");
+        message.setContenido(caption);
+        message.setEstado("ENVIADO");
+        message.setMensajeEn(OffsetDateTime.now(ZoneOffset.UTC));
+        message.setRawPayload(sendResult.rawResponse());
+        CrmWhatsappMessage saved = messageRepository.save(message);
+        updateConversation(prospecto, saved, false);
+        createWhatsappActivity(prospecto, caption, saved.getMensajeEn(), false);
+
+        CotizacionResponse updatedQuote = updateCotizacionEstadoUseCase.execute(
+                quoteId,
+                new UpdateCotizacionEstadoRequest("ENVIADA", "WHATSAPP", null, null, null)
+        );
+        return new SendWhatsappQuoteResponse(toResponse(saved), updatedQuote);
     }
 
     private void processInboundMessage(CrmCanalTokenConfig config,
@@ -430,6 +585,32 @@ public class WhatsappIntegrationService {
                 ));
     }
 
+    private CrmWhatsappConversation requireConversationForUpdate(Long prospectoId) {
+        return conversationRepository.findForUpdateByProspectoId(prospectoId)
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_CONVERSACION_NO_ENCONTRADA",
+                        "El prospecto aun no tiene una conversacion de WhatsApp"
+                ));
+    }
+
+    private CrmWhatsappConversationNote requireConversationNote(Long conversationId, Long noteId) {
+        return conversationNoteRepository.findByIdAndConversation_Id(noteId, conversationId)
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_NOTA_NO_ENCONTRADA",
+                        "La nota interna no pertenece a esta conversacion"
+                ));
+    }
+
+    private void syncLegacyNote(CrmWhatsappConversation conversation) {
+        String firstContent = conversationNoteRepository
+                .findAllByConversation_IdOrderBySlotAsc(conversation.getId())
+                .stream()
+                .findFirst()
+                .map(CrmWhatsappConversationNote::getContenido)
+                .orElse(null);
+        conversation.setNotaInterna(firstContent);
+    }
+
     private boolean matchesConversation(CrmWhatsappConversation conversation, String query) {
         if (query == null) {
             return true;
@@ -445,6 +626,18 @@ public class WhatsappIntegrationService {
 
     private CrmWhatsappConversationResponse toConversationResponse(CrmWhatsappConversation conversation) {
         CrmProspecto prospecto = conversation.getProspecto();
+        List<CrmWhatsappInternalNoteResponse> notes = conversationNoteRepository
+                .findAllByConversation_IdOrderBySlotAsc(conversation.getId())
+                .stream()
+                .map(note -> new CrmWhatsappInternalNoteResponse(
+                        note.getId(),
+                        note.getSlot(),
+                        note.getContenido(),
+                        note.getCreatedAt(),
+                        note.getUpdatedAt()
+                ))
+                .toList();
+        String legacyNote = notes.isEmpty() ? conversation.getNotaInterna() : notes.getFirst().contenido();
         return new CrmWhatsappConversationResponse(
                 conversation.getId(),
                 prospecto.getId(),
@@ -464,7 +657,8 @@ public class WhatsappIntegrationService {
                 conversation.getUltimoMensaje(),
                 conversation.getUltimaDireccion(),
                 conversation.getUltimoMensajeEn(),
-                conversation.getNotaInterna()
+                legacyNote,
+                notes
         );
     }
 

@@ -6,6 +6,7 @@ import com.azurion.saascore.suscripciones.domain.repositories.SuscripcionReposit
 import com.azurion.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -13,6 +14,7 @@ public class GetSuscripcionByIdUseCase {
 
     private final SuscripcionRepository suscripcionRepository;
 
+    @Transactional(readOnly = true)
     public SuscripcionResponse execute(Long id) {
         return suscripcionRepository.findById(id)
                 .map(SuscripcionMapper::toResponse)

@@ -4,6 +4,7 @@ import com.azurion.saascore.usuarios.application.dto.UpdateUsuarioTenantRequest;
 import com.azurion.saascore.usuarios.application.dto.UsuarioTenantResponse;
 import com.azurion.saascore.usuarios.application.mappers.UsuariosMapper;
 import com.azurion.saascore.usuarios.application.services.UsuarioSucursalScopeService;
+import com.azurion.saascore.usuarios.application.services.TenantUserLimitService;
 import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
 import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import com.azurion.shared.exception.BusinessException;
@@ -17,6 +18,7 @@ public class UpdateUsuarioTenantUseCase {
 
     private final UsuarioTenantRepository usuarioTenantRepository;
     private final UsuarioSucursalScopeService usuarioSucursalScopeService;
+    private final TenantUserLimitService tenantUserLimitService;
 
     @Transactional
     public UsuarioTenantResponse execute(Long id, UpdateUsuarioTenantRequest request) {
@@ -26,6 +28,9 @@ public class UpdateUsuarioTenantUseCase {
         usuario.setNombres(request.nombres().trim());
         usuario.setEmail(request.email() == null ? null : request.email().trim());
         if (request.activo() != null) {
+            if (request.activo() && !usuario.isActivo()) {
+                tenantUserLimitService.assertCanActivateAnotherUser();
+            }
             usuario.setActivo(request.activo());
         }
 

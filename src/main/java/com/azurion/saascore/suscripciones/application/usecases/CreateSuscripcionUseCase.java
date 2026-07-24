@@ -30,12 +30,22 @@ public class CreateSuscripcionUseCase {
 
         Plan plan = planRepository.findById(request.planId())
                 .orElseThrow(() -> new BusinessException("PLAN_NOT_FOUND", "Plan not found: " + request.planId()));
+        if (!"ACTIVO".equalsIgnoreCase(plan.getEstado())) {
+            throw new BusinessException("PLAN_NO_DISPONIBLE", "El plan seleccionado no esta activo");
+        }
+        if (!suscripcionRepository.findAllActiveStateForUpdate(empresa.getId()).isEmpty()) {
+            throw new BusinessException(
+                    "SUSCRIPCION_ACTIVA_EXISTENTE",
+                    "La empresa ya tiene una suscripcion activa; actualiza su plan actual"
+            );
+        }
 
         Suscripcion suscripcion = new Suscripcion();
         suscripcion.setEmpresa(empresa);
         suscripcion.setPlan(plan);
         suscripcion.setEstado("ACTIVA");
         suscripcion.setFechaInicio(request.fechaInicio() == null ? LocalDate.now() : request.fechaInicio());
+        suscripcion.setLimiteUsuarios(request.limiteUsuarios());
 
         return SuscripcionMapper.toResponse(suscripcionRepository.save(suscripcion));
     }

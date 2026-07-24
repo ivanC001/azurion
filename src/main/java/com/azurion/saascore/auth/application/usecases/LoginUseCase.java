@@ -16,9 +16,14 @@ import com.azurion.saascore.usuarios.application.services.UsuarioSucursalScopeSe
 import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
 import com.azurion.saascore.usuarios.domain.repositories.UsuarioGlobalRolRepository;
 import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
-import com.azurion.security.jwt.JwtProperties;
 import com.azurion.security.jwt.JwtTokenProvider;
+import com.azurion.security.session.AuthSessionRecord;
+import com.azurion.security.session.AuthSessionService;
+import com.azurion.security.session.ReplacementChallenge;
+import com.azurion.security.session.SessionClientInfo;
 import com.azurion.shared.exception.BusinessException;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -37,13 +42,20 @@ public class LoginUseCase {
     private final UsuarioTenantRepository usuarioTenantRepository;
     private final EmpresaRepository empresaRepository;
     private final JwtTokenProvider jwtTokenProvider;
-    private final JwtProperties jwtProperties;
     private final EffectivePermissionService effectivePermissionService;
     private final UsuarioSucursalScopeService usuarioSucursalScopeService;
     private final ModuleAccessService moduleAccessService;
     private final PasswordEncoder passwordEncoder;
+    private final AuthSessionService authSessionService;
 
     public LoginResponse executePublic(LoginRequest request) {
+        return executePublic(
+                request,
+                SessionClientInfo.unknown(request.deviceId(), request.deviceName())
+        );
+    }
+
+    public LoginResponse executePublic(LoginRequest request, SessionClientInfo client) {
         TenantContext.setTenantId(TenantContext.DEFAULT_TENANT);
 
         UsuarioGlobal user = userRepository.findByUsernameAndActivoTrue(request.username())
@@ -53,31 +65,22 @@ public class LoginUseCase {
         LinkedHashSet<String> roles = resolveGlobalRoles(user);
         List<String> roleList = List.copyOf(roles);
 
-        String token = jwtTokenProvider.generateToken(
-                user.getUsername(),
+        AuthSessionRecord session = authSessionService.open(
+                TenantContext.DEFAULT_TENANT,
                 user.getId(),
-                TenantContext.DEFAULT_TENANT,
-                roleList,
-                List.of(),
-                List.of()
+                client
         );
-
-        return new LoginResponse(
-                token,
-                "Bearer",
-                jwtProperties.expiration().toSeconds(),
-                user.getUsername(),
-                TenantContext.DEFAULT_TENANT,
-                roleList,
-                List.of(),
-                List.of(),
-                roles.contains("ROLE_ADMIN_GENERAL"),
-                false,
-                OffsetDateTime.now()
-        );
+        return publicResponse(user, roleList, session);
     }
 
     public TenantLoginResponse executeTenant(LoginRequest request) {
+        return executeTenant(
+                request,
+                SessionClientInfo.unknown(request.deviceId(), request.deviceName())
+        );
+    }
+
+    public TenantLoginResponse executeTenant(LoginRequest request, SessionClientInfo client) {
         String tenant = resolveTenantForTenantLogin(request.tenantId());
 
         TenantContext.setTenantId(tenant);
@@ -88,9 +91,6 @@ public class LoginUseCase {
                     .orElseThrow(this::badCredentials);
             validatePassword(request.password(), tenantUser.getPasswordHash());
 
-            tenantUser.setUltimoAcceso(java.time.LocalDateTime.now());
-            usuarioTenantRepository.save(tenantUser);
-
             LinkedHashSet<String> tenantRoles = tenantUser.getUsuarioRoles().stream()
                     .map(usuarioRol -> RoleCodeSupport.toAuthority(usuarioRol.getRol().getCodigo()))
                     .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
@@ -100,35 +100,149 @@ public class LoginUseCase {
                     .orElseThrow(() -> new BusinessException("TENANT_NO_ENCONTRADO", "Empresa no encontrada para el tenant"));
             List<String> modules = moduleAccessService.getActiveModules(empresa.getId());
             List<String> permissions = effectivePermissionService.findPermissionCodes(tenantUser.getId(), modules);
-            String token = jwtTokenProvider.generateToken(
-                    tenantUser.getUsername(),
-                    tenantUser.getId(),
+            AuthSessionRecord session = authSessionService.open(
                     tenant,
-                    roleList,
-                    permissions,
-                    modules
+                    tenantUser.getId(),
+                    client
             );
-
-            return new TenantLoginResponse(
-                    token,
-                    "Bearer",
-                    jwtProperties.expiration().toSeconds(),
-                    tenantUser.getUsername(),
-                    tenantUser.getId(),
-                    tenantUser.getNombres(),
-                    tenantUser.getEmail(),
+            tenantUser.setUltimoAcceso(java.time.LocalDateTime.now());
+            usuarioTenantRepository.save(tenantUser);
+            return tenantResponse(
+                    tenantUser,
                     tenant,
-                    toEmpresaResponse(empresa),
+                    empresa,
                     roleList,
                     permissions,
                     modules,
-                    usuarioSucursalScopeService.findByUsuarioId(tenantUser.getId()),
-                    tenantRoles.contains("ROLE_ADMIN_EMPRESA"),
-                    OffsetDateTime.now()
+                    session
             );
         }
 
         throw badCredentials();
+    }
+
+    public Object replaceSession(String replacementToken, String deviceId) {
+        ReplacementChallenge challenge = authSessionService.inspectReplacement(replacementToken);
+        TenantContext.setTenantId(challenge.tenantId());
+
+        if (TenantContext.DEFAULT_TENANT.equalsIgnoreCase(challenge.tenantId())) {
+            UsuarioGlobal user = userRepository.findById(challenge.userId())
+                    .filter(UsuarioGlobal::isActivo)
+                    .orElseThrow(this::badCredentials);
+            List<String> roles = List.copyOf(resolveGlobalRoles(user));
+            AuthSessionRecord session = authSessionService.replace(
+                    replacementToken,
+                    challenge,
+                    deviceId
+            );
+            return publicResponse(user, roles, session);
+        }
+
+        UsuarioTenant tenantUser = usuarioTenantRepository.findWithUsuarioRolesById(challenge.userId())
+                .filter(UsuarioTenant::isActivo)
+                .orElseThrow(this::badCredentials);
+        LinkedHashSet<String> tenantRoles = tenantUser.getUsuarioRoles().stream()
+                .map(usuarioRol -> RoleCodeSupport.toAuthority(usuarioRol.getRol().getCodigo()))
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        List<String> roleList = List.copyOf(tenantRoles);
+        Empresa empresa = empresaRepository.findByTenantId(challenge.tenantId())
+                .orElseThrow(() -> new BusinessException(
+                        "TENANT_NO_ENCONTRADO",
+                        "Empresa no encontrada para el tenant"
+                ));
+        List<String> modules = moduleAccessService.getActiveModules(empresa.getId());
+        List<String> permissions = effectivePermissionService.findPermissionCodes(
+                tenantUser.getId(),
+                modules
+        );
+        AuthSessionRecord session = authSessionService.replace(
+                replacementToken,
+                challenge,
+                deviceId
+        );
+        tenantUser.setUltimoAcceso(java.time.LocalDateTime.now());
+        usuarioTenantRepository.save(tenantUser);
+        return tenantResponse(
+                tenantUser,
+                challenge.tenantId(),
+                empresa,
+                roleList,
+                permissions,
+                modules,
+                session
+        );
+    }
+
+    private LoginResponse publicResponse(
+            UsuarioGlobal user,
+            List<String> roles,
+            AuthSessionRecord session
+    ) {
+        String token = jwtTokenProvider.generateToken(
+                user.getUsername(),
+                user.getId(),
+                TenantContext.DEFAULT_TENANT,
+                roles,
+                List.of(),
+                List.of(),
+                session.sessionId(),
+                session.expiresAt()
+        );
+        return new LoginResponse(
+                token,
+                "Bearer",
+                remainingSeconds(session),
+                user.getUsername(),
+                TenantContext.DEFAULT_TENANT,
+                roles,
+                List.of(),
+                List.of(),
+                roles.contains("ROLE_ADMIN_GENERAL"),
+                false,
+                OffsetDateTime.now()
+        );
+    }
+
+    private TenantLoginResponse tenantResponse(
+            UsuarioTenant tenantUser,
+            String tenant,
+            Empresa empresa,
+            List<String> roles,
+            List<String> permissions,
+            List<String> modules,
+            AuthSessionRecord session
+    ) {
+        String token = jwtTokenProvider.generateToken(
+                tenantUser.getUsername(),
+                tenantUser.getId(),
+                tenant,
+                roles,
+                permissions,
+                modules,
+                session.sessionId(),
+                session.expiresAt()
+        );
+        return new TenantLoginResponse(
+                token,
+                "Bearer",
+                remainingSeconds(session),
+                tenantUser.getUsername(),
+                tenantUser.getId(),
+                tenantUser.getNombres(),
+                tenantUser.getEmail(),
+                tenant,
+                toEmpresaResponse(empresa),
+                roles,
+                permissions,
+                modules,
+                usuarioSucursalScopeService.findByUsuarioId(tenantUser.getId()),
+                roles.contains("ROLE_ADMIN_EMPRESA"),
+                OffsetDateTime.now()
+        );
+    }
+
+    private long remainingSeconds(AuthSessionRecord session) {
+        return Math.max(0, Duration.between(Instant.now(), session.expiresAt()).toSeconds());
     }
 
     private String resolveTenantForTenantLogin(String tenantOrRuc) {

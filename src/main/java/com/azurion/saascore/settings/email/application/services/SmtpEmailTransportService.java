@@ -1,6 +1,7 @@
 package com.azurion.saascore.settings.email.application.services;
 
 import com.azurion.saascore.settings.email.domain.entities.SmtpSecurity;
+import com.azurion.saascore.settings.email.domain.entities.PlatformEmailConfig;
 import com.azurion.saascore.settings.email.domain.entities.TenantEmailConfig;
 import com.azurion.saascore.settings.email.infrastructure.config.EmailTransportProperties;
 import com.azurion.shared.exception.BusinessException;
@@ -24,20 +25,60 @@ public class SmtpEmailTransportService {
     private final EmailTransportProperties transportProperties;
 
     public void send(TenantEmailConfig config, String to, String subject, String body, List<EmailAttachment> attachments) {
+        send(
+                new SmtpAccount(
+                        config.getTenantId(),
+                        config.getNombreRemitente(),
+                        config.getCorreoRemitente(),
+                        config.getReplyTo(),
+                        config.getSmtpHost(),
+                        config.getSmtpPort(),
+                        config.getSmtpSecurity(),
+                        config.getSmtpUsername(),
+                        config.getSmtpPasswordEncrypted()
+                ),
+                to,
+                subject,
+                body,
+                attachments
+        );
+    }
+
+    public void send(PlatformEmailConfig config, String to, String subject, String body, List<EmailAttachment> attachments) {
+        send(
+                new SmtpAccount(
+                        "platform",
+                        config.getNombreRemitente(),
+                        config.getCorreoRemitente(),
+                        config.getReplyTo(),
+                        config.getSmtpHost(),
+                        config.getSmtpPort(),
+                        config.getSmtpSecurity(),
+                        config.getSmtpUsername(),
+                        config.getSmtpPasswordEncrypted()
+                ),
+                to,
+                subject,
+                body,
+                attachments
+        );
+    }
+
+    private void send(SmtpAccount config, String to, String subject, String body, List<EmailAttachment> attachments) {
         try {
             JavaMailSenderImpl sender = new JavaMailSenderImpl();
-            sender.setHost(config.getSmtpHost());
-            sender.setPort(config.getSmtpPort());
-            sender.setUsername(config.getSmtpUsername());
-            sender.setPassword(encryptionService.decrypt(config.getSmtpPasswordEncrypted()));
-            sender.setJavaMailProperties(mailProperties(config.getSmtpSecurity()));
+            sender.setHost(config.smtpHost());
+            sender.setPort(config.smtpPort());
+            sender.setUsername(config.smtpUsername());
+            sender.setPassword(encryptionService.decrypt(config.smtpPasswordEncrypted()));
+            sender.setJavaMailProperties(mailProperties(config.smtpSecurity()));
 
             MimeMessage message = sender.createMimeMessage();
             boolean multipart = attachments != null && !attachments.isEmpty();
             MimeMessageHelper helper = new MimeMessageHelper(message, multipart, "UTF-8");
-            helper.setFrom(config.getCorreoRemitente(), config.getNombreRemitente());
-            if (config.getReplyTo() != null && !config.getReplyTo().isBlank()) {
-                helper.setReplyTo(config.getReplyTo());
+            helper.setFrom(config.correoRemitente(), config.nombreRemitente());
+            if (config.replyTo() != null && !config.replyTo().isBlank()) {
+                helper.setReplyTo(config.replyTo());
             }
             helper.setTo(to);
             helper.setSubject(subject);
@@ -55,10 +96,10 @@ public class SmtpEmailTransportService {
         } catch (Exception ex) {
             log.warn(
                     "Fallo SMTP tenant={} host={} port={} security={} errorType={} detail={}",
-                    config.getTenantId(),
-                    config.getSmtpHost(),
-                    config.getSmtpPort(),
-                    config.getSmtpSecurity(),
+                    config.scope(),
+                    config.smtpHost(),
+                    config.smtpPort(),
+                    config.smtpSecurity(),
                     rootCause(ex).getClass().getSimpleName(),
                     sanitizeError(rootCause(ex))
             );
@@ -101,5 +142,18 @@ public class SmtpEmailTransportService {
             current = current.getCause();
         }
         return current;
+    }
+
+    private record SmtpAccount(
+            String scope,
+            String nombreRemitente,
+            String correoRemitente,
+            String replyTo,
+            String smtpHost,
+            Integer smtpPort,
+            SmtpSecurity smtpSecurity,
+            String smtpUsername,
+            String smtpPasswordEncrypted
+    ) {
     }
 }
