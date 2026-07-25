@@ -62,8 +62,8 @@ public class LandingLeadValidationService {
                 catalogoItem,
                 productPending,
                 landing.isCrearActividadInicial(),
-                firstNonBlank(request.canalIngreso(), landing.getCanalIngreso(), "LANDING"),
-                firstNonBlank(request.campania(), landing.getCampania()),
+                firstNonBlank(landing.getCanalIngreso(), "LANDING"),
+                firstNonBlank(landing.getCampania(), request.campania()),
                 trim(landing.getResponsableId())
         );
     }

@@ -34,6 +34,7 @@ import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepos
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
 import com.azurion.shared.exception.BusinessException;
 import java.util.List;
 import java.util.Optional;
@@ -109,6 +110,9 @@ class CrmUseCaseServiceTest {
     @Mock
     CrmLeadAssignmentService leadAssignmentService;
 
+    @Mock
+    CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -131,7 +135,8 @@ class CrmUseCaseServiceTest {
                 landingLeadValidationService,
                 prospectoInteresRepository,
                 crmSecretEncryptionService,
-                leadAssignmentService
+                leadAssignmentService,
+                publicLeadSubmissionRepository
         );
     }
 

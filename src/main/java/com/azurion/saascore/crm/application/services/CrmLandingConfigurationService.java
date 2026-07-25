@@ -9,6 +9,8 @@ import com.azurion.saascore.crm.domain.entities.LandingProductMode;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLandingCatalogItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLandingConfigRepository;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import com.azurion.shared.exception.BusinessException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -29,8 +31,10 @@ public class CrmLandingConfigurationService {
     private final CrmLandingConfigRepository landingConfigRepository;
     private final CrmLandingCatalogItemRepository landingCatalogItemRepository;
     private final CrmCatalogoItemRepository catalogoItemRepository;
+    private final CrmLandingIngressRegistryService ingressRegistryService;
+    private final UsuarioTenantRepository usuarioTenantRepository;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<CrmLandingConfigResponse> list() {
         return landingConfigRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::toResponse)
@@ -63,6 +67,13 @@ public class CrmLandingConfigurationService {
         return toResponse(landingConfigRepository.save(landing));
     }
 
+    @Transactional
+    public CrmLandingConfigResponse regenerateRelaySecret(Long id) {
+        CrmLandingConfig landing = findLanding(id);
+        ingressRegistryService.regenerateRelaySecret(landing);
+        return toResponse(landing);
+    }
+
     private void apply(CrmLandingConfig landing, SaveCrmLandingConfigRequest request) {
         landing.setNombre(request.nombre().trim());
         landing.setCampania(trim(request.campania()));
@@ -72,8 +83,15 @@ public class CrmLandingConfigurationService {
         landing.setRecibirLeads(request.recibirLeads() == null || request.recibirLeads());
         landing.setCrearSeguimiento(true);
         landing.setCrearActividadInicial(request.crearActividadInicial() == null || request.crearActividadInicial());
-        landing.setResponsableId(trim(request.responsableId()));
+        landing.setResponsableId(validateResponsable(request.responsableId()));
         landing.setValidarDuplicadosPor("TELEFONO_CORREO");
+        if (landing.getModoProducto() == LandingProductMode.REQUERIDO
+                && (request.catalogoItemIds() == null || request.catalogoItemIds().isEmpty())) {
+            throw new BusinessException(
+                    "CRM_LANDING_PRODUCTO_REQUERIDO",
+                    "Selecciona al menos un producto permitido para esta landing"
+            );
+        }
     }
 
     private void syncCatalogItems(CrmLandingConfig landing, List<Long> requestedIds) {
@@ -114,6 +132,8 @@ public class CrmLandingConfigurationService {
     }
 
     private CrmLandingConfigResponse toResponse(CrmLandingConfig landing) {
+        CrmLandingIngressRegistryService.LandingIngressCredentials ingress =
+                ingressRegistryService.synchronize(landing);
         List<Long> catalogItemIds = landingCatalogItemRepository.findAllByLandingConfigOrderByIdAsc(landing).stream()
                 .filter(CrmLandingCatalogItem::isActivo)
                 .map(relation -> relation.getCatalogoItem().getId())
@@ -130,9 +150,30 @@ public class CrmLandingConfigurationService {
                 landing.isCrearActividadInicial(),
                 landing.getResponsableId(),
                 catalogItemIds,
+                ingress.relaySecret(),
                 landing.getCreatedAt(),
                 landing.getUpdatedAt()
         );
+    }
+
+    private String validateResponsable(String rawResponsableId) {
+        String responsableId = trim(rawResponsableId);
+        if (responsableId == null) {
+            return null;
+        }
+        UsuarioTenant usuario;
+        try {
+            usuario = usuarioTenantRepository.findById(Long.parseLong(responsableId)).orElse(null);
+        } catch (NumberFormatException ignored) {
+            usuario = usuarioTenantRepository.findByUsernameAndActivoTrue(responsableId).orElse(null);
+        }
+        if (usuario == null || !usuario.isActivo()) {
+            throw new BusinessException(
+                    "CRM_LANDING_RESPONSABLE_INVALIDO",
+                    "El responsable seleccionado no existe o esta inhabilitado"
+            );
+        }
+        return String.valueOf(usuario.getId());
     }
 
     private CrmLandingConfig findLanding(Long id) {

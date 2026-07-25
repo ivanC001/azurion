@@ -88,6 +88,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 || path.equals("/public/crm/leads")
                 || path.equals("/v1/public/crm/leads/relay")
                 || path.equals("/public/crm/leads/relay")
+                || path.startsWith("/v1/public/forms/")
+                || path.startsWith("/public/forms/")
                 || path.startsWith("/v1/public/crm/catalogo/")
                 || path.startsWith("/public/crm/catalogo/")
                 || path.startsWith("/v1/public/crm/whatsapp/")
@@ -115,6 +117,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         if (path.contains("/whatsapp/")) {
             return "public-whatsapp";
+        }
+        if (path.contains("/public/forms/")) {
+            return "public-form";
+        }
+        if (path.contains("/catalogo/")) {
+            return "public-catalog";
         }
         return "public-crm";
     }

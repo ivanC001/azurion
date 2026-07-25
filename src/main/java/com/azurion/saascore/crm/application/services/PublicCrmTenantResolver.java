@@ -6,6 +6,7 @@ import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.modulos.application.services.ModuleAccessService;
 import com.azurion.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -47,6 +48,7 @@ public class PublicCrmTenantResolver {
         if (!empresa.getTenantId().equals(currentTenant)) {
             TenantContext.setTenantId(empresa.getTenantId());
         }
+        MDC.put("tenant", empresa.getTenantId());
         moduleAccessService.requireModule(empresa.getId(), "CRM");
         return empresa;
     }

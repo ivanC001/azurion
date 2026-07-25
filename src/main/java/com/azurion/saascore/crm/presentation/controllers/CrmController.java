@@ -130,6 +130,15 @@ public class CrmController {
         );
     }
 
+    @PostMapping("/configuracion/landings/{id}/regenerar-relay-secret")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<CrmLandingConfigResponse> regenerateLandingRelaySecret(@PathVariable Long id) {
+        return ApiResponse.ok(
+                landingConfigurationService.regenerateRelaySecret(id),
+                "Secreto del relay regenerado; actualiza el backend que utilizaba el secreto anterior"
+        );
+    }
+
     @GetMapping("/bandeja/canales")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
     public ApiResponse<List<CrmInboxChannelResponse>> listInboxChannels() {

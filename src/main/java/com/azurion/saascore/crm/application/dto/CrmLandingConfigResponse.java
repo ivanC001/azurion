@@ -16,6 +16,7 @@ public record CrmLandingConfigResponse(
         Boolean crearActividadInicial,
         String responsableId,
         List<Long> catalogoItemIds,
+        String relaySecret,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

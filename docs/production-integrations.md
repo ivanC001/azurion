@@ -72,15 +72,36 @@ FACTURADOR_CALLBACK_SECRET=SECRETO_HMAC_CALLBACK
 
 ## Landings externas
 
-Si una landing vive en otro dominio y su formulario se envía desde el navegador, el navegador va a exigir CORS. La salida profesional es evitar ese cruce directo: la landing debe postear a su propio backend o a un relay del mismo dominio, y ese backend reenvia el lead a Azurion.
+Azurion ofrece dos entradas que terminan en el mismo motor multitenant de captacion.
 
-Para ese caso usa el contrato de relay:
+### Formulario desde JavaScript
+
+Para HTML, React, Angular o una landing estatica:
+
+- `POST /api/v1/public/forms/{sourceKey}/submissions`
+- acepta `Content-Type: application/json`
+- permite cualquier origen exclusivamente en `/public/forms/**`
+- no usa cookies, JWT, RUC ni `X-Tenant-Id`
+- acepta `X-Idempotency-Key` para evitar procesar dos veces el mismo envio
+
+La `sourceKey` se genera por landing y resuelve el tenant automaticamente.
+
+### Relay servidor a servidor
+
+Para Node, PHP, Java, WordPress o proveedores con webhooks:
 
 - `POST /api/v1/public/crm/leads/relay`
-- mismo body que `/api/v1/public/crm/leads`
-- no depende de CORS porque se llama server-to-server
+- no depende de CORS
+- requiere `X-Azurion-Source-Key`, `X-Azurion-Timestamp`,
+  `X-Azurion-Signature` y `X-Idempotency-Key`
+- firma: `HMAC-SHA256(relaySecret, timestamp + "." + idempotencyKey + "." + rawBody)`
+- el header de firma usa el formato `sha256={hex}`
 
-La URL directa sigue siendo valida para landings que viven en el mismo origen o que ya estan dentro de la allowlist CORS. El relay es la opcion recomendada cuando cada landing tiene dominio propio.
+El secreto del relay nunca debe publicarse en JavaScript. Se copia desde la configuracion
+de la landing y se guarda solamente en el backend que envia el webhook.
+
+No configures `CORS_ALLOWED_ORIGINS=*`: esa variable protege la API administrativa.
+El CORS abierto ya esta limitado por codigo a la ruta publica de formularios.
 
 ## Comprobaciones despues del despliegue
 

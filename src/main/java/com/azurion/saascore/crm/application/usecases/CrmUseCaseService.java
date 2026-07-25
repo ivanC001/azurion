@@ -39,6 +39,7 @@ import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunida
 import com.azurion.saascore.crm.application.dto.MarcarPerdidaRequest;
 import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
 import com.azurion.saascore.crm.application.dto.PublicCrmCatalogoItemResponse;
+import com.azurion.saascore.crm.application.dto.PublicLeadReceiptResponse;
 import com.azurion.saascore.crm.application.dto.RealizarCrmActividadRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
@@ -64,6 +65,7 @@ import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidadHistorial;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmProspectoInteres;
+import com.azurion.saascore.crm.domain.entities.CrmPublicLeadSubmission;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
@@ -75,6 +77,7 @@ import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepos
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
 import com.azurion.shared.api.PageResponse;
 import com.azurion.shared.exception.BusinessException;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -84,6 +87,8 @@ import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.LocalDate;
@@ -97,6 +102,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -164,6 +170,7 @@ public class CrmUseCaseService {
     private final CrmProspectoInteresRepository prospectoInteresRepository;
     private final CrmSecretEncryptionService crmSecretEncryptionService;
     private final CrmLeadAssignmentService leadAssignmentService;
+    private final CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
 
     @Transactional(readOnly = true)
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
@@ -337,28 +344,43 @@ public class CrmUseCaseService {
     }
 
     @Transactional
-    public CrmProspectoResponse capturePublicLead(PublicCrmLeadRequest request) {
+    public PublicLeadReceiptResponse capturePublicLead(PublicCrmLeadRequest request,
+                                                       String sourceType,
+                                                       String idempotencyKey) {
+        String normalizedSourceType = requireEnum(
+                sourceType,
+                Set.of("BROWSER", "SERVER", "LEGACY"),
+                "CRM_LEAD_SOURCE_INVALIDA"
+        );
+        String idempotencyHash = publicLeadIdempotencyHash(request.landingKey(), idempotencyKey);
+        if (idempotencyHash != null) {
+            Optional<CrmPublicLeadSubmission> previous =
+                    publicLeadSubmissionRepository.findByIdempotencyHash(idempotencyHash);
+            if (previous.isPresent()) {
+                return toPublicLeadReceipt(previous.get());
+            }
+        }
+
         LandingLeadContext leadContext = landingLeadValidationService.validate(request);
         CrmCatalogoItem catalogoItem = leadContext.catalogoItem();
         CrmProspecto prospecto = findDuplicatePublicLead(request).orElseGet(CrmProspecto::new);
         boolean isNew = prospecto.getId() == null;
-        prospecto.setTipoPersona(defaultEnum(request.tipoPersona(), "NATURAL", TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
-        prospecto.setTipoDocumento(trim(request.tipoDocumento()));
-        prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
-        prospecto.setNombre(required(request.nombre(), "El nombre del lead es obligatorio"));
-        prospecto.setRazonSocial(trim(request.empresa()));
-        prospecto.setNombreComercial(trim(request.empresa()));
-        prospecto.setTelefono(trim(request.telefono()));
-        prospecto.setCorreo(trim(request.correo()));
-        prospecto.setDireccion(trim(request.direccion()));
-        prospecto.setOrigen("WEB");
-        prospecto.setCanalIngreso(defaultEnum(leadContext.canalIngreso(), "LANDING", CANALES_INGRESO, "CANAL_CRM_INVALIDO"));
-        prospecto.setCampania(trim(leadContext.campania()));
-        prospecto.setLandingUrl(trim(request.landingUrl()));
-        prospecto.setLandingKey(trim(request.landingKey()));
-        prospecto.setMensaje(trim(request.mensaje()));
-        boolean preserveExistingCatalog = !isNew && catalogoItem == null && prospecto.getCatalogoItemId() != null;
-        if (!preserveExistingCatalog) {
+        if (isNew) {
+            prospecto.setTipoPersona(defaultEnum(request.tipoPersona(), "NATURAL", TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
+            prospecto.setTipoDocumento(trim(request.tipoDocumento()));
+            prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
+            prospecto.setNombre(required(request.nombre(), "El nombre del lead es obligatorio"));
+            prospecto.setRazonSocial(trim(request.empresa()));
+            prospecto.setNombreComercial(trim(request.empresa()));
+            prospecto.setTelefono(trim(request.telefono()));
+            prospecto.setCorreo(trim(request.correo()));
+            prospecto.setDireccion(trim(request.direccion()));
+            prospecto.setOrigen("WEB");
+            prospecto.setCanalIngreso(defaultEnum(leadContext.canalIngreso(), "LANDING", CANALES_INGRESO, "CANAL_CRM_INVALIDO"));
+            prospecto.setCampania(trim(leadContext.campania()));
+            prospecto.setLandingUrl(trim(request.landingUrl()));
+            prospecto.setLandingKey(trim(request.landingKey()));
+            prospecto.setMensaje(trim(request.mensaje()));
             prospecto.setTipoInteres(catalogoItem == null ? "PRODUCTO" : resolveTipoComercial(catalogoItem.getTipoItem()));
             prospecto.setInteresPrincipal(trim(catalogoItem == null
                     ? firstNonBlank(request.interesPrincipal(), request.mensaje(), "Interes general")
@@ -370,25 +392,34 @@ public class CrmUseCaseService {
             prospecto.setCatalogoItemId(catalogoItem == null ? null : catalogoItem.getId());
             prospecto.setProductoPendiente(leadContext.productoPendiente());
             prospecto.setMetadataJson(publicLeadMetadata(request, catalogoItem, leadContext));
-        }
-        prospecto.setFechaInteres(request.fechaInteres() == null ? java.time.LocalDate.now() : request.fechaInteres());
-        if (isNew || prospecto.getEstado() == null) {
             prospecto.setEstado("NUEVO");
-        }
-        prospecto.setNivelInteres("FRIO");
-        recalculateQualification(prospecto);
-        if (isNew && !hasText(leadContext.responsableId())) {
-            leadAssignmentService.assignAutomatically(prospecto, PUBLIC_LEAD_OWNER);
+            prospecto.setNivelInteres("FRIO");
+            prospecto.setFechaInteres(request.fechaInteres() == null ? java.time.LocalDate.now() : request.fechaInteres());
+            recalculateQualification(prospecto);
+            if (!hasText(leadContext.responsableId())) {
+                leadAssignmentService.assignAutomatically(prospecto, PUBLIC_LEAD_OWNER);
+            } else {
+                prospecto.setResponsableId(leadContext.responsableId());
+            }
+            prospecto.setObservacion(trim(request.mensaje()));
         } else {
-            prospecto.setResponsableId(firstNonBlank(leadContext.responsableId(), prospecto.getResponsableId(), PUBLIC_LEAD_OWNER));
+            mergeMissingPublicContactFields(prospecto, request);
         }
-        prospecto.setObservacion(trim(request.mensaje()));
+
         CrmProspecto saved = prospectoRepository.save(prospecto);
         boolean nuevoInteres = upsertPublicLeadInterest(saved, catalogoItem, request, leadContext);
         if (leadContext.crearActividadInicial() && (isNew || nuevoInteres)) {
             createInitialPublicLeadActivity(saved, catalogoItem, request);
         }
-        return CrmMapper.toProspectoResponse(saved);
+        CrmPublicLeadSubmission submission = new CrmPublicLeadSubmission();
+        submission.setReceiptId(generatePublicLeadReceipt());
+        submission.setIdempotencyHash(idempotencyHash);
+        submission.setSourceKey(trim(request.landingKey()));
+        submission.setSourceType(normalizedSourceType);
+        submission.setProspectoId(saved.getId());
+        submission.setEstado("PROCESSED");
+        submission.setReceivedAt(OffsetDateTime.now());
+        return toPublicLeadReceipt(publicLeadSubmissionRepository.save(submission));
     }
 
     @Transactional(readOnly = true)
@@ -1921,18 +1952,42 @@ public class CrmUseCaseService {
     }
 
     private Optional<CrmProspecto> findDuplicatePublicLead(PublicCrmLeadRequest request) {
-        String telefono = trim(request.telefono());
+        String telefono = normalizePhone(request.telefono());
         if (telefono != null) {
-            Optional<CrmProspecto> byPhone = prospectoRepository.findFirstByTelefonoOrderByIdDesc(telefono);
+            Optional<CrmProspecto> byPhone = prospectoRepository.findFirstByTelefonoNormalizado(telefono);
             if (byPhone.isPresent()) {
                 return byPhone;
             }
         }
-        String correo = trim(request.correo());
+        String correo = normalizeEmail(request.correo());
         if (correo != null) {
             return prospectoRepository.findFirstByCorreoIgnoreCaseOrderByIdDesc(correo);
         }
         return Optional.empty();
+    }
+
+    private void mergeMissingPublicContactFields(CrmProspecto prospecto, PublicCrmLeadRequest request) {
+        if (!hasText(prospecto.getTelefono())) {
+            prospecto.setTelefono(trim(request.telefono()));
+        }
+        if (!hasText(prospecto.getCorreo())) {
+            prospecto.setCorreo(trim(request.correo()));
+        }
+        if (!hasText(prospecto.getTipoDocumento())) {
+            prospecto.setTipoDocumento(trim(request.tipoDocumento()));
+        }
+        if (!hasText(prospecto.getNumeroDocumento())) {
+            prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
+        }
+        if (!hasText(prospecto.getRazonSocial())) {
+            prospecto.setRazonSocial(trim(request.empresa()));
+        }
+        if (!hasText(prospecto.getNombreComercial())) {
+            prospecto.setNombreComercial(trim(request.empresa()));
+        }
+        if (!hasText(prospecto.getDireccion())) {
+            prospecto.setDireccion(trim(request.direccion()));
+        }
     }
 
     private boolean upsertPublicLeadInterest(CrmProspecto prospecto,
@@ -2396,7 +2451,7 @@ public class CrmUseCaseService {
         )));
         actividad.setFechaProgramada(OffsetDateTime.now().plusMinutes(15));
         actividad.setEstado("PENDIENTE");
-        actividad.setUsuarioId(PUBLIC_LEAD_OWNER);
+        actividad.setUsuarioId(firstNonBlank(prospecto.getResponsableId(), PUBLIC_LEAD_OWNER));
         actividad.setEstadoProspectoResultado("NUEVO");
         actividad.setNivelInteres("FRIO");
         actividadRepository.save(actividad);
@@ -2618,6 +2673,56 @@ public class CrmUseCaseService {
                 json(request.metadataJson()),
                 catalogoItem == null ? "" : json(catalogoItem.getMetadataJson())
         ).trim();
+    }
+
+    private PublicLeadReceiptResponse toPublicLeadReceipt(CrmPublicLeadSubmission submission) {
+        return new PublicLeadReceiptResponse(
+                submission.getReceiptId(),
+                submission.getEstado(),
+                submission.getReceivedAt()
+        );
+    }
+
+    private String publicLeadIdempotencyHash(String sourceKey, String idempotencyKey) {
+        String normalized = trim(idempotencyKey);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.length() > 120) {
+            throw new BusinessException(
+                    "CRM_IDEMPOTENCY_KEY_INVALIDA",
+                    "X-Idempotency-Key no puede superar 120 caracteres"
+            );
+        }
+        try {
+            String material = firstNonBlank(sourceKey, "legacy") + ":" + normalized;
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(material.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (Exception ex) {
+            throw BusinessException.internal(
+                    "CRM_IDEMPOTENCY_HASH_ERROR",
+                    "No se pudo preparar la clave de idempotencia"
+            );
+        }
+    }
+
+    private String generatePublicLeadReceipt() {
+        return "LD-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizePhone(String value) {
+        String normalized = trim(value);
+        if (normalized == null) {
+            return null;
+        }
+        String digits = normalized.replaceAll("[^0-9]", "");
+        return digits.isBlank() ? null : digits;
+    }
+
+    private String normalizeEmail(String value) {
+        String normalized = trim(value);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
     private String json(String value) {

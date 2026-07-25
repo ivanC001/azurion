@@ -32,7 +32,7 @@ public class SecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final AuditTrailFilter auditTrailFilter;
 
-    @Value("${azurion.multitenancy.public-endpoints:/v1/auth/public/login,/v1/auth/tenant/login,/v1/auth/session/replace,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/leads/relay,/public/crm/leads/relay,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/public/crm/meta/**,/public/crm/meta/**,/v1/facturador/callback/**,/actuator/health,/files/**}")
+    @Value("${azurion.multitenancy.public-endpoints:/v1/auth/public/login,/v1/auth/tenant/login,/v1/auth/session/replace,/v1/public/forms/**,/public/forms/**,/v1/public/crm/leads,/public/crm/leads,/v1/public/crm/leads/relay,/public/crm/leads/relay,/v1/public/crm/catalogo/**,/public/crm/catalogo/**,/v1/public/crm/whatsapp/**,/public/crm/whatsapp/**,/v1/public/crm/meta/**,/public/crm/meta/**,/v1/facturador/callback/**,/actuator/health,/files/**}")
     private String publicEndpointsProperty;
 
     @Value("${azurion.security.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*}")
@@ -77,16 +77,26 @@ public class SecurityConfig {
                 .filter(value -> !value.isBlank())
                 .toList();
 
-        CorsConfiguration cors = new CorsConfiguration();
-        cors.setAllowedOriginPatterns(allowedOrigins);
-        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cors.setAllowedHeaders(List.of("*"));
-        cors.setExposedHeaders(List.of("Authorization", "X-Correlation-Id"));
-        cors.setAllowCredentials(true);
-        cors.setMaxAge(3600L);
+        CorsConfiguration publicFormsCors = new CorsConfiguration();
+        publicFormsCors.setAllowedOrigins(List.of("*"));
+        publicFormsCors.setAllowedMethods(List.of("POST", "OPTIONS"));
+        publicFormsCors.setAllowedHeaders(List.of("Content-Type", "X-Idempotency-Key", "X-Correlation-Id"));
+        publicFormsCors.setExposedHeaders(List.of("X-Correlation-Id"));
+        publicFormsCors.setAllowCredentials(false);
+        publicFormsCors.setMaxAge(3600L);
+
+        CorsConfiguration privateCors = new CorsConfiguration();
+        privateCors.setAllowedOriginPatterns(allowedOrigins);
+        privateCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        privateCors.setAllowedHeaders(List.of("*"));
+        privateCors.setExposedHeaders(List.of("Authorization", "X-Correlation-Id"));
+        privateCors.setAllowCredentials(true);
+        privateCors.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", cors);
+        source.registerCorsConfiguration("/v1/public/forms/**", publicFormsCors);
+        source.registerCorsConfiguration("/public/forms/**", publicFormsCors);
+        source.registerCorsConfiguration("/**", privateCors);
         return source;
     }
 

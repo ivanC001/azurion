@@ -13,6 +13,7 @@ import com.azurion.saascore.crm.domain.entities.LandingProductMode;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLandingCatalogItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLandingConfigRepository;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,10 @@ class CrmLandingConfigurationServiceTest {
     private CrmLandingCatalogItemRepository landingCatalogItemRepository;
     @Mock
     private CrmCatalogoItemRepository catalogoItemRepository;
+    @Mock
+    private CrmLandingIngressRegistryService ingressRegistryService;
+    @Mock
+    private UsuarioTenantRepository usuarioTenantRepository;
 
     private CrmLandingConfigurationService service;
 
@@ -37,7 +42,9 @@ class CrmLandingConfigurationServiceTest {
         service = new CrmLandingConfigurationService(
                 landingConfigRepository,
                 landingCatalogItemRepository,
-                catalogoItemRepository
+                catalogoItemRepository,
+                ingressRegistryService,
+                usuarioTenantRepository
         );
         when(landingConfigRepository.save(any(CrmLandingConfig.class))).thenAnswer(invocation -> {
             CrmLandingConfig landing = invocation.getArgument(0);
@@ -46,6 +53,11 @@ class CrmLandingConfigurationServiceTest {
         });
         when(landingCatalogItemRepository.findAllByLandingConfigOrderByIdAsc(any(CrmLandingConfig.class)))
                 .thenReturn(List.of());
+        when(ingressRegistryService.synchronize(any(CrmLandingConfig.class)))
+                .thenReturn(new CrmLandingIngressRegistryService.LandingIngressCredentials(
+                        "lnd_test",
+                        "rls_test"
+                ));
     }
 
     @Test
