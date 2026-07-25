@@ -70,6 +70,18 @@ FACTURADOR_CALLBACK_SECRET=SECRETO_HMAC_CALLBACK
 
 `FACTURADOR_BASE_URL=http://127.0.0.1:8000` solo funciona cuando ambos procesos comparten el mismo host. Dentro de contenedores, `127.0.0.1` apunta al propio contenedor de Azurion y no al facturador.
 
+## Landings externas
+
+Si una landing vive en otro dominio y su formulario se envía desde el navegador, el navegador va a exigir CORS. La salida profesional es evitar ese cruce directo: la landing debe postear a su propio backend o a un relay del mismo dominio, y ese backend reenvia el lead a Azurion.
+
+Para ese caso usa el contrato de relay:
+
+- `POST /api/v1/public/crm/leads/relay`
+- mismo body que `/api/v1/public/crm/leads`
+- no depende de CORS porque se llama server-to-server
+
+La URL directa sigue siendo valida para landings que viven en el mismo origen o que ya estan dentro de la allowlist CORS. El relay es la opcion recomendada cuando cada landing tiene dominio propio.
+
 ## Comprobaciones despues del despliegue
 
 1. `GET /api/actuator/health` responde `UP`.

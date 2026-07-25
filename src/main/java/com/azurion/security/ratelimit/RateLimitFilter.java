@@ -86,6 +86,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private boolean isProtectedPublicPath(String path) {
         return path.equals("/v1/public/crm/leads")
                 || path.equals("/public/crm/leads")
+                || path.equals("/v1/public/crm/leads/relay")
+                || path.equals("/public/crm/leads/relay")
                 || path.startsWith("/v1/public/crm/catalogo/")
                 || path.startsWith("/public/crm/catalogo/")
                 || path.startsWith("/v1/public/crm/whatsapp/")

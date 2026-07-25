@@ -26,6 +26,15 @@ public class PublicCrmLeadController {
 
     @PostMapping("/leads")
     public ApiResponse<CrmProspectoResponse> capture(@Valid @RequestBody PublicCrmLeadRequest request) {
+        return captureLead(request);
+    }
+
+    @PostMapping("/leads/relay")
+    public ApiResponse<CrmProspectoResponse> relay(@Valid @RequestBody PublicCrmLeadRequest request) {
+        return captureLead(request);
+    }
+
+    private ApiResponse<CrmProspectoResponse> captureLead(PublicCrmLeadRequest request) {
         tenantResolver.resolveWithContextFallback(request.rucTenant());
         return ApiResponse.ok(crmUseCaseService.capturePublicLead(request), "Lead CRM registrado");
     }
