@@ -30,4 +30,11 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             """)
     List<Object[]> sumCantidadByProductoIds(@Param("productoIds") List<Long> productoIds,
                                             @Param("almacenId") Long almacenId);
+
+    @Query("""
+            select coalesce(sum(stock.cantidad), 0)
+              from Stock stock
+             where stock.producto.id = :productoId
+            """)
+    java.math.BigDecimal sumCantidadByProductoId(@Param("productoId") Long productoId);
 }

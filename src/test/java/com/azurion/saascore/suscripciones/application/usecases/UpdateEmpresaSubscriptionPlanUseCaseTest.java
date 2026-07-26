@@ -143,14 +143,15 @@ class UpdateEmpresaSubscriptionPlanUseCaseTest {
         when(userCountService.countActiveUsers(empresa)).thenReturn(1L);
         when(suscripcionRepository.findAllActiveStateForUpdate(10L))
                 .thenReturn(List.of(subscription));
-        when(suscripcionRepository.save(subscription)).thenReturn(subscription);
         when(planModuloRepository.findModuloCodigosByPlanId(2L)).thenReturn(List.of());
 
         assertThatThrownBy(() -> useCase.execute(
                 10L,
                 new UpdateEmpresaSubscriptionPlanRequest(2L, null)
         )).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("al menos un modulo");
+                .hasMessageContaining("al menos un módulo");
+        verify(suscripcionRepository, never()).save(any());
+        verify(moduleAssignment, never()).execute(eq(10L), any());
     }
 
     private Plan plan(Long id, String code, int userLimit) {

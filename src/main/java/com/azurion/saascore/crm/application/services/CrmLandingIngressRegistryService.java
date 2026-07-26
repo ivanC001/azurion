@@ -32,6 +32,11 @@ public class CrmLandingIngressRegistryService {
 
     @Transactional
     public LandingIngressCredentials synchronize(CrmLandingConfig landing) {
+        return synchronize(landing, true);
+    }
+
+    @Transactional
+    public LandingIngressCredentials synchronize(CrmLandingConfig landing, boolean revealRelaySecret) {
         String tenantId = requireCurrentTenant();
         CrmLandingIngressRegistry registry = repository
                 .findByTenantIdAndLandingConfigId(tenantId, landing.getId())
@@ -44,7 +49,9 @@ public class CrmLandingIngressRegistryService {
             registry.setRelaySecretEncrypted(secretEncryptionService.encrypt(generateSecret()));
         }
         CrmLandingIngressRegistry saved = repository.save(registry);
-        return credentials(saved);
+        return revealRelaySecret
+                ? credentials(saved)
+                : new LandingIngressCredentials(saved.getSourceKey(), null);
     }
 
     @Transactional

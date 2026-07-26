@@ -15,6 +15,7 @@ public record CrmLandingConfigResponse(
         LandingProductMode modoProducto,
         Boolean crearActividadInicial,
         String responsableId,
+        String validarDuplicadosPor,
         List<Long> catalogoItemIds,
         String relaySecret,
         LocalDateTime createdAt,

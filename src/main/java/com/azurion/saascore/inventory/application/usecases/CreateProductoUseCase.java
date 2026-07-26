@@ -47,13 +47,20 @@ public class CreateProductoUseCase {
         if (productoRepository.existsByCodigoIgnoreCase(codigo)) {
             throw new BusinessException("CODIGO_PRODUCTO_DUPLICADO", "Ya existe un producto con ese codigo");
         }
+        String codigoBarras = trim(request.codigoBarras());
+        if (codigoBarras != null && productoRepository.existsByCodigoBarrasIgnoreCase(codigoBarras)) {
+            throw new BusinessException(
+                    "CODIGO_BARRAS_DUPLICADO",
+                    "Ya existe un producto con ese codigo de barras"
+            );
+        }
 
         Almacen almacen = resolveAlmacen(request.almacenId());
 
         Producto producto = new Producto();
         producto.setSku(sku);
         producto.setCodigo(codigo);
-        producto.setCodigoBarras(trim(request.codigoBarras()));
+        producto.setCodigoBarras(codigoBarras);
         producto.setNombre(nombre);
         producto.setDescripcion(trim(request.descripcion()));
         producto.setPrecio(precio);
@@ -112,7 +119,11 @@ public class CreateProductoUseCase {
         stock.setAlmacen(almacen);
         stock.setCantidad(BigDecimal.ZERO);
         stock.setStockReservado(BigDecimal.ZERO);
-        stock.setStockMinimo(BigDecimal.ZERO);
+        stock.setStockMinimo(
+                producto.getStockMinimoGlobal() == null
+                        ? BigDecimal.ZERO
+                        : producto.getStockMinimoGlobal()
+        );
         stock.setEstado("ACTIVO");
         stockRepository.save(stock);
     }

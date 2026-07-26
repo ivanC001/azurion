@@ -52,6 +52,8 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
+import com.azurion.saascore.crm.application.services.CrmIngressLockService;
+import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
@@ -171,6 +173,8 @@ public class CrmUseCaseService {
     private final CrmSecretEncryptionService crmSecretEncryptionService;
     private final CrmLeadAssignmentService leadAssignmentService;
     private final CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
+    private final CrmIngressLockService ingressLockService;
+    private final CrmPhoneNormalizationService phoneNormalizationService;
 
     @Transactional(readOnly = true)
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
@@ -354,16 +358,24 @@ public class CrmUseCaseService {
         );
         String idempotencyHash = publicLeadIdempotencyHash(request.landingKey(), idempotencyKey);
         if (idempotencyHash != null) {
+            ingressLockService.lockAll(List.of("crm-lead:idempotency:" + idempotencyHash));
             Optional<CrmPublicLeadSubmission> previous =
                     publicLeadSubmissionRepository.findByIdempotencyHash(idempotencyHash);
             if (previous.isPresent()) {
+                if ("REJECTED".equals(previous.get().getEstado())) {
+                    throw new BusinessException(
+                            firstNonBlank(previous.get().getErrorCode(), "CRM_LEAD_RECHAZADO"),
+                            firstNonBlank(previous.get().getErrorMessage(), "El formulario fue rechazado anteriormente")
+                    );
+                }
                 return toPublicLeadReceipt(previous.get());
             }
         }
 
         LandingLeadContext leadContext = landingLeadValidationService.validate(request);
+        ingressLockService.lockAll(publicLeadIdentityLocks(request, leadContext));
         CrmCatalogoItem catalogoItem = leadContext.catalogoItem();
-        CrmProspecto prospecto = findDuplicatePublicLead(request).orElseGet(CrmProspecto::new);
+        CrmProspecto prospecto = findDuplicatePublicLead(request, leadContext).orElseGet(CrmProspecto::new);
         boolean isNew = prospecto.getId() == null;
         if (isNew) {
             prospecto.setTipoPersona(defaultEnum(request.tipoPersona(), "NATURAL", TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
@@ -419,6 +431,7 @@ public class CrmUseCaseService {
         submission.setProspectoId(saved.getId());
         submission.setEstado("PROCESSED");
         submission.setReceivedAt(OffsetDateTime.now());
+        submission.setCompletedAt(OffsetDateTime.now());
         return toPublicLeadReceipt(publicLeadSubmissionRepository.save(submission));
     }
 
@@ -1951,19 +1964,67 @@ public class CrmUseCaseService {
         return item;
     }
 
-    private Optional<CrmProspecto> findDuplicatePublicLead(PublicCrmLeadRequest request) {
-        String telefono = normalizePhone(request.telefono());
-        if (telefono != null) {
-            Optional<CrmProspecto> byPhone = prospectoRepository.findFirstByTelefonoNormalizado(telefono);
-            if (byPhone.isPresent()) {
-                return byPhone;
+    private Optional<CrmProspecto> findDuplicatePublicLead(PublicCrmLeadRequest request,
+                                                           LandingLeadContext leadContext) {
+        String policy = duplicatePolicy(leadContext);
+        CrmPhoneNormalizationService.NormalizedPhone normalizedPhone =
+                phoneNormalizationService.normalize(request.telefono());
+        String correo = normalizeEmail(request.correo());
+        Optional<CrmProspecto> byPhone = Optional.empty();
+        if (policyUsesPhone(policy)) {
+            for (String candidate : normalizedPhone.lookupCandidates()) {
+                byPhone = prospectoRepository.findFirstByTelefonoNormalizado(candidate);
+                if (byPhone.isPresent()) {
+                    break;
+                }
             }
         }
-        String correo = normalizeEmail(request.correo());
-        if (correo != null) {
-            return prospectoRepository.findFirstByCorreoIgnoreCaseOrderByIdDesc(correo);
+        Optional<CrmProspecto> byEmail = policyUsesEmail(policy) && correo != null
+                ? prospectoRepository.findFirstByCorreoIgnoreCaseOrderByIdDesc(correo)
+                : Optional.empty();
+
+        if (byPhone.isPresent() && byEmail.isPresent()
+                && !byPhone.get().getId().equals(byEmail.get().getId())) {
+            throw BusinessException.conflict(
+                    "CRM_LEAD_IDENTIDAD_CONFLICTO",
+                    "El telefono y el correo pertenecen a prospectos distintos. Revisa los datos antes de reenviar."
+            );
         }
-        return Optional.empty();
+        if (byPhone.isPresent()) {
+            return byPhone;
+        }
+        return byEmail;
+    }
+
+    private List<String> publicLeadIdentityLocks(PublicCrmLeadRequest request,
+                                                 LandingLeadContext leadContext) {
+        String policy = duplicatePolicy(leadContext);
+        List<String> keys = new ArrayList<>();
+        String phone = phoneNormalizationService.normalize(request.telefono()).identity();
+        String email = normalizeEmail(request.correo());
+        if (policyUsesPhone(policy) && phone != null) {
+            keys.add("crm-lead:phone:" + phone);
+        }
+        if (policyUsesEmail(policy) && email != null) {
+            keys.add("crm-lead:email:" + email);
+        }
+        return keys;
+    }
+
+    private String duplicatePolicy(LandingLeadContext leadContext) {
+        if (leadContext.landingConfig() == null
+                || !hasText(leadContext.landingConfig().getValidarDuplicadosPor())) {
+            return "TELEFONO_CORREO";
+        }
+        return leadContext.landingConfig().getValidarDuplicadosPor().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean policyUsesPhone(String policy) {
+        return "TELEFONO".equals(policy) || "TELEFONO_CORREO".equals(policy);
+    }
+
+    private boolean policyUsesEmail(String policy) {
+        return "CORREO".equals(policy) || "TELEFONO_CORREO".equals(policy);
     }
 
     private void mergeMissingPublicContactFields(CrmProspecto prospecto, PublicCrmLeadRequest request) {
@@ -2709,15 +2770,6 @@ public class CrmUseCaseService {
 
     private String generatePublicLeadReceipt() {
         return "LD-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT);
-    }
-
-    private String normalizePhone(String value) {
-        String normalized = trim(value);
-        if (normalized == null) {
-            return null;
-        }
-        String digits = normalized.replaceAll("[^0-9]", "");
-        return digits.isBlank() ? null : digits;
     }
 
     private String normalizeEmail(String value) {

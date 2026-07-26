@@ -72,9 +72,17 @@ public class StockMovimientoUseCase {
         Stock stock = resolveStock(producto, almacen);
         BigDecimal saldoAnterior = stock.getCantidad();
         BigDecimal nuevoSaldo = saldoAnterior.add(cantidad);
+        BigDecimal saldoGlobalAnterior = stockRepository.sumCantidadByProductoId(producto.getId());
+        BigDecimal saldoGlobalNuevo = saldoGlobalAnterior.add(cantidad);
         stock.setCantidad(nuevoSaldo);
         stockRepository.save(stock);
-        actualizarCostosProductoPorEntrada(producto, request, cantidad, saldoAnterior, nuevoSaldo);
+        actualizarCostosProductoPorEntrada(
+                producto,
+                request,
+                cantidad,
+                saldoGlobalAnterior,
+                saldoGlobalNuevo
+        );
 
         if (lote != null) {
             StockLote stockLote = resolveStockLote(lote, producto, almacen);

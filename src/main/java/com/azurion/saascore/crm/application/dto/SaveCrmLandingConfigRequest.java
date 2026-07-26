@@ -13,6 +13,7 @@ public record SaveCrmLandingConfigRequest(
         Boolean recibirLeads,
         Boolean crearActividadInicial,
         @Size(max = 80) String responsableId,
+        @Size(max = 40) String validarDuplicadosPor,
         List<Long> catalogoItemIds
 ) {
 }

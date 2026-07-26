@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class CrmLandingConfigurationService {
 
     private static final SecureRandom KEY_RANDOM = new SecureRandom();
+    private static final Set<String> DUPLICATE_POLICIES =
+            Set.of("TELEFONO_CORREO", "TELEFONO", "CORREO", "NINGUNO");
 
     private final CrmLandingConfigRepository landingConfigRepository;
     private final CrmLandingCatalogItemRepository landingCatalogItemRepository;
@@ -37,7 +39,7 @@ public class CrmLandingConfigurationService {
     @Transactional
     public List<CrmLandingConfigResponse> list() {
         return landingConfigRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(this::toResponse)
+                .map(landing -> toResponse(landing, false))
                 .toList();
     }
 
@@ -48,7 +50,7 @@ public class CrmLandingConfigurationService {
         apply(landing, request);
         CrmLandingConfig saved = landingConfigRepository.save(landing);
         syncCatalogItems(saved, request.catalogoItemIds());
-        return toResponse(saved);
+        return toResponse(saved, true);
     }
 
     @Transactional
@@ -57,21 +59,21 @@ public class CrmLandingConfigurationService {
         apply(landing, request);
         CrmLandingConfig saved = landingConfigRepository.save(landing);
         syncCatalogItems(saved, request.catalogoItemIds());
-        return toResponse(saved);
+        return toResponse(saved, false);
     }
 
     @Transactional
     public CrmLandingConfigResponse regenerateKey(Long id) {
         CrmLandingConfig landing = findLanding(id);
         landing.setLandingKey(generateLandingKey());
-        return toResponse(landingConfigRepository.save(landing));
+        return toResponse(landingConfigRepository.save(landing), false);
     }
 
     @Transactional
     public CrmLandingConfigResponse regenerateRelaySecret(Long id) {
         CrmLandingConfig landing = findLanding(id);
         ingressRegistryService.regenerateRelaySecret(landing);
-        return toResponse(landing);
+        return toResponse(landing, true);
     }
 
     private void apply(CrmLandingConfig landing, SaveCrmLandingConfigRequest request) {
@@ -84,7 +86,7 @@ public class CrmLandingConfigurationService {
         landing.setCrearSeguimiento(true);
         landing.setCrearActividadInicial(request.crearActividadInicial() == null || request.crearActividadInicial());
         landing.setResponsableId(validateResponsable(request.responsableId()));
-        landing.setValidarDuplicadosPor("TELEFONO_CORREO");
+        landing.setValidarDuplicadosPor(resolveDuplicatePolicy(request.validarDuplicadosPor()));
         if (landing.getModoProducto() == LandingProductMode.REQUERIDO
                 && (request.catalogoItemIds() == null || request.catalogoItemIds().isEmpty())) {
             throw new BusinessException(
@@ -131,9 +133,9 @@ public class CrmLandingConfigurationService {
         }
     }
 
-    private CrmLandingConfigResponse toResponse(CrmLandingConfig landing) {
+    private CrmLandingConfigResponse toResponse(CrmLandingConfig landing, boolean revealRelaySecret) {
         CrmLandingIngressRegistryService.LandingIngressCredentials ingress =
-                ingressRegistryService.synchronize(landing);
+                ingressRegistryService.synchronize(landing, revealRelaySecret);
         List<Long> catalogItemIds = landingCatalogItemRepository.findAllByLandingConfigOrderByIdAsc(landing).stream()
                 .filter(CrmLandingCatalogItem::isActivo)
                 .map(relation -> relation.getCatalogoItem().getId())
@@ -149,11 +151,27 @@ public class CrmLandingConfigurationService {
                 landing.getModoProducto(),
                 landing.isCrearActividadInicial(),
                 landing.getResponsableId(),
+                landing.getValidarDuplicadosPor(),
                 catalogItemIds,
-                ingress.relaySecret(),
+                revealRelaySecret ? ingress.relaySecret() : null,
                 landing.getCreatedAt(),
                 landing.getUpdatedAt()
         );
+    }
+
+    private String resolveDuplicatePolicy(String rawPolicy) {
+        String policy = trim(rawPolicy);
+        if (policy == null) {
+            return "TELEFONO_CORREO";
+        }
+        policy = policy.toUpperCase();
+        if (!DUPLICATE_POLICIES.contains(policy)) {
+            throw new BusinessException(
+                    "CRM_LANDING_DUPLICADOS_INVALIDO",
+                    "Selecciona una politica valida para detectar leads duplicados"
+            );
+        }
+        return policy;
     }
 
     private String validateResponsable(String rawResponsableId) {

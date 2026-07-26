@@ -1,9 +1,12 @@
 package com.azurion.saascore.inventory.presentation.controllers;
 
 import com.azurion.saascore.inventory.application.dto.CreateProductoRequest;
+import com.azurion.saascore.inventory.application.dto.CreateProductoRapidoRequest;
 import com.azurion.saascore.inventory.application.dto.ProductoResponse;
 import com.azurion.saascore.inventory.application.dto.UpdateProductoRequest;
+import com.azurion.saascore.inventory.application.usecases.BuscarProductoPorCodigoUseCase;
 import com.azurion.saascore.inventory.application.usecases.CreateProductoUseCase;
+import com.azurion.saascore.inventory.application.usecases.CreateProductoRapidoUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListProductosUseCase;
 import com.azurion.saascore.inventory.application.usecases.UpdateProductoUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
@@ -29,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class InventoryProductoController {
 
     private final CreateProductoUseCase createProductoUseCase;
+    private final CreateProductoRapidoUseCase createProductoRapidoUseCase;
+    private final BuscarProductoPorCodigoUseCase buscarProductoPorCodigoUseCase;
     private final ListProductosUseCase listProductosUseCase;
     private final UpdateProductoUseCase updateProductoUseCase;
 
@@ -36,6 +41,23 @@ public class InventoryProductoController {
     @PreAuthorize("hasAuthority('PRODUCTOS_WRITE')")
     public ApiResponse<ProductoResponse> create(@Valid @RequestBody CreateProductoRequest request) {
         return ApiResponse.ok(createProductoUseCase.execute(request), "Producto creado");
+    }
+
+    @PostMapping("/rapido")
+    @PreAuthorize("hasAuthority('PRODUCTOS_WRITE') and hasAuthority('INVENTORY_ENTRY')")
+    public ApiResponse<ProductoResponse> createRapido(
+            @Valid @RequestBody CreateProductoRapidoRequest request
+    ) {
+        return ApiResponse.ok(
+                createProductoRapidoUseCase.execute(request),
+                "Producto y existencias iniciales registrados"
+        );
+    }
+
+    @GetMapping("/lookup")
+    @PreAuthorize("hasAuthority('PRODUCTOS_READ')")
+    public ApiResponse<ProductoResponse> lookup(@RequestParam String codigo) {
+        return ApiResponse.ok(buscarProductoPorCodigoUseCase.execute(codigo), "Busqueda de producto");
     }
 
     @GetMapping

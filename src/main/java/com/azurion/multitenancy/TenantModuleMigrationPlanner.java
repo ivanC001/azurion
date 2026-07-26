@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.flywaydb.core.api.MigrationVersion;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -31,6 +32,10 @@ public class TenantModuleMigrationPlanner {
 
     private static final List<String> ALL_TENANT_MIGRATIONS = List.of(
             "V1__tenant_erp_facturacion.sql",
+            "V2__productos_comerciales_core.sql",
+            "V2_1__clientes_core.sql",
+            "V2_2__ventas_core.sql",
+            "V2_3__facturacion_documental_core.sql",
             "V3__inventory_core.sql",
             "V4__roles_permisos_core.sql",
             "V5__caja_core.sql",
@@ -100,7 +105,10 @@ public class TenantModuleMigrationPlanner {
             "V69__crm_sent_email_inbox_index.sql",
             "V70__reconcile_default_tenant_admin.sql",
             "V71__crm_whatsapp_internal_notes.sql",
-            "V72__crm_public_lead_submissions.sql"
+            "V72__crm_public_lead_submissions.sql",
+            "V73__harden_public_lead_ingress.sql",
+            "V74__audit_public_lead_rejections.sql",
+            "V75__productos_alta_rapida_codigos_unicos.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -112,17 +120,17 @@ public class TenantModuleMigrationPlanner {
             return new TenantMigrationPlan(true, List.of(), ALL_TENANT_MIGRATIONS);
         }
 
-        if (normalizedModules.contains("ERP")) {
-            return new TenantMigrationPlan(true, List.copyOf(normalizedModules), ALL_TENANT_MIGRATIONS);
-        }
-
+        Set<String> expandedModules = expandDependencies(normalizedModules);
         LinkedHashSet<String> scripts = new LinkedHashSet<>(COMMON_MIGRATIONS);
-        for (String moduleCode : expandDependencies(normalizedModules)) {
+        for (String moduleCode : expandedModules) {
             scripts.addAll(MODULE_MIGRATIONS.getOrDefault(moduleCode, List.of()));
+        }
+        if (expandedModules.contains("INVENTARIO") && expandedModules.contains("FACTURACION")) {
+            scripts.add("V64__paged_collection_indexes.sql");
         }
 
         List<String> orderedScripts = scripts.stream()
-                .sorted(Comparator.comparingInt(this::extractVersion))
+                .sorted(Comparator.comparing(this::extractVersion))
                 .toList();
 
         return new TenantMigrationPlan(false, List.copyOf(normalizedModules), orderedScripts);
@@ -171,45 +179,47 @@ public class TenantModuleMigrationPlanner {
         return expanded;
     }
 
-    private int extractVersion(String filename) {
+    private MigrationVersion extractVersion(String filename) {
         int prefixStart = filename.indexOf('V');
         int prefixEnd = filename.indexOf("__");
         if (prefixStart < 0 || prefixEnd < 0 || prefixEnd <= prefixStart + 1) {
-            return Integer.MAX_VALUE;
+            return MigrationVersion.fromVersion(String.valueOf(Integer.MAX_VALUE));
         }
-        return Integer.parseInt(filename.substring(prefixStart + 1, prefixEnd));
+        String version = filename.substring(prefixStart + 1, prefixEnd).replace('_', '.');
+        return MigrationVersion.fromVersion(version);
     }
 
     private static Map<String, List<String>> buildModuleMigrations() {
         Map<String, List<String>> mapping = new LinkedHashMap<>();
 
+        mapping.put("ERP", List.of());
         mapping.put("INVENTARIO", List.of(
-                "V1__tenant_erp_facturacion.sql",
+                "V2__productos_comerciales_core.sql",
                 "V3__inventory_core.sql",
                 "V9__sucursales_and_cajas_by_branch.sql",
                 "V8__productos_require_almacen.sql",
                 "V13__inventory_lotes_transferencias_ajustes.sql",
                 "V14__productos_precios_stock_movimientos.sql",
                 "V15__sucursales_ubigeo_igv.sql",
-                "V17__compras_lotes_origen_inventario.sql",
                 "V20__productos_fotos_texto.sql",
                 "V21__effective_permissions_and_user_scopes.sql",
                 "V22__warehouses_require_branch.sql",
                 "V23__seed_product_categories.sql",
                 "V25__initialize_missing_product_stock.sql",
-                "V48__crm_quote_product_warehouse_repair.sql"
+                "V48__crm_quote_product_warehouse_repair.sql",
+                "V75__productos_alta_rapida_codigos_unicos.sql"
         ));
         mapping.put("COMPRAS", List.of(
                 "V17__compras_lotes_origen_inventario.sql"
         ));
         mapping.put("CLIENTES", List.of(
-                "V1__tenant_erp_facturacion.sql",
+                "V2_1__clientes_core.sql",
                 "V18__clientes_datos_fiscales_credito.sql",
                 "V19__cliente_abonos.sql"
         ));
         mapping.put("VENTAS", List.of(
-                "V1__tenant_erp_facturacion.sql",
-                "V5__caja_core.sql",
+                "V2__productos_comerciales_core.sql",
+                "V2_2__ventas_core.sql",
                 "V9__sucursales_and_cajas_by_branch.sql",
                 "V10__ventas_facturacion_async_status.sql",
                 "V15__sucursales_ubigeo_igv.sql",
@@ -225,7 +235,7 @@ public class TenantModuleMigrationPlanner {
                 "V26__arquitectura_tributaria_pos.sql"
         ));
         mapping.put("FACTURACION", List.of(
-                "V1__tenant_erp_facturacion.sql",
+                "V2_3__facturacion_documental_core.sql",
                 "V10__ventas_facturacion_async_status.sql",
                 "V11__guias_remision_registro_facturador_status.sql",
                 "V12__notas_fiscales_credito_debito.sql",
@@ -233,7 +243,7 @@ public class TenantModuleMigrationPlanner {
                 "V27__preserve_existing_product_tax_behavior.sql"
         ));
         mapping.put("COTIZACIONES", List.of(
-                "V1__tenant_erp_facturacion.sql",
+                "V2__productos_comerciales_core.sql",
                 "V9__sucursales_and_cajas_by_branch.sql",
                 "V15__sucursales_ubigeo_igv.sql",
                 "V21__effective_permissions_and_user_scopes.sql",
@@ -242,14 +252,9 @@ public class TenantModuleMigrationPlanner {
                 "V42__cotizaciones_flujo_promociones.sql",
                 "V43__crm_default_branch_support.sql",
                 "V44__crm_quote_permissions.sql",
-                "V45__crm_followup_qualification.sql",
-                "V46__tenant_schema_drift_repair.sql",
-                "V47__crm_negotiation_process.sql",
-                "V48__crm_quote_product_warehouse_repair.sql",
                 "V63__cotizacion_email_send_guard.sql"
         ));
         mapping.put("CRM", List.of(
-                "V1__tenant_erp_facturacion.sql",
                 "V18__clientes_datos_fiscales_credito.sql",
                 "V24__cotizaciones_simples.sql",
                 "V28__crm_module.sql",
@@ -271,7 +276,6 @@ public class TenantModuleMigrationPlanner {
                 "V45__crm_followup_qualification.sql",
                 "V46__tenant_schema_drift_repair.sql",
                 "V47__crm_negotiation_process.sql",
-                "V48__crm_quote_product_warehouse_repair.sql",
                 "V49__crm_simplified_opportunity_flow.sql",
                 "V50__crm_channel_token_config.sql",
                 "V51__crm_landing_config.sql",
@@ -289,7 +293,9 @@ public class TenantModuleMigrationPlanner {
                 "V68__crm_landing_optional_product_default.sql",
                 "V69__crm_sent_email_inbox_index.sql",
                 "V71__crm_whatsapp_internal_notes.sql",
-                "V72__crm_public_lead_submissions.sql"
+                "V72__crm_public_lead_submissions.sql",
+                "V73__harden_public_lead_ingress.sql",
+                "V74__audit_public_lead_rejections.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

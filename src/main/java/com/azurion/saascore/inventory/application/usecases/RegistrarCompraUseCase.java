@@ -124,6 +124,8 @@ public class RegistrarCompraUseCase {
         Stock stock = resolveStock(producto, almacen);
         BigDecimal saldoAnterior = stock.getCantidad();
         BigDecimal saldoNuevo = saldoAnterior.add(cantidad);
+        BigDecimal saldoGlobalAnterior = stockRepository.sumCantidadByProductoId(producto.getId());
+        BigDecimal saldoGlobalNuevo = saldoGlobalAnterior.add(cantidad);
         stock.setCantidad(saldoNuevo);
         stockRepository.save(stock);
 
@@ -133,7 +135,14 @@ public class RegistrarCompraUseCase {
             stockLoteRepository.save(stockLote);
         }
 
-        actualizarCostosProducto(producto, cantidad, saldoAnterior, saldoNuevo, costoUnitario, precioVenta);
+        actualizarCostosProducto(
+                producto,
+                cantidad,
+                saldoGlobalAnterior,
+                saldoGlobalNuevo,
+                costoUnitario,
+                precioVenta
+        );
         registrarKardex(compra, savedDetalle, producto, almacen, lote, cantidad, saldoAnterior, saldoNuevo, costoUnitario, precioVenta);
         return savedDetalle;
     }

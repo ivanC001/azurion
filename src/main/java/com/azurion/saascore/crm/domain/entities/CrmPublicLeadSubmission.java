@@ -34,4 +34,13 @@ public class CrmPublicLeadSubmission extends BaseEntity {
 
     @Column(name = "received_at", nullable = false)
     private OffsetDateTime receivedAt = OffsetDateTime.now();
+
+    @Column(name = "completed_at")
+    private OffsetDateTime completedAt;
+
+    @Column(name = "error_code", length = 80)
+    private String errorCode;
+
+    @Column(name = "error_message", length = 500)
+    private String errorMessage;
 }

@@ -70,8 +70,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
         int limit = authRequest ? authLimit : publicLimit;
         String bucket = authRequest ? "auth" : bucketFor(path);
         String client = clientIpResolver.resolve(request);
+        String sourceKey = publicFormSourceKey(path);
 
-        String key = bucket + ':' + client;
+        String key = sourceKey == null
+                ? bucket + ':' + client
+                : bucket + ':' + sourceKey + ':' + client;
         RequestRateLimiter.Decision decision = acquire(key, limit);
         if (!decision.allowed()) {
             response.setStatus(429);
@@ -125,6 +128,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return "public-catalog";
         }
         return "public-crm";
+    }
+
+    private String publicFormSourceKey(String path) {
+        String marker = "/public/forms/";
+        int start = path.indexOf(marker);
+        if (start < 0) {
+            return null;
+        }
+        start += marker.length();
+        int end = path.indexOf("/submissions", start);
+        if (end <= start) {
+            return null;
+        }
+        String sourceKey = path.substring(start, end);
+        return sourceKey.length() > 120 ? sourceKey.substring(0, 120) : sourceKey;
     }
 
     private static int positive(int value, String property) {

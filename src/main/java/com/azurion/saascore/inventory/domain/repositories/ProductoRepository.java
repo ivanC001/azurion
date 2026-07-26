@@ -20,6 +20,10 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
     Optional<Producto> findBySku(String sku);
     Optional<Producto> findBySkuIgnoreCase(String sku);
+    Optional<Producto> findByCodigoIgnoreCase(String codigo);
+    Optional<Producto> findByCodigoBarrasIgnoreCase(String codigoBarras);
+    boolean existsByCodigoBarrasIgnoreCase(String codigoBarras);
+    boolean existsByCodigoBarrasIgnoreCaseAndIdNot(String codigoBarras, Long id);
     boolean existsByCodigoIgnoreCase(String codigo);
     boolean existsByCodigoIgnoreCaseAndIdNot(String codigo, Long id);
 

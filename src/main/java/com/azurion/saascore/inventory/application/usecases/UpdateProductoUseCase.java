@@ -42,11 +42,19 @@ public class UpdateProductoUseCase {
         if (productoRepository.existsByCodigoIgnoreCaseAndIdNot(codigo, productoId)) {
             throw new BusinessException("CODIGO_PRODUCTO_DUPLICADO", "Ya existe otro producto con ese codigo");
         }
+        String codigoBarras = trim(request.codigoBarras());
+        if (codigoBarras != null
+                && productoRepository.existsByCodigoBarrasIgnoreCaseAndIdNot(codigoBarras, productoId)) {
+            throw new BusinessException(
+                    "CODIGO_BARRAS_DUPLICADO",
+                    "Ya existe otro producto con ese codigo de barras"
+            );
+        }
 
         producto.setNombre(request.nombre().trim());
         producto.setPrecio(precio);
         producto.setCodigo(codigo);
-        producto.setCodigoBarras(trim(request.codigoBarras()));
+        producto.setCodigoBarras(codigoBarras);
         producto.setDescripcion(trim(request.descripcion()));
         if (request.categoriaId() != null) {
             producto.setCategoria(categoriaRepository.findById(request.categoriaId())

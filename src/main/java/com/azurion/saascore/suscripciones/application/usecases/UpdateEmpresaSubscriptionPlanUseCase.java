@@ -81,6 +81,14 @@ public class UpdateEmpresaSubscriptionPlanUseCase {
         boolean planChanged = subscription.getId() == null
                 || subscription.getPlan() == null
                 || !plan.getId().equals(subscription.getPlan().getId());
+        List<String> planModuleCodes =
+                planModuloRepository.findModuloCodigosByPlanId(plan.getId());
+        if (planChanged && planModuleCodes.isEmpty()) {
+            throw new BusinessException(
+                    "PLAN_SIN_MODULOS",
+                    "Configura al menos un módulo en el plan antes de asignarlo a una empresa"
+            );
+        }
 
         LocalDate today = LocalDate.now();
         activeSubscriptions.stream().skip(1).forEach(duplicate -> {
@@ -99,14 +107,6 @@ public class UpdateEmpresaSubscriptionPlanUseCase {
         subscription.setFechaFin(null);
         Suscripcion saved = suscripcionRepository.save(subscription);
 
-        List<String> planModuleCodes =
-                planModuloRepository.findModuloCodigosByPlanId(plan.getId());
-        if (planChanged && planModuleCodes.isEmpty()) {
-            throw new BusinessException(
-                    "PLAN_SIN_MODULOS",
-                    "Configura al menos un modulo en el plan antes de asignarlo a una empresa"
-            );
-        }
         if (!planModuleCodes.isEmpty()) {
             synchronizeCompanyModules(empresa, planModuleCodes, today);
         }

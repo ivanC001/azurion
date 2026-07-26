@@ -260,7 +260,9 @@ public class LoginUseCase {
             return empresaByFiscalId.get().getTenantId();
         }
 
-        return normalized;
+        return empresaRepository.findByTenantIdIgnoreCase(normalized)
+                .map(Empresa::getTenantId)
+                .orElse(normalized);
     }
 
     private LinkedHashSet<String> resolveGlobalRoles(UsuarioGlobal user) {

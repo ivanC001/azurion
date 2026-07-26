@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.clientes.application.dto.ClienteResponse;
@@ -17,13 +19,19 @@ import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepositor
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
+import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
+import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
+import com.azurion.saascore.crm.application.services.CrmIngressLockService;
+import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
+import com.azurion.saascore.crm.domain.entities.CrmLandingConfig;
+import com.azurion.saascore.crm.domain.entities.CrmPublicLeadSubmission;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
@@ -39,6 +47,7 @@ import com.azurion.shared.exception.BusinessException;
 import java.util.List;
 import java.util.Optional;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,6 +122,12 @@ class CrmUseCaseServiceTest {
     @Mock
     CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
 
+    @Mock
+    CrmIngressLockService ingressLockService;
+
+    @Mock
+    CrmPhoneNormalizationService phoneNormalizationService;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -136,7 +151,9 @@ class CrmUseCaseServiceTest {
                 prospectoInteresRepository,
                 crmSecretEncryptionService,
                 leadAssignmentService,
-                publicLeadSubmissionRepository
+                publicLeadSubmissionRepository,
+                ingressLockService,
+                phoneNormalizationService
         );
     }
 
@@ -172,6 +189,53 @@ class CrmUseCaseServiceTest {
         ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
         verify(prospectoRepository).save(captor.capture());
         assertEquals("20", captor.getValue().getResponsableId());
+    }
+
+    @Test
+    void retryConMismaIdempotencyKeyDevuelveElMismoComprobante() {
+        CrmPublicLeadSubmission previous = new CrmPublicLeadSubmission();
+        previous.setReceiptId("LD-EXISTENTE");
+        previous.setEstado("PROCESSED");
+        previous.setReceivedAt(OffsetDateTime.parse("2026-07-25T10:00:00-05:00"));
+        when(publicLeadSubmissionRepository.findByIdempotencyHash(anyString()))
+                .thenReturn(Optional.of(previous));
+
+        var response = service.capturePublicLead(publicLeadRequest(), "BROWSER", "submission-123");
+
+        assertEquals("LD-EXISTENTE", response.receiptId());
+        verify(ingressLockService).lockAll(any());
+        verify(landingLeadValidationService, never()).validate(any());
+    }
+
+    @Test
+    void rechazaCuandoTelefonoYCorreoYaPertenecenAProspectosDiferentes() {
+        CrmLandingConfig landing = new CrmLandingConfig();
+        landing.setValidarDuplicadosPor("TELEFONO_CORREO");
+        when(landingLeadValidationService.validate(any())).thenReturn(
+                new LandingLeadContext(landing, null, true, true, "LANDING", "municipios", null)
+        );
+        when(phoneNormalizationService.normalize(any())).thenReturn(
+                new CrmPhoneNormalizationService.NormalizedPhone(
+                        "51999999999",
+                        List.of("51999999999", "999999999")
+                )
+        );
+        CrmProspecto phoneOwner = new CrmProspecto();
+        phoneOwner.setId(10L);
+        CrmProspecto emailOwner = new CrmProspecto();
+        emailOwner.setId(20L);
+        when(prospectoRepository.findFirstByTelefonoNormalizado("51999999999"))
+                .thenReturn(Optional.of(phoneOwner));
+        when(prospectoRepository.findFirstByCorreoIgnoreCaseOrderByIdDesc("juan@perez.com"))
+                .thenReturn(Optional.of(emailOwner));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.capturePublicLead(publicLeadRequest(), "BROWSER", null)
+        );
+
+        assertEquals("CRM_LEAD_IDENTIDAD_CONFLICTO", exception.getCode());
+        verify(prospectoRepository, never()).save(any());
     }
 
     @Test
@@ -457,6 +521,35 @@ class CrmUseCaseServiceTest {
         oportunidad.setResponsableId("10");
         oportunidad.setEstado(estado);
         return oportunidad;
+    }
+
+    private PublicCrmLeadRequest publicLeadRequest() {
+        return new PublicCrmLeadRequest(
+                "empresa_demo",
+                "lnd_publica",
+                "NATURAL",
+                null,
+                null,
+                "Juan Perez",
+                null,
+                "juan@perez.com",
+                "+51 999 999 999",
+                null,
+                "WEB",
+                "LANDING",
+                "municipios",
+                "https://landing.example/contacto",
+                "Deseo informacion",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "",
+                null
+        );
     }
 
     private void authenticate(String... authorities) {
