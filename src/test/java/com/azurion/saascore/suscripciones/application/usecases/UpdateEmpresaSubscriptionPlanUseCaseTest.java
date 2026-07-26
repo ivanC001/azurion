@@ -24,6 +24,7 @@ import com.azurion.saascore.suscripciones.domain.entities.Suscripcion;
 import com.azurion.saascore.suscripciones.domain.repositories.SuscripcionRepository;
 import com.azurion.saascore.usuarios.application.services.EmpresaTenantUserCountService;
 import com.azurion.shared.exception.BusinessException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +79,7 @@ class UpdateEmpresaSubscriptionPlanUseCaseTest {
 
         var response = useCase.execute(
                 10L,
-                new UpdateEmpresaSubscriptionPlanRequest(1L, 12)
+                new UpdateEmpresaSubscriptionPlanRequest(1L, 12, null)
         );
 
         assertThat(response.limiteUsuarios()).isEqualTo(12);
@@ -112,7 +113,7 @@ class UpdateEmpresaSubscriptionPlanUseCaseTest {
 
         var response = useCase.execute(
                 10L,
-                new UpdateEmpresaSubscriptionPlanRequest(2L, null)
+                new UpdateEmpresaSubscriptionPlanRequest(2L, null, null)
         );
 
         assertThat(response.planId()).isEqualTo(2L);
@@ -129,7 +130,7 @@ class UpdateEmpresaSubscriptionPlanUseCaseTest {
 
         assertThatThrownBy(() -> useCase.execute(
                 10L,
-                new UpdateEmpresaSubscriptionPlanRequest(1L, 5)
+                new UpdateEmpresaSubscriptionPlanRequest(1L, 5, null)
         )).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("6 usuario");
     }
@@ -147,11 +148,35 @@ class UpdateEmpresaSubscriptionPlanUseCaseTest {
 
         assertThatThrownBy(() -> useCase.execute(
                 10L,
-                new UpdateEmpresaSubscriptionPlanRequest(2L, null)
+                new UpdateEmpresaSubscriptionPlanRequest(2L, null, null)
         )).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("al menos un módulo");
         verify(suscripcionRepository, never()).save(any());
         verify(moduleAssignment, never()).execute(eq(10L), any());
+    }
+
+    @Test
+    void updatesSubscriptionStartDate() {
+        Plan plan = plan(1L, "BASIC", 5);
+        Suscripcion subscription = subscription(20L, plan);
+        subscription.setFechaInicio(LocalDate.of(2026, 7, 26));
+        when(planRepository.findById(1L)).thenReturn(Optional.of(plan));
+        when(userCountService.countActiveUsers(empresa)).thenReturn(1L);
+        when(suscripcionRepository.findAllActiveStateForUpdate(10L))
+                .thenReturn(List.of(subscription));
+        when(suscripcionRepository.save(subscription)).thenReturn(subscription);
+        when(planModuloRepository.findModuloCodigosByPlanId(1L)).thenReturn(List.of());
+
+        useCase.execute(
+                10L,
+                new UpdateEmpresaSubscriptionPlanRequest(
+                        1L,
+                        null,
+                        LocalDate.of(2026, 7, 25)
+                )
+        );
+
+        assertThat(subscription.getFechaInicio()).isEqualTo(LocalDate.of(2026, 7, 25));
     }
 
     private Plan plan(Long id, String code, int userLimit) {

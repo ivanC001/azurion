@@ -100,10 +100,16 @@ public class UpdateEmpresaSubscriptionPlanUseCase {
         if (subscription.getId() == null) {
             subscription.setEmpresa(empresa);
             subscription.setEstado("ACTIVA");
-            subscription.setFechaInicio(today);
+        }
+        LocalDate startDate = request.fechaInicio();
+        if (startDate == null) {
+            startDate = subscription.getFechaInicio() == null
+                    ? today
+                    : subscription.getFechaInicio();
         }
         subscription.setPlan(plan);
         subscription.setLimiteUsuarios(request.limiteUsuarios());
+        subscription.setFechaInicio(startDate);
         subscription.setFechaFin(null);
         Suscripcion saved = suscripcionRepository.save(subscription);
 
