@@ -4,9 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 class TenantModuleMigrationPlannerTest {
 
@@ -26,6 +30,10 @@ class TenantModuleMigrationPlannerTest {
         assertTrue(plan.scriptNames().contains("V71__crm_whatsapp_internal_notes.sql"));
         assertTrue(plan.scriptNames().contains("V73__harden_public_lead_ingress.sql"));
         assertTrue(plan.scriptNames().contains("V74__audit_public_lead_rejections.sql"));
+        assertTrue(plan.scriptNames().contains("V78__cotizacion_whatsapp_send_guard.sql"));
+        assertTrue(plan.scriptNames().contains("V79__crm_open_opportunity_next_action.sql"));
+        assertTrue(plan.scriptNames().contains("V80__crm_prospect_person_classification.sql"));
+        assertTrue(plan.scriptNames().contains("V81__crm_prospect_country_identification.sql"));
         assertFalse(plan.scriptNames().contains("V75__productos_alta_rapida_codigos_unicos.sql"));
     }
 
@@ -66,9 +74,34 @@ class TenantModuleMigrationPlannerTest {
         assertTrue(plan.scriptNames().contains("V73__harden_public_lead_ingress.sql"));
         assertTrue(plan.scriptNames().contains("V74__audit_public_lead_rejections.sql"));
         assertTrue(plan.scriptNames().contains("V75__productos_alta_rapida_codigos_unicos.sql"));
+        assertTrue(plan.scriptNames().contains("V76__inventory_consistency_rules.sql"));
+        assertTrue(plan.scriptNames().contains("V77__caja_turnos_refactoring.sql"));
+        assertTrue(plan.scriptNames().contains("V78__cotizacion_whatsapp_send_guard.sql"));
+        assertTrue(plan.scriptNames().contains("V79__crm_open_opportunity_next_action.sql"));
+        assertTrue(plan.scriptNames().contains("V80__crm_prospect_person_classification.sql"));
+        assertTrue(plan.scriptNames().contains("V81__crm_prospect_country_identification.sql"));
         assertEquals(
                 plan.scriptNames().size(),
                 new HashSet<>(plan.scriptNames().stream().map(this::versionOf).toList()).size()
+        );
+    }
+
+    @Test
+    void registersEveryTenantMigrationInTheLegacyPlan() throws IOException {
+        TenantMigrationPlan plan = planner.buildPlan(List.of(), true);
+        HashSet<String> registeredScripts = new HashSet<>(plan.scriptNames());
+        Resource[] migrationResources = new PathMatchingResourcePatternResolver()
+                .getResources("classpath*:db/migration/tenant/V*.sql");
+
+        List<String> unregisteredScripts = Arrays.stream(migrationResources)
+                .map(Resource::getFilename)
+                .filter(filename -> filename != null && !registeredScripts.contains(filename))
+                .sorted()
+                .toList();
+
+        assertTrue(
+                unregisteredScripts.isEmpty(),
+                () -> "Unregistered tenant migrations: " + unregisteredScripts
         );
     }
 
@@ -83,6 +116,8 @@ class TenantModuleMigrationPlannerTest {
         assertFalse(plan.scriptNames().contains("V2_3__facturacion_documental_core.sql"));
         assertFalse(plan.scriptNames().contains("V17__compras_lotes_origen_inventario.sql"));
         assertTrue(plan.scriptNames().contains("V75__productos_alta_rapida_codigos_unicos.sql"));
+        assertTrue(plan.scriptNames().contains("V76__inventory_consistency_rules.sql"));
+        assertFalse(plan.scriptNames().contains("V77__caja_turnos_refactoring.sql"));
         assertFalse(plan.scriptNames().contains("V73__harden_public_lead_ingress.sql"));
     }
 
@@ -109,6 +144,16 @@ class TenantModuleMigrationPlannerTest {
         assertFalse(inventory.scriptNames().contains("V17__compras_lotes_origen_inventario.sql"));
         assertFalse(sales.scriptNames().contains("V5__caja_core.sql"));
         assertTrue(purchases.scriptNames().contains("V17__compras_lotes_origen_inventario.sql"));
+    }
+
+    @Test
+    void includesShiftRefactoringOnlyForCashModule() {
+        TenantMigrationPlan cash = planner.buildPlan(List.of("CAJA"), false);
+        TenantMigrationPlan sales = planner.buildPlan(List.of("VENTAS"), false);
+
+        assertTrue(cash.scriptNames().contains("V77__caja_turnos_refactoring.sql"));
+        assertTrue(cash.scriptNames().contains("V2_2__ventas_core.sql"));
+        assertFalse(sales.scriptNames().contains("V77__caja_turnos_refactoring.sql"));
     }
 
     @Test

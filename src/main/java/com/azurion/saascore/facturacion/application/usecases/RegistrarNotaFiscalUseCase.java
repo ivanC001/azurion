@@ -15,6 +15,8 @@ import com.azurion.saascore.ventas.domain.entities.VentaDetalle;
 import com.azurion.saascore.ventas.domain.repositories.VentaDetalleRepository;
 import com.azurion.saascore.ventas.domain.repositories.VentaRepository;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
+import com.azurion.shared.util.RequestFingerprint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -41,6 +43,7 @@ public class RegistrarNotaFiscalUseCase {
     private final NotaFiscalRepository notaFiscalRepository;
     private final FacturadorClient facturadorClient;
     private final ObjectMapper objectMapper;
+    private final BusinessOperationLockService operationLockService;
 
     @Transactional
     public RegistrarNotaFiscalResponse execute(String tipoDocumento, RegistrarNotaFiscalRequest request) {
@@ -48,6 +51,28 @@ public class RegistrarNotaFiscalUseCase {
         String tipoNota = NotaFiscal.TIPO_DOCUMENTO_CREDITO.equals(normalizedTipoDocumento)
                 ? NotaFiscal.TIPO_NOTA_CREDITO
                 : NotaFiscal.TIPO_NOTA_DEBITO;
+
+        String clientOperationId = normalizeOperationId(request.clientOperationId());
+        String requestHash = RequestFingerprint.sha256(
+                normalizedTipoDocumento,
+                request.ventaId(),
+                request.motivoCodigo(),
+                request.motivoDescripcion(),
+                request.monto(),
+                request.responsableId()
+        );
+        NotaFiscal retryNota = null;
+        if (clientOperationId != null) {
+            operationLockService.lockAll(List.of("fiscal-note:" + clientOperationId));
+            NotaFiscal existing = notaFiscalRepository.findByClientOperationId(clientOperationId).orElse(null);
+            if (existing != null) {
+                validateSameRequest(existing.getRequestHash(), requestHash);
+                if (!NotaFiscal.ESTADO_ERROR.equals(existing.getFacturacionEstado())) {
+                    return existingResponse(existing);
+                }
+                retryNota = existing;
+            }
+        }
 
         String tenantId = TenantContext.getTenantId();
         Empresa empresa = empresaRepository.findByTenantId(tenantId)
@@ -70,21 +95,27 @@ public class RegistrarNotaFiscalUseCase {
         }
 
         LocalDate fechaEmision = LocalDate.now(ZoneId.of("America/Lima"));
-        String externalId = buildExternalId(normalizedTipoDocumento);
+        String externalId = retryNota == null
+                ? buildExternalId(normalizedTipoDocumento, clientOperationId)
+                : retryNota.getExternalId();
         String endpoint = NotaFiscal.TIPO_DOCUMENTO_CREDITO.equals(normalizedTipoDocumento)
                 ? "/notas-credito"
                 : "/notas-debito";
 
-        NotaFiscal nota = createNota(
-                request,
-                venta,
-                referencia,
-                normalizedTipoDocumento,
-                tipoNota,
-                externalId,
-                endpoint,
-                fechaEmision
-        );
+        NotaFiscal nota = retryNota == null
+                ? createNota(
+                        request,
+                        venta,
+                        referencia,
+                        normalizedTipoDocumento,
+                        tipoNota,
+                        externalId,
+                        endpoint,
+                        fechaEmision,
+                        clientOperationId,
+                        requestHash
+                )
+                : retryNota;
 
         Map<String, Object> payload = buildPayload(
                 request,
@@ -160,10 +191,14 @@ public class RegistrarNotaFiscalUseCase {
             String tipoNota,
             String externalId,
             String endpoint,
-            LocalDate fechaEmision
+            LocalDate fechaEmision,
+            String clientOperationId,
+            String requestHash
     ) {
         NotaFiscal nota = new NotaFiscal();
         nota.setExternalId(externalId);
+        nota.setClientOperationId(clientOperationId);
+        nota.setRequestHash(requestHash);
         nota.setTipoDocumento(tipoDocumento);
         nota.setTipoNota(tipoNota);
         nota.setVentaId(venta.getId());
@@ -185,7 +220,9 @@ public class RegistrarNotaFiscalUseCase {
         nota.setFacturadorTipoComprobante(tipoDocumento);
         nota.setFacturadorMensaje("Nota registrada en Azurion. Pendiente de envio al facturador.");
         nota.setFacturacionActualizadoEn(OffsetDateTime.now());
-        return notaFiscalRepository.save(nota);
+        return clientOperationId == null
+                ? notaFiscalRepository.save(nota)
+                : notaFiscalRepository.saveAndFlush(nota);
     }
 
     private void markNotaProcessing(NotaFiscal nota) {
@@ -487,9 +524,50 @@ public class RegistrarNotaFiscalUseCase {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private String buildExternalId(String tipoDocumento) {
+    private String buildExternalId(String tipoDocumento, String clientOperationId) {
         String prefix = NotaFiscal.TIPO_DOCUMENTO_CREDITO.equals(tipoDocumento) ? "NC" : "ND";
+        if (clientOperationId != null) {
+            return prefix + "-" + RequestFingerprint.sha256(clientOperationId)
+                    .substring(0, 18).toUpperCase(Locale.ROOT);
+        }
         return prefix + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 18).toUpperCase(Locale.ROOT);
+    }
+
+    private RegistrarNotaFiscalResponse existingResponse(NotaFiscal nota) {
+        String estado = normalizeEstado(firstNonBlank(
+                nota.getFacturadorSunatEstado(),
+                nota.getFacturacionEstado()
+        ));
+        boolean success = !NotaFiscal.ESTADO_ERROR.equals(estado)
+                && !NotaFiscal.ESTADO_RECHAZADO.equals(estado);
+        return new RegistrarNotaFiscalResponse(
+                nota.getExternalId(),
+                NotaFiscalMapper.toResponse(nota),
+                new FacturadorVentaResponse(
+                        success,
+                        nota.getFacturadorHttpStatus() == null ? 200 : nota.getFacturadorHttpStatus(),
+                        nota.getFacturadorEndpoint(),
+                        nota.getFacturadorTipoComprobante(),
+                        nota.getFacturadorMensaje(),
+                        parseJson(nota.getFacturadorRespuestaJson())
+                )
+        );
+    }
+
+    private void validateSameRequest(String storedHash, String requestHash) {
+        if (!requestHash.equals(storedHash)) {
+            throw new BusinessException(
+                    "OPERACION_ID_REUTILIZADA",
+                    "El identificador de operacion ya fue usado con datos diferentes."
+            );
+        }
+    }
+
+    private String normalizeOperationId(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String defaultIfBlank(String value, String defaultValue) {

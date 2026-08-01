@@ -8,6 +8,7 @@ import com.azurion.saascore.inventory.application.usecases.ListComprasUseCase;
 import com.azurion.saascore.inventory.application.usecases.RegistrarCompraUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping({"/v1/saas/inventory/compras", "/inventario/compras"})
@@ -40,6 +42,20 @@ public class InventoryCompraController {
     @PreAuthorize("hasAnyAuthority('COMPRAS_READ','INVENTORY_READ')")
     public ApiResponse<List<CompraResponse>> list() {
         return ApiResponse.ok(listComprasUseCase.execute(), "Compras");
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAnyAuthority('COMPRAS_READ','INVENTORY_READ')")
+    public ApiResponse<PageResponse<CompraResponse>> page(
+            @RequestParam(defaultValue = "") String query,
+            @RequestParam(required = false) Long almacenId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(
+                listComprasUseCase.page(query, almacenId, page, size),
+                "Compras paginadas"
+        );
     }
 
     @GetMapping("/{id}")

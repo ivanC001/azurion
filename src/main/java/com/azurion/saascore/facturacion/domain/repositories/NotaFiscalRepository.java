@@ -12,6 +12,8 @@ public interface NotaFiscalRepository extends JpaRepository<NotaFiscal, Long> {
 
     Optional<NotaFiscal> findByExternalId(String externalId);
 
+    Optional<NotaFiscal> findByClientOperationId(String clientOperationId);
+
     @Query("""
             select nota from NotaFiscal nota
              where nota.tipoDocumento = :tipo

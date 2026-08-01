@@ -17,12 +17,15 @@ import lombok.Setter;
 public class CrmProspecto extends BaseEntity {
 
     @Column(name = "tipo_persona", nullable = false, length = 20)
-    private String tipoPersona;
+    private String tipoPersona = "SIN_DEFINIR";
 
-    @Column(name = "tipo_documento", length = 5)
+    @Column(name = "pais_codigo", length = 2)
+    private String paisCodigo;
+
+    @Column(name = "tipo_documento", length = 30)
     private String tipoDocumento;
 
-    @Column(name = "numero_documento", length = 20)
+    @Column(name = "numero_documento", length = 30)
     private String numeroDocumento;
 
     @Column(name = "nombre", nullable = false, length = 180)

@@ -1,6 +1,8 @@
 package com.azurion.saascore.facturacion.infrastructure.http;
 
 import com.azurion.saascore.facturacion.infrastructure.config.FacturadorProperties;
+import com.azurion.saascore.facturacion.infrastructure.config.FacturadorProperties.FacturadorCredential;
+import com.azurion.saascore.facturacion.infrastructure.security.FacturadorHmacSigner;
 import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,24 +12,18 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class FacturadorClient {
 
     private static final long MIN_WAIT_PROCESSED_TIMEOUT_MS = 5_000;
@@ -35,19 +31,208 @@ public class FacturadorClient {
     private static final long MIN_WAIT_PROCESSED_POLL_INTERVAL_MS = 250;
     private static final long MAX_WAIT_PROCESSED_POLL_INTERVAL_MS = 5_000;
     private static final long MAX_LIST_STATUS_TIMEOUT_MS = 4500;
+    private static final int MAX_PDF_BYTES = 20 * 1024 * 1024;
 
     private static final String HEADER_API_KEY = "X-API-Key";
     private static final String HEADER_TIMESTAMP = "X-Timestamp";
     private static final String HEADER_NONCE = "X-Nonce";
     private static final String HEADER_SIGNATURE = "X-Signature";
+    private static final String HEADER_CLIENT_ID = "X-Client-Id";
+    private static final String HEADER_SIGNATURE_VERSION = "X-Signature-Version";
 
     private static final Set<String> TERMINAL_STATES = Set.of("ACEPTADO", "RECHAZADO", "ERROR");
 
     private final FacturadorProperties properties;
     private final ObjectMapper objectMapper;
+    private final FacturadorHmacSigner hmacSigner;
+    private final HttpClient httpClient;
+
+    public FacturadorClient(
+            FacturadorProperties properties,
+            ObjectMapper objectMapper,
+            FacturadorHmacSigner hmacSigner
+    ) {
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.hmacSigner = hmacSigner;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(Math.max(500, properties.getConnectTimeoutMillis())))
+                .build();
+    }
+
+    public FacturadorTenantProvisioningResult provisionarTenant(
+            String externalTenantId,
+            String businessName,
+            String countryCode,
+            String taxId,
+            boolean active
+    ) {
+        FacturadorCredential credential = properties.resolveCredential(null)
+                .orElseThrow(() -> new BusinessException(
+                        "FACTURADOR_API_KEY_MISSING",
+                        "No existe la credencial de integracion con el facturador"
+                ));
+        String safeTenantId = externalTenantId == null ? "" : externalTenantId.trim();
+        if (!safeTenantId.matches("[A-Za-z0-9._:-]{2,80}")) {
+            throw new BusinessException("FACTURADOR_TENANT_INVALID", "El identificador del tenant no es valido");
+        }
+
+        String path = normalizePath("/integrations/azurion/tenants/")
+                + URLEncoder.encode(safeTenantId, StandardCharsets.UTF_8);
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("business_name", businessName);
+            payload.put("country_code", countryCode);
+            payload.put("tax_id", taxId);
+            payload.put("active", active);
+            String body = objectMapper.writeValueAsString(payload);
+            SignedCallResult response = executeSignedRequest("PUT", path, body, credential, null, safeTenantId);
+
+            if (!isSuccessfulResponse(response.status(), response.body())) {
+                throw new BusinessException("FACTURADOR_PROVISION_ERROR", resolveMessage(response.body(), response.status()));
+            }
+
+            JsonNode data = extractData(response.body());
+            return new FacturadorTenantProvisioningResult(
+                    response.status(),
+                    text(data, "document_mode"),
+                    text(data, "fiscal_status"),
+                    text(data, "sunat_mode"),
+                    response.body()
+            );
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(
+                    "FACTURADOR_PROVISION_ERROR",
+                    "No se pudo aprovisionar el tenant en el facturador: " + exception.getMessage()
+            );
+        }
+    }
+
+    public JsonNode listarTenantsAdministrados() {
+        return executeManagementRequest(
+                "GET",
+                "/integrations/azurion/management/tenants",
+                Map.of(),
+                "platform",
+                false
+        );
+    }
+
+    public JsonNode obtenerTenantAdministrado(long tenantId) {
+        return executeManagementRequest(
+                "GET",
+                "/integrations/azurion/management/tenants/" + tenantId,
+                Map.of(),
+                "platform",
+                true
+        );
+    }
+
+    public JsonNode obtenerTenantAdministradoPorExternalId(String externalTenantId) {
+        String safeTenantId = requireSafeExternalTenantId(externalTenantId);
+        return executeManagementRequest(
+                "GET",
+                "/integrations/azurion/management/tenants/external/"
+                        + URLEncoder.encode(safeTenantId, StandardCharsets.UTF_8),
+                Map.of(),
+                safeTenantId,
+                true
+        );
+    }
+
+    public JsonNode crearTenantAdministrado(Map<String, Object> payload) {
+        return executeManagementRequest(
+                "POST",
+                "/integrations/azurion/management/tenants",
+                payload,
+                "platform",
+                false
+        );
+    }
+
+    public JsonNode actualizarTenantAdministrado(long tenantId, Map<String, Object> payload) {
+        return executeManagementRequest(
+                "PUT",
+                "/integrations/azurion/management/tenants/" + tenantId,
+                payload,
+                "platform",
+                false
+        );
+    }
+
+    public JsonNode actualizarTenantAdministradoPorExternalId(
+            String externalTenantId,
+            Map<String, Object> payload
+    ) {
+        String safeTenantId = requireSafeExternalTenantId(externalTenantId);
+        return executeManagementRequest(
+                "PUT",
+                "/integrations/azurion/management/tenants/external/"
+                        + URLEncoder.encode(safeTenantId, StandardCharsets.UTF_8),
+                payload,
+                safeTenantId,
+                false
+        );
+    }
+
+    private JsonNode executeManagementRequest(
+            String method,
+            String endpointPath,
+            Map<String, Object> payload,
+            String signedTenantId,
+            boolean allowNotFound
+    ) {
+        FacturadorCredential credential = properties.resolveCredential(null)
+                .orElseThrow(() -> new BusinessException(
+                        "FACTURADOR_API_KEY_MISSING",
+                        "No existe la credencial de integracion con el facturador"
+                ));
+        String requestPath = normalizePath(endpointPath);
+
+        try {
+            String body = "GET".equalsIgnoreCase(method)
+                    ? ""
+                    : objectMapper.writeValueAsString(payload == null ? Map.of() : payload);
+            SignedCallResult response = executeSignedRequest(
+                    method,
+                    requestPath,
+                    body,
+                    credential,
+                    null,
+                    signedTenantId
+            );
+            if (allowNotFound && response.status() == 404) {
+                return null;
+            }
+            if (!isSuccessfulResponse(response.status(), response.body())) {
+                throw new BusinessException(
+                        "FACTURADOR_MANAGEMENT_ERROR",
+                        resolveMessage(response.body(), response.status())
+                );
+            }
+            return extractData(response.body());
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(
+                    "FACTURADOR_MANAGEMENT_ERROR",
+                    "No se pudo comunicar con el facturador: " + exception.getMessage()
+            );
+        }
+    }
+
+    private String requireSafeExternalTenantId(String externalTenantId) {
+        String safeTenantId = externalTenantId == null ? "" : externalTenantId.trim();
+        if (!safeTenantId.matches("[A-Za-z0-9._:-]{2,80}")) {
+            throw new BusinessException("FACTURADOR_TENANT_INVALID", "El identificador del tenant no es valido");
+        }
+        return safeTenantId;
+    }
 
     public FacturadorEmissionResult emitirDocumento(String tenantId, String tenantRuc, String endpointPath, Object payload, String tipoComprobante) {
-        String apiKey = properties.resolveApiKey(tenantId)
+        FacturadorCredential credential = properties.resolveCredential(tenantId)
                 .orElseThrow(() -> new BusinessException(
                         "FACTURADOR_API_KEY_MISSING",
                         "No existe API key configurada para facturador en el tenant " + tenantId
@@ -57,7 +242,7 @@ public class FacturadorClient {
 
         try {
             String body = objectMapper.writeValueAsString(payload);
-            SignedCallResult initial = executeSignedRequest("POST", path, body, apiKey, tenantRuc);
+            SignedCallResult initial = executeSignedRequest("POST", path, body, credential, tenantRuc, tenantId);
 
             if (!isSuccessfulResponse(initial.status(), initial.body())) {
                 throw new BusinessException("FACTURADOR_ERROR", resolveMessage(initial.body(), initial.status()));
@@ -68,7 +253,7 @@ public class FacturadorClient {
             String finalMessage = resolveMessage(finalBody, finalStatus);
 
             if (shouldWaitForProcessed(tipoComprobante, finalBody)) {
-                SignedCallResult processed = waitForProcessed(apiKey, tenantRuc, finalBody);
+                SignedCallResult processed = waitForProcessed(credential, tenantRuc, tenantId, finalBody);
                 if (processed != null) {
                     finalBody = processed.body();
                     finalStatus = processed.status();
@@ -103,7 +288,7 @@ public class FacturadorClient {
             return Map.of();
         }
 
-        String apiKey = properties.resolveApiKey(tenantId)
+        FacturadorCredential credential = properties.resolveCredential(tenantId)
                 .orElseThrow(() -> new BusinessException(
                         "FACTURADOR_API_KEY_MISSING",
                         "No existe API key configurada para facturador en el tenant " + tenantId
@@ -123,7 +308,7 @@ public class FacturadorClient {
 
             try {
                 long timeoutMs = Math.min(properties.getReadTimeoutMillis(), MAX_LIST_STATUS_TIMEOUT_MS);
-                SignedCallResult response = executeSignedRequest("GET", requestPath, "", apiKey, tenantRuc, timeoutMs);
+                SignedCallResult response = executeSignedRequest("GET", requestPath, "", credential, tenantRuc, tenantId, timeoutMs);
 
                 if (!isSuccessfulResponse(response.status(), response.body())) {
                     throw new BusinessException("FACTURADOR_STATUS_ERROR", resolveMessage(response.body(), response.status()));
@@ -140,7 +325,152 @@ public class FacturadorClient {
         return results;
     }
 
-    private SignedCallResult waitForProcessed(String apiKey, String tenantRuc, JsonNode initialBody) throws Exception {
+    /**
+     * Obtiene una URL firmada nueva y descarga el PDF desde el facturador. La URL
+     * temporal nunca se expone al navegador, por lo que no puede quedar obsoleta
+     * en el estado de Angular ni reutilizarse para consultar otro tenant.
+     */
+    public FacturadorArtifactDownload descargarPdfComprobante(
+            String tenantId,
+            String tenantRuc,
+            String externalId
+    ) {
+        String safeExternalId = externalId == null ? "" : externalId.trim();
+        if (safeExternalId.isBlank()) {
+            throw new BusinessException("VENTA_EXTERNAL_ID_REQUIRED", "La venta no tiene identificador para facturacion");
+        }
+
+        FacturadorDocumentoStatusResult documento = consultarDocumentosPorExternalIds(
+                tenantId,
+                tenantRuc,
+                List.of(safeExternalId)
+        ).get(safeExternalId);
+
+        if (documento == null) {
+            throw BusinessException.notFound(
+                    "FACTURADOR_DOCUMENT_NOT_FOUND",
+                    "El comprobante no existe en el facturador"
+            );
+        }
+        if (documento.pdfUrl() == null || documento.pdfUrl().isBlank()) {
+            throw BusinessException.conflict(
+                    "FACTURADOR_PDF_NOT_READY",
+                    "El PDF aun no esta disponible. Espera a que termine el procesamiento del comprobante"
+            );
+        }
+
+        URI artifactUri = validateArtifactUri(documento.pdfUrl(), documento.documentoId(), "pdf");
+        try {
+            HttpRequest request = HttpRequest.newBuilder(artifactUri)
+                    .timeout(Duration.ofMillis(Math.max(500, properties.getReadTimeoutMillis())))
+                    .header("Accept", "application/pdf")
+                    .GET()
+                    .build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            byte[] content = response.body() == null ? new byte[0] : response.body();
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new BusinessException(
+                        "FACTURADOR_PDF_DOWNLOAD_ERROR",
+                        response.statusCode() == 403
+                                ? "La firma temporal del PDF fue rechazada por el facturador"
+                                : "El facturador no pudo entregar el PDF (HTTP " + response.statusCode() + ")",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY
+                );
+            }
+            if (content.length == 0 || content.length > MAX_PDF_BYTES || !hasPdfSignature(content)) {
+                throw new BusinessException(
+                        "FACTURADOR_PDF_INVALID",
+                        "El facturador respondio con un archivo PDF invalido",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY
+                );
+            }
+
+            String filename = safePdfFilename(tenantRuc, documento);
+            return new FacturadorArtifactDownload(content, filename, "application/pdf");
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "FACTURADOR_PDF_DOWNLOAD_INTERRUPTED",
+                    "La descarga del PDF fue interrumpida",
+                    org.springframework.http.HttpStatus.BAD_GATEWAY
+            );
+        } catch (Exception exception) {
+            throw new BusinessException(
+                    "FACTURADOR_PDF_DOWNLOAD_ERROR",
+                    "No se pudo descargar el PDF desde el facturador: " + exception.getMessage(),
+                    org.springframework.http.HttpStatus.BAD_GATEWAY
+            );
+        }
+    }
+
+    private URI validateArtifactUri(String rawUrl, Integer documentoId, String artifact) {
+        try {
+            URI candidate = URI.create(rawUrl.trim());
+            String artifactBaseUrl = properties.getArtifactBaseUrl();
+            String configuredArtifactBase = artifactBaseUrl == null || artifactBaseUrl.isBlank()
+                    ? properties.getBaseUrl()
+                    : artifactBaseUrl;
+            URI configuredBase = URI.create(configuredArtifactBase.replaceAll("/+$", ""));
+            String expectedPath = normalizePath("/documentos/")
+                    + documentoId
+                    + "/"
+                    + artifact;
+            boolean sameOrigin = configuredBase.getScheme().equalsIgnoreCase(candidate.getScheme())
+                    && configuredBase.getHost().equalsIgnoreCase(candidate.getHost())
+                    && effectivePort(configuredBase) == effectivePort(candidate);
+            String query = candidate.getRawQuery();
+
+            if (!sameOrigin
+                    || !expectedPath.equals(candidate.getPath())
+                    || query == null
+                    || !query.matches("(^|.*&)signature=[A-Fa-f0-9]{32,}(&.*|$)")) {
+                throw new IllegalArgumentException("URL de artefacto fuera del facturador configurado");
+            }
+            return candidate;
+        } catch (Exception exception) {
+            throw BusinessException.internal(
+                    "FACTURADOR_ARTIFACT_URL_INVALID",
+                    "El facturador devolvio una URL de PDF no valida"
+            );
+        }
+    }
+
+    private int effectivePort(URI uri) {
+        if (uri.getPort() >= 0) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private boolean hasPdfSignature(byte[] content) {
+        return content.length >= 5
+                && content[0] == '%'
+                && content[1] == 'P'
+                && content[2] == 'D'
+                && content[3] == 'F'
+                && content[4] == '-';
+    }
+
+    private String safePdfFilename(String tenantRuc, FacturadorDocumentoStatusResult documento) {
+        String raw = String.join(
+                "-",
+                tenantRuc == null ? "comprobante" : tenantRuc,
+                documento.tipoDocumento() == null ? "documento" : documento.tipoDocumento(),
+                documento.serie() == null ? "sin-serie" : documento.serie(),
+                documento.correlativo() == null ? String.valueOf(documento.documentoId()) : documento.correlativo()
+        );
+        return raw.replaceAll("[^A-Za-z0-9._-]", "_") + ".pdf";
+    }
+
+    private SignedCallResult waitForProcessed(
+            FacturadorCredential credential,
+            String tenantRuc,
+            String tenantId,
+            JsonNode initialBody
+    ) throws Exception {
         Long documentoId = extractDocumentoId(initialBody);
         if (documentoId == null) {
             return null;
@@ -160,7 +490,7 @@ public class FacturadorClient {
         SignedCallResult lastSuccessful = null;
 
         while (System.currentTimeMillis() <= deadlineEpochMillis) {
-            SignedCallResult statusCall = executeSignedRequest("GET", statusPath, "", apiKey, tenantRuc);
+            SignedCallResult statusCall = executeSignedRequest("GET", statusPath, "", credential, tenantRuc, tenantId);
             if (!isSuccessfulResponse(statusCall.status(), statusCall.body())) {
                 throw new BusinessException("FACTURADOR_STATUS_ERROR", resolveMessage(statusCall.body(), statusCall.status()));
             }
@@ -316,15 +646,27 @@ public class FacturadorClient {
             String method,
             String requestUri,
             String requestBody,
-            String apiKey,
+            FacturadorCredential credential,
             String tenantRuc
+    ) throws Exception {
+        return executeSignedRequest(method, requestUri, requestBody, credential, tenantRuc, null);
+    }
+
+    private SignedCallResult executeSignedRequest(
+            String method,
+            String requestUri,
+            String requestBody,
+            FacturadorCredential credential,
+            String tenantRuc,
+            String externalTenantId
     ) throws Exception {
         return executeSignedRequest(
                 method,
                 requestUri,
                 requestBody,
-                apiKey,
+                credential,
                 tenantRuc,
+                externalTenantId,
                 properties.getReadTimeoutMillis()
         );
     }
@@ -333,8 +675,9 @@ public class FacturadorClient {
             String method,
             String requestUri,
             String requestBody,
-            String apiKey,
+            FacturadorCredential credential,
             String tenantRuc,
+            String externalTenantId,
             long requestTimeoutMs
     ) throws Exception {
         String normalizedMethod = method == null ? "GET" : method.trim().toUpperCase(Locale.ROOT);
@@ -344,35 +687,57 @@ public class FacturadorClient {
         String body = requestBody == null ? "" : requestBody;
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
         String nonce = UUID.randomUUID().toString().replace("-", "");
-        String canonical = buildCanonical(normalizedMethod, requestUri, timestamp, nonce, sha256Hex(body));
-        String signature = signBase64(canonical, apiKey);
+        String signedTenantId = externalTenantId == null || externalTenantId.isBlank()
+                ? ""
+                : trimHeaderValue(externalTenantId, 80);
+        String signedTenantRuc = tenantRuc == null || tenantRuc.isBlank()
+                ? ""
+                : trimHeaderValue(tenantRuc, 40);
+        String signature = hmacSigner.sign(
+                credential.signatureVersion(),
+                normalizedMethod,
+                requestUri,
+                timestamp,
+                nonce,
+                signedTenantId,
+                signedTenantRuc,
+                body,
+                credential.secret()
+        );
 
         HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
                 .timeout(Duration.ofMillis(Math.max(500, requestTimeoutMs)))
                 .header("Accept", "application/json")
-                .header(HEADER_API_KEY, apiKey)
-                .header("X-Tenant-RUC", tenantRuc)
                 .header(HEADER_TIMESTAMP, timestamp)
                 .header(HEADER_NONCE, nonce)
-                .header(HEADER_SIGNATURE, signature);
+                .header(HEADER_SIGNATURE, signature)
+                .header(HEADER_SIGNATURE_VERSION, credential.signatureVersion());
 
-        if ("POST".equals(normalizedMethod)) {
+        if (credential.legacyApiKey()) {
+            builder.header(HEADER_API_KEY, credential.secret());
+        } else {
+            builder.header(HEADER_CLIENT_ID, trimHeaderValue(credential.clientId(), 120));
+        }
+
+        if (!signedTenantRuc.isBlank()) {
+            builder.header("X-Tenant-RUC", signedTenantRuc);
+        }
+        if (!signedTenantId.isBlank()) {
+            builder.header("X-Azurion-Tenant-ID", signedTenantId);
+        }
+
+        if ("POST".equals(normalizedMethod) || "PUT".equals(normalizedMethod)) {
             String idempotencyKey = extractIdempotencyKey(body);
             builder.header("Content-Type", "application/json");
             if (idempotencyKey != null) {
                 builder.header("Idempotency-Key", idempotencyKey);
             }
-            builder
-                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+            builder.method(normalizedMethod, HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
         } else {
             builder.GET();
         }
 
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .build();
-
-        HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         return new SignedCallResult(response.statusCode(), parseBody(response.body()));
     }
 
@@ -382,14 +747,21 @@ public class FacturadorClient {
         }
         try {
             JsonNode payload = objectMapper.readTree(body);
-            String externalId = payload.path("external_id").asText("").trim();
-            if (externalId.isBlank()) {
-                externalId = payload.path("externalId").asText("").trim();
+            String externalId = readExternalId(payload);
+            if (externalId.isBlank() && payload.has("documento")) {
+                externalId = readExternalId(payload.path("documento"));
             }
             return externalId.isBlank() ? null : trimHeaderValue(externalId, 180);
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String readExternalId(JsonNode source) {
+        String externalId = source.path("external_id").asText("").trim();
+        return externalId.isBlank()
+                ? source.path("externalId").asText("").trim()
+                : externalId;
     }
 
     private String trimHeaderValue(String value, int maxLength) {
@@ -416,33 +788,6 @@ public class FacturadorClient {
             return path;
         }
         return prefix + path;
-    }
-
-    private String buildCanonical(String method, String requestUri, String timestamp, String nonce, String bodyHash) {
-        return String.join("\n",
-                method.toUpperCase(Locale.ROOT),
-                requestUri,
-                timestamp,
-                nonce,
-                bodyHash
-        );
-    }
-
-    private String signBase64(String canonical, String secret) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        byte[] signature = mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8));
-        return Base64.getEncoder().encodeToString(signature);
-    }
-
-    private String sha256Hex(String body) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(body.getBytes(StandardCharsets.UTF_8));
-        StringBuilder sb = new StringBuilder(hash.length * 2);
-        for (byte b : hash) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
     }
 
     private JsonNode parseBody(String body) {
@@ -539,6 +884,22 @@ public class FacturadorClient {
             String xmlUrl,
             String cdrUrl,
             int httpStatus,
+            JsonNode rawData
+    ) {
+    }
+
+    public record FacturadorArtifactDownload(
+            byte[] content,
+            String filename,
+            String contentType
+    ) {
+    }
+
+    public record FacturadorTenantProvisioningResult(
+            int httpStatus,
+            String documentMode,
+            String fiscalStatus,
+            String sunatMode,
             JsonNode rawData
     ) {
     }

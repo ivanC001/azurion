@@ -9,12 +9,89 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.LockModeType;
 
 public interface CotizacionRepository extends JpaRepository<Cotizacion, Long> {
+
+    @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
+    @Query("select distinct quote from Cotizacion quote where quote.id = :id")
+    Optional<Cotizacion> findDetailedById(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
+    @Query("select quote from Cotizacion quote where quote.id = :id")
+    Optional<Cotizacion> findByIdForUpdate(@Param("id") Long id);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            update Cotizacion quote
+               set quote.whatsappSendStatus = 'SENDING',
+                   quote.whatsappSendToken = :token,
+                   quote.whatsappSendStartedAt = :now,
+                   quote.whatsappSendError = null,
+                   quote.updatedAt = :updatedAt
+             where quote.id = :id
+               and (quote.whatsappSendStatus is null or quote.whatsappSendStatus = 'ERROR')
+            """)
+    int claimWhatsappSend(@Param("id") Long id,
+                          @Param("token") String token,
+                          @Param("now") OffsetDateTime now,
+                          @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            update Cotizacion quote
+               set quote.whatsappSendStatus = 'SENT',
+                   quote.whatsappMessageId = :messageId,
+                   quote.whatsappSendError = null,
+                   quote.updatedAt = :updatedAt
+             where quote.id = :id
+               and quote.whatsappSendStatus = 'SENDING'
+               and quote.whatsappSendToken = :token
+            """)
+    int markWhatsappSent(@Param("id") Long id,
+                         @Param("token") String token,
+                         @Param("messageId") String messageId,
+                         @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            update Cotizacion quote
+               set quote.whatsappSendStatus = 'ERROR',
+                   quote.whatsappSendError = :error,
+                   quote.updatedAt = :updatedAt
+             where quote.id = :id
+               and quote.whatsappSendStatus = 'SENDING'
+               and quote.whatsappSendToken = :token
+            """)
+    int markWhatsappFailed(@Param("id") Long id,
+                           @Param("token") String token,
+                           @Param("error") String error,
+                           @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            update Cotizacion quote
+               set quote.whatsappSendStatus = 'UNKNOWN',
+                   quote.whatsappSendError = :error,
+                   quote.updatedAt = :updatedAt
+             where quote.id = :id
+               and quote.whatsappSendStatus = 'SENDING'
+               and quote.whatsappSendToken = :token
+            """)
+    int markWhatsappUncertain(@Param("id") Long id,
+                              @Param("token") String token,
+                              @Param("error") String error,
+                              @Param("updatedAt") LocalDateTime updatedAt);
 
     @Modifying
     @Transactional
@@ -82,6 +159,13 @@ public interface CotizacionRepository extends JpaRepository<Cotizacion, Long> {
 
     @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
     List<Cotizacion> findAllByOrderByFechaEmisionDescIdDesc();
+
+    @Query("select quote.id from Cotizacion quote order by quote.fechaEmision desc, quote.id desc")
+    Page<Long> findRecentIds(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
+    @Query("select distinct quote from Cotizacion quote where quote.id in :ids order by quote.fechaEmision desc, quote.id desc")
+    List<Cotizacion> findDetailedByIdIn(@Param("ids") List<Long> ids);
 
     @EntityGraph(attributePaths = {"cliente", "sucursal", "detalles", "detalles.producto", "detalles.promocion"})
     List<Cotizacion> findByCrmOportunidadIdOrderByFechaEmisionDescIdDesc(Long crmOportunidadId);

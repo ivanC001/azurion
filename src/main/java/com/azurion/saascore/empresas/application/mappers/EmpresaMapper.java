@@ -42,6 +42,12 @@ public final class EmpresaMapper {
                 empresa.getTenantId(),
                 empresa.getSchemaName(),
                 empresa.getLogoPanelUrl(),
+                empresa.getFacturadorStatus(),
+                empresa.getFacturadorDocumentMode(),
+                empresa.getFacturadorFiscalStatus(),
+                empresa.getFacturadorSunatMode(),
+                empresa.getFacturadorLastError(),
+                empresa.getFacturadorProvisionedAt(),
                 empresa.isActivo()
         );
     }

@@ -1,13 +1,13 @@
 package com.azurion.saascore.ventas.infrastructure.realtime;
 
 import com.azurion.saascore.ventas.application.dto.VentaStatusRealtimeEvent;
-import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -20,19 +20,23 @@ public class VentaStatusRealtimeStreamService {
     private static final String EVENT_NAME_STATUS = "venta-status";
     private static final String EVENT_NAME_CONNECTED = "connected";
 
-    private final Map<String, CopyOnWriteArrayList<SseEmitter>> emittersByTenant = new ConcurrentHashMap<>();
+    private final Map<String, CopyOnWriteArrayList<SseConnection>> emittersByTenant = new ConcurrentHashMap<>();
 
     public SseEmitter subscribe(String tenantId) {
         String normalizedTenant = normalizeTenant(tenantId);
-        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
-        CopyOnWriteArrayList<SseEmitter> tenantEmitters = emittersByTenant.computeIfAbsent(normalizedTenant, key -> new CopyOnWriteArrayList<>());
-        tenantEmitters.add(emitter);
+        SseEmitter emitter = createEmitter();
+        SseConnection connection = new SseConnection(emitter);
+        CopyOnWriteArrayList<SseConnection> tenantEmitters = emittersByTenant.computeIfAbsent(
+                normalizedTenant,
+                key -> new CopyOnWriteArrayList<>()
+        );
+        tenantEmitters.add(connection);
 
-        emitter.onCompletion(() -> removeEmitter(normalizedTenant, emitter));
-        emitter.onTimeout(() -> removeEmitter(normalizedTenant, emitter));
-        emitter.onError(error -> removeEmitter(normalizedTenant, emitter));
+        emitter.onCompletion(() -> removeConnection(normalizedTenant, connection));
+        emitter.onTimeout(() -> removeConnection(normalizedTenant, connection));
+        emitter.onError(error -> removeConnection(normalizedTenant, connection));
 
-        sendConnectedEvent(emitter, normalizedTenant);
+        sendConnectedEvent(connection, normalizedTenant);
         return emitter;
     }
 
@@ -42,50 +46,60 @@ public class VentaStatusRealtimeStreamService {
         }
 
         String normalizedTenant = normalizeTenant(event.tenantId());
-        List<SseEmitter> emitters = emittersByTenant.get(normalizedTenant);
+        List<SseConnection> emitters = emittersByTenant.get(normalizedTenant);
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
 
-        for (SseEmitter emitter : emitters) {
+        for (SseConnection connection : emitters) {
+            if (connection.isClosed()) {
+                continue;
+            }
             try {
-                emitter.send(SseEmitter.event()
+                connection.emitter().send(SseEmitter.event()
                         .id(UUID.randomUUID().toString())
                         .name(EVENT_NAME_STATUS)
                         .data(event));
-            } catch (IOException exception) {
-                log.debug("No se pudo emitir SSE de venta para tenant {}: {}", normalizedTenant, exception.getMessage());
-                removeEmitter(normalizedTenant, emitter);
-                emitter.completeWithError(exception);
             } catch (Exception exception) {
-                log.debug("SSE venta finalizada para tenant {}: {}", normalizedTenant, exception.getMessage());
-                removeEmitter(normalizedTenant, emitter);
-                emitter.complete();
+                handleSendFailure(normalizedTenant, connection, exception);
             }
         }
     }
 
-    private void sendConnectedEvent(SseEmitter emitter, String tenantId) {
+    SseEmitter createEmitter() {
+        return new SseEmitter(STREAM_TIMEOUT_MS);
+    }
+
+    private void sendConnectedEvent(SseConnection connection, String tenantId) {
         try {
-            emitter.send(SseEmitter.event()
+            connection.emitter().send(SseEmitter.event()
                     .id(UUID.randomUUID().toString())
                     .name(EVENT_NAME_CONNECTED)
                     .data(Map.of(
                             "tenantId", tenantId,
                             "connectedAt", OffsetDateTime.now().toString()
                     )));
-        } catch (IOException exception) {
-            removeEmitter(tenantId, emitter);
-            emitter.completeWithError(exception);
+        } catch (Exception exception) {
+            handleSendFailure(tenantId, connection, exception);
         }
     }
 
-    private void removeEmitter(String tenantId, SseEmitter emitter) {
-        CopyOnWriteArrayList<SseEmitter> tenantEmitters = emittersByTenant.get(tenantId);
+    private void handleSendFailure(String tenantId, SseConnection connection, Exception exception) {
+        log.debug("Conexion SSE de venta cerrada para tenant {}: {}", tenantId, exception.getMessage());
+        removeConnection(tenantId, connection);
+        /*
+         * SseEmitter.send() ya delega el error al contenedor Servlet. Completar el
+         * emitter otra vez desde este hilo reutilizaria un AsyncContext invalidado.
+         */
+    }
+
+    private void removeConnection(String tenantId, SseConnection connection) {
+        connection.close();
+        CopyOnWriteArrayList<SseConnection> tenantEmitters = emittersByTenant.get(tenantId);
         if (tenantEmitters == null) {
             return;
         }
-        tenantEmitters.remove(emitter);
+        tenantEmitters.remove(connection);
         if (tenantEmitters.isEmpty()) {
             emittersByTenant.remove(tenantId, tenantEmitters);
         }
@@ -96,5 +110,27 @@ public class VentaStatusRealtimeStreamService {
             return "public";
         }
         return tenantId.trim();
+    }
+
+    private static final class SseConnection {
+
+        private final SseEmitter emitter;
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+
+        private SseConnection(SseEmitter emitter) {
+            this.emitter = emitter;
+        }
+
+        private SseEmitter emitter() {
+            return emitter;
+        }
+
+        private boolean isClosed() {
+            return closed.get();
+        }
+
+        private void close() {
+            closed.compareAndSet(false, true);
+        }
     }
 }

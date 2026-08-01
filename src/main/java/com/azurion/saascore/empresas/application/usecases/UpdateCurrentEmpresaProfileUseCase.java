@@ -5,6 +5,7 @@ import com.azurion.saascore.empresas.application.dto.UpdateCurrentEmpresaProfile
 import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.shared.exception.BusinessException;
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -19,6 +20,7 @@ public class UpdateCurrentEmpresaProfileUseCase {
 
     private final EmpresaRepository empresaRepository;
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
+    private final FacturadorTenantProvisioningService facturadorTenantProvisioningService;
 
     @Transactional
     public EmpresaResponse execute(UpdateCurrentEmpresaProfileRequest request) {
@@ -65,7 +67,9 @@ public class UpdateCurrentEmpresaProfileUseCase {
         empresa.setFormatoHora(upper(request.formatoHora()));
         empresa.setMonedaCodigo(upper(request.monedaCodigo()));
         empresa.setMonedaSimbolo(required(request.monedaSimbolo()));
-        return EmpresaMapper.toResponse(empresaRepository.save(empresa));
+        Empresa saved = empresaRepository.save(empresa);
+        facturadorTenantProvisioningService.enqueueProfileSynchronization(saved);
+        return EmpresaMapper.toResponse(saved);
     }
 
     private String required(String value) {

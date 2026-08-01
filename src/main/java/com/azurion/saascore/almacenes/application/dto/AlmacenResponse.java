@@ -9,6 +9,7 @@ public record AlmacenResponse(
         String sucursalCodigo,
         String sucursalNombre,
         String tipoAlmacen,
+        boolean permiteVenta,
         String estado,
         boolean activo
 ) {

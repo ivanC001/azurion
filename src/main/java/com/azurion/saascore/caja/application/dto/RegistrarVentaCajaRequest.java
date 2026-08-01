@@ -1,11 +1,12 @@
 package com.azurion.saascore.caja.application.dto;
 
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +14,6 @@ import java.util.Map;
 public record RegistrarVentaCajaRequest(
         @NotNull TipoComprobanteVenta tipoComprobante,
         @NotNull @DecimalMin("0.01") BigDecimal total,
-        @NotBlank String responsableId,
-        @NotBlank String responsableNombre,
         Long clienteId,
         String clienteTipoDocumento,
         String clienteNumeroDocumento,
@@ -23,6 +22,7 @@ public record RegistrarVentaCajaRequest(
         String moneda,
         BigDecimal tipoCambio,
         String formaPago,
+        String metodoPago,
         Boolean contingencia,
         String tipoOperacionSunat,
         @Valid PercepcionRequest percepcion,
@@ -31,7 +31,8 @@ public record RegistrarVentaCajaRequest(
         List<@Valid CuotaRequest> cuotas,
         List<@Valid LeyendaRequest> leyendas,
         String descripcion,
-        @NotEmpty List<@Valid VentaProductoRequest> items
+        @NotEmpty List<@Valid VentaProductoRequest> items,
+        @NotBlank @Size(max = 100) String clientOperationId
 ) {
     public record PercepcionRequest(
             String codigoRegimen,

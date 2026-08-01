@@ -1,9 +1,10 @@
 package com.azurion.saascore.empresas.presentation.controllers;
 
-import com.azurion.saascore.empresas.application.dto.CreateEmpresaRequest;
+import com.azurion.saascore.empresas.application.dto.CreateEmpresaRegistrationRequest;
+import com.azurion.saascore.empresas.application.dto.EmpresaRegistrationResponse;
 import com.azurion.saascore.empresas.application.dto.EmpresaOperationalSummaryResponse;
 import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
-import com.azurion.saascore.empresas.application.usecases.CreateEmpresaUseCase;
+import com.azurion.saascore.empresas.application.usecases.CreateEmpresaRegistrationUseCase;
 import com.azurion.saascore.empresas.application.usecases.GetEmpresaByIdUseCase;
 import com.azurion.saascore.empresas.application.usecases.ListEmpresaOperationalSummariesUseCase;
 import com.azurion.saascore.empresas.application.usecases.ListEmpresasUseCase;
@@ -25,14 +26,19 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAnyRole('PLATFORM_ADMIN','ADMIN_GENERAL')")
 public class EmpresaController {
 
-    private final CreateEmpresaUseCase createEmpresaUseCase;
+    private final CreateEmpresaRegistrationUseCase createEmpresaRegistrationUseCase;
     private final ListEmpresasUseCase listEmpresasUseCase;
     private final ListEmpresaOperationalSummariesUseCase listOperationalSummariesUseCase;
     private final GetEmpresaByIdUseCase getEmpresaByIdUseCase;
 
-    @PostMapping
-    public ApiResponse<EmpresaResponse> create(@Valid @RequestBody CreateEmpresaRequest request) {
-        return ApiResponse.ok(createEmpresaUseCase.execute(request), "Empresa created");
+    @PostMapping("/registro")
+    public ApiResponse<EmpresaRegistrationResponse> createRegistration(
+            @Valid @RequestBody CreateEmpresaRegistrationRequest request
+    ) {
+        return ApiResponse.ok(
+                createEmpresaRegistrationUseCase.execute(request),
+                "Empresa, suscripcion y modulos creados"
+        );
     }
 
     @GetMapping

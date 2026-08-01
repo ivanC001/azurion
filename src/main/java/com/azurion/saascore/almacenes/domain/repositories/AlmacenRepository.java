@@ -10,6 +10,13 @@ import org.springframework.data.domain.Pageable;
 
 public interface AlmacenRepository extends JpaRepository<Almacen, Long> {
     Optional<Almacen> findByCodigo(String codigo);
+    Optional<Almacen> findByCodigoIgnoreCase(String codigo);
+    boolean existsBySucursalIdAndTipoAlmacenIgnoreCaseAndActivoTrue(Long sucursalId, String tipoAlmacen);
+    boolean existsBySucursalIdAndTipoAlmacenIgnoreCaseAndActivoTrueAndIdNot(
+            Long sucursalId,
+            String tipoAlmacen,
+            Long id
+    );
 
     @Override
     @EntityGraph(attributePaths = "sucursal")

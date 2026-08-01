@@ -49,6 +49,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class WhatsappIntegrationServiceTest {
@@ -79,6 +82,8 @@ class WhatsappIntegrationServiceTest {
     private WhatsappCloudApiClient cloudApiClient;
     @Mock
     private CrmLeadAssignmentService leadAssignmentService;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     private WhatsappIntegrationService service;
     private CrmCanalTokenConfig config;
@@ -98,8 +103,13 @@ class WhatsappIntegrationServiceTest {
                 secretEncryptionService,
                 cloudApiClient,
                 new ObjectMapper(),
-                leadAssignmentService
+                leadAssignmentService,
+                transactionTemplate
         );
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(new SimpleTransactionStatus());
+        });
         config = new CrmCanalTokenConfig();
         config.setCanal("WHATSAPP");
         config.setActivo(true);
@@ -151,6 +161,7 @@ class WhatsappIntegrationServiceTest {
         ArgumentCaptor<CrmProspecto> prospectCaptor = ArgumentCaptor.forClass(CrmProspecto.class);
         verify(prospectoRepository).save(prospectCaptor.capture());
         assertEquals("Ana Perez", prospectCaptor.getValue().getNombre());
+        assertEquals("SIN_DEFINIR", prospectCaptor.getValue().getTipoPersona());
         assertEquals("WHATSAPP", prospectCaptor.getValue().getOrigen());
         assertEquals("WHATSAPP", prospectCaptor.getValue().getCanalIngreso());
         assertEquals("51999888777", prospectCaptor.getValue().getTelefono());
@@ -286,6 +297,8 @@ class WhatsappIntegrationServiceTest {
         when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
         when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
         when(cotizacionRepository.findByIdAndCrmProspectoId(12L, 44L)).thenReturn(Optional.of(quote));
+        when(cotizacionRepository.claimWhatsappSend(eq(12L), any(), any(), any())).thenReturn(1);
+        when(cotizacionRepository.markWhatsappSent(eq(12L), any(), eq("wamid.quote-12"), any())).thenReturn(1);
         when(generateCotizacionPdfUseCase.execute(12L)).thenReturn(new CotizacionPdfResponse(
                 "cotizacion-12.pdf",
                 "application/pdf",
@@ -315,6 +328,30 @@ class WhatsappIntegrationServiceTest {
                 new UpdateCotizacionEstadoRequest("ENVIADA", "WHATSAPP", null, null, null)
         );
         verify(actividadRepository).save(any());
+    }
+
+    @Test
+    void rejectsDuplicateWhatsappQuoteSendBeforeCallingMeta() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setNombre("Luis");
+        prospecto.setTelefono("+51 999 888 777");
+        Cotizacion quote = new Cotizacion();
+        quote.setId(12L);
+        quote.setWhatsappSendStatus("SENT");
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        when(cotizacionRepository.findByIdAndCrmProspectoId(12L, 44L)).thenReturn(Optional.of(quote));
+        when(cotizacionRepository.claimWhatsappSend(eq(12L), any(), any(), any())).thenReturn(0);
+        when(cotizacionRepository.findById(12L)).thenReturn(Optional.of(quote));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.sendQuote(44L, 12L, new SendWhatsappQuoteRequest("Adjunto"))
+        );
+
+        assertEquals("CRM_WHATSAPP_COTIZACION_YA_ENVIADA", exception.getCode());
+        verify(cloudApiClient, never()).uploadMedia(any(), any(), any(), any());
+        verify(cloudApiClient, never()).sendDocument(any(), any(), any(), any(), any());
     }
 
     private CrmWhatsappConversationNote note(CrmWhatsappConversation conversation, int slot) {

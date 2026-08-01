@@ -6,6 +6,7 @@ import com.azurion.saascore.inventory.application.dto.CompraDetalleRequest;
 import com.azurion.saascore.inventory.application.dto.CompraResponse;
 import com.azurion.saascore.inventory.application.dto.CreateCompraRequest;
 import com.azurion.saascore.inventory.application.mappers.CompraInventoryMapper;
+import com.azurion.saascore.inventory.application.services.InventoryOperationalValidator;
 import com.azurion.saascore.inventory.domain.entities.Compra;
 import com.azurion.saascore.inventory.domain.entities.CompraDetalle;
 import com.azurion.saascore.inventory.domain.entities.KardexMovimiento;
@@ -21,6 +22,8 @@ import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.inventory.domain.repositories.StockLoteRepository;
 import com.azurion.saascore.inventory.domain.repositories.StockRepository;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
+import com.azurion.shared.util.RequestFingerprint;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -45,27 +48,53 @@ public class RegistrarCompraUseCase {
     private final LoteRepository loteRepository;
     private final StockLoteRepository stockLoteRepository;
     private final KardexMovimientoRepository kardexRepository;
+    private final InventoryOperationalValidator inventoryValidator;
+    private final BusinessOperationLockService operationLockService;
 
     @Transactional
     public CompraResponse execute(CreateCompraRequest request) {
         if (request.detalles() == null || request.detalles().isEmpty()) {
             throw new BusinessException("COMPRA_SIN_DETALLES", "La compra debe tener al menos un detalle");
         }
+        validateProveedor(request);
 
         String tipoComprobante = normalizeTipoComprobante(request.tipoComprobante());
         String numeroComprobante = defaultIfBlank(request.numeroComprobante(), buildNumeroComprobante(request.serie(), request.correlativo()));
-        validateComprobanteUnicoPorProveedor(request, tipoComprobante, numeroComprobante);
+        if (numeroComprobante == null) {
+            throw new BusinessException(
+                    "COMPRA_COMPROBANTE_REQUERIDO",
+                    "Indica el numero de comprobante de la compra"
+            );
+        }
+        String operationKey = normalizeOperationKey(request.clientOperationId());
+        operationLockService.lockAll(List.of(
+                "purchase-document:" + tipoComprobante + ':'
+                        + proveedorKey(request.proveedorId(), request.proveedorDocumento()) + ':'
+                        + numeroComprobante.toUpperCase(),
+                operationKey == null ? "" : "purchase-operation:" + operationKey
+        ));
 
         Almacen almacen = almacenRepository.findById(request.almacenId())
                 .orElseThrow(() -> new BusinessException("ALMACEN_NO_ENCONTRADO", "Almacen destino no encontrado"));
-        if (!almacen.isActivo() || !"ACTIVO".equalsIgnoreCase(almacen.getEstado())) {
-            throw new BusinessException("ALMACEN_INACTIVO", "No se puede ingresar una compra en un almacen inactivo");
-        }
-        if (almacen.getSucursal() == null || !almacen.getSucursal().isActivo()) {
-            throw new BusinessException("SUCURSAL_INACTIVA", "La sucursal del almacen esta inactiva y no permite ingresos");
-        }
+        inventoryValidator.requireOperationalWarehouse(almacen);
 
         Map<Long, Producto> productosBloqueados = lockProductos(request.detalles());
+        String requestHash = operationKey == null ? null : RequestFingerprint.sha256(request);
+        if (operationKey != null) {
+            Compra completed = compraRepository.findByClientOperationId(operationKey).orElse(null);
+            if (completed != null) {
+                if (!completed.getRequestHash().equals(requestHash)) {
+                    throw new BusinessException(
+                            "OPERACION_COMPRA_REUTILIZADA",
+                            "El identificador de operacion ya fue usado con datos diferentes"
+                    );
+                }
+                return CompraInventoryMapper.toResponse(completed, completed.getDetalles());
+            }
+        }
+        // Lock first and check the natural document key afterwards so two
+        // concurrent purchases cannot both pass the duplicate check.
+        validateComprobanteUnicoPorProveedor(request, tipoComprobante, numeroComprobante);
 
         Compra compra = new Compra();
         compra.setProveedorId(request.proveedorId());
@@ -80,7 +109,11 @@ public class RegistrarCompraUseCase {
         compra.setAlmacen(almacen);
         compra.setEstado("REGISTRADA");
         compra.setTotal(BigDecimal.ZERO);
-        Compra savedCompra = compraRepository.save(compra);
+        compra.setClientOperationId(operationKey);
+        compra.setRequestHash(requestHash);
+        Compra savedCompra = operationKey == null
+                ? compraRepository.save(compra)
+                : compraRepository.saveAndFlush(compra);
 
         List<CompraDetalle> detalles = new ArrayList<>();
         BigDecimal totalCompra = BigDecimal.ZERO;
@@ -102,6 +135,8 @@ public class RegistrarCompraUseCase {
             Map<Long, Producto> productosBloqueados
     ) {
         Producto producto = productosBloqueados.get(request.productoId());
+        inventoryValidator.requireStockProduct(producto);
+        inventoryValidator.validateLotDates(request.fechaFabricacion(), request.fechaVencimiento());
 
         BigDecimal cantidad = positive(request.cantidad(), "DETALLE_CANTIDAD_INVALIDA", "La cantidad debe ser mayor a cero");
         BigDecimal costoUnitario = positive(request.costoUnitario(), "DETALLE_COSTO_INVALIDO", "El costo unitario debe ser mayor a cero");
@@ -184,11 +219,24 @@ public class RegistrarCompraUseCase {
             BigDecimal costoUnitario
     ) {
         String codigoLote = trim(request.codigoLote());
-        if (codigoLote == null && request.fechaVencimiento() == null && request.fechaFabricacion() == null) {
+        boolean controlaLotes = producto.isManejaLotes() || producto.isManejaVencimiento();
+        boolean tieneDatosLote = codigoLote != null
+                || request.fechaVencimiento() != null
+                || request.fechaFabricacion() != null;
+        if (!controlaLotes && !tieneDatosLote) {
             return null;
         }
         if (codigoLote == null) {
-            throw new BusinessException("LOTE_CODIGO_REQUERIDO", "Debe indicar codigoLote para registrar lote");
+            throw new BusinessException(
+                    "LOTE_CODIGO_REQUERIDO",
+                    "Debe indicar el codigo de lote para este producto"
+            );
+        }
+        if (producto.isManejaVencimiento() && request.fechaVencimiento() == null) {
+            throw new BusinessException(
+                    "LOTE_VENCIMIENTO_REQUERIDO",
+                    "Debe indicar la fecha de vencimiento para este producto"
+            );
         }
 
         producto.setManejaLotes(true);
@@ -199,11 +247,24 @@ public class RegistrarCompraUseCase {
 
         return loteRepository.findByProductoIdAndCodigoLote(producto.getId(), codigoLote)
                 .map(existing -> {
+                    validateExistingLot(existing, request);
                     if (existing.getCompraDetalle() == null) {
                         existing.setCompraDetalle(detalle);
                     }
-                    existing.setCantidadInicial(existing.getCantidadInicial().add(cantidad));
-                    existing.setCostoUnitario(costoUnitario);
+                    BigDecimal cantidadAnterior = existing.getCantidadInicial();
+                    BigDecimal cantidadNueva = cantidadAnterior.add(cantidad);
+                    BigDecimal costoPonderado = existing.getCostoUnitario()
+                            .multiply(cantidadAnterior)
+                            .add(costoUnitario.multiply(cantidad))
+                            .divide(cantidadNueva, 6, RoundingMode.HALF_UP);
+                    existing.setCantidadInicial(cantidadNueva);
+                    existing.setCostoUnitario(costoPonderado);
+                    if (existing.getFechaFabricacion() == null) {
+                        existing.setFechaFabricacion(request.fechaFabricacion());
+                    }
+                    if (existing.getFechaVencimiento() == null) {
+                        existing.setFechaVencimiento(request.fechaVencimiento());
+                    }
                     return loteRepository.save(existing);
                 })
                 .orElseGet(() -> {
@@ -313,6 +374,36 @@ public class RegistrarCompraUseCase {
         return value;
     }
 
+    private void validateProveedor(CreateCompraRequest request) {
+        if (request.proveedorId() == null
+                && trim(request.proveedorDocumento()) == null
+                && trim(request.proveedorNombre()) == null) {
+            throw new BusinessException(
+                    "PROVEEDOR_REQUERIDO",
+                    "Indica el documento o nombre del proveedor"
+            );
+        }
+    }
+
+    private void validateExistingLot(Lote existing, CompraDetalleRequest request) {
+        if (existing.getFechaFabricacion() != null
+                && request.fechaFabricacion() != null
+                && !existing.getFechaFabricacion().equals(request.fechaFabricacion())) {
+            throw new BusinessException(
+                    "LOTE_FABRICACION_DIFERENTE",
+                    "El lote ya existe con una fecha de fabricacion diferente"
+            );
+        }
+        if (existing.getFechaVencimiento() != null
+                && request.fechaVencimiento() != null
+                && !existing.getFechaVencimiento().equals(request.fechaVencimiento())) {
+            throw new BusinessException(
+                    "LOTE_VENCIMIENTO_DIFERENTE",
+                    "El lote ya existe con una fecha de vencimiento diferente"
+            );
+        }
+    }
+
     private String normalizeTipoComprobante(String value) {
         String normalized = defaultIfBlank(value, "OTRO").toUpperCase();
         return switch (normalized) {
@@ -351,6 +442,17 @@ public class RegistrarCompraUseCase {
     private String defaultIfBlank(String value, String fallback) {
         String trimmed = trim(value);
         return trimmed == null ? fallback : trimmed;
+    }
+
+    private String normalizeOperationKey(String value) {
+        String operationKey = trim(value);
+        if (operationKey != null && operationKey.length() > 100) {
+            throw new BusinessException(
+                    "OPERACION_COMPRA_INVALIDA",
+                    "El identificador de operacion no puede superar 100 caracteres"
+            );
+        }
+        return operationKey;
     }
 
     private String trim(String value) {

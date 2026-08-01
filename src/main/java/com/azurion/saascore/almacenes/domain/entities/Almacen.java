@@ -33,6 +33,9 @@ public class Almacen extends BaseEntity {
     @Column(name = "tipo_almacen", nullable = false, length = 30)
     private String tipoAlmacen = "PRINCIPAL";
 
+    @Column(name = "permite_venta", nullable = false)
+    private boolean permiteVenta = true;
+
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "ACTIVO";
 

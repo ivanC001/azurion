@@ -2,7 +2,7 @@ package com.azurion.saascore.caja.application.services;
 
 import com.azurion.saascore.almacenes.domain.entities.Almacen;
 import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
-import com.azurion.saascore.caja.domain.entities.Caja;
+import com.azurion.saascore.caja.domain.entities.CajaFisica;
 import com.azurion.shared.exception.BusinessException;
 import java.util.Collection;
 import java.util.Objects;
@@ -15,7 +15,7 @@ public class VentaSucursalStockPolicy {
 
     private final AlmacenRepository almacenRepository;
 
-    public void validar(Caja caja, Collection<Long> almacenIds) {
+    public void validar(CajaFisica caja, Collection<Long> almacenIds) {
         if (caja == null || caja.getSucursal() == null) {
             throw new BusinessException(
                     "CAJA_SIN_SUCURSAL",

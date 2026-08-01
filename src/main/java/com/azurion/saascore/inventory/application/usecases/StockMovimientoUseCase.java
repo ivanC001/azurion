@@ -6,21 +6,29 @@ import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
 import com.azurion.saascore.inventory.application.dto.KardexMovimientoResponse;
 import com.azurion.saascore.inventory.application.dto.StockMovimientoRequest;
 import com.azurion.saascore.inventory.application.dto.StockResponse;
+import com.azurion.saascore.inventory.application.services.InventoryOperationalValidator;
+import com.azurion.saascore.inventory.domain.entities.InventoryOperationRequest;
 import com.azurion.saascore.inventory.domain.entities.KardexMovimiento;
 import com.azurion.saascore.inventory.domain.entities.Lote;
 import com.azurion.saascore.inventory.domain.entities.Producto;
 import com.azurion.saascore.inventory.domain.entities.Stock;
 import com.azurion.saascore.inventory.domain.entities.StockLote;
 import com.azurion.saascore.inventory.domain.repositories.KardexMovimientoRepository;
+import com.azurion.saascore.inventory.domain.repositories.InventoryOperationRequestRepository;
 import com.azurion.saascore.inventory.domain.repositories.LoteRepository;
 import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.inventory.domain.repositories.StockLoteRepository;
 import com.azurion.saascore.inventory.domain.repositories.StockRepository;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,7 +44,10 @@ public class StockMovimientoUseCase {
     private final LoteRepository loteRepository;
     private final StockLoteRepository stockLoteRepository;
     private final KardexMovimientoRepository kardexRepository;
+    private final InventoryOperationRequestRepository operationRequestRepository;
+    private final BusinessOperationLockService operationLockService;
     private final AuthorizationService authorizationService;
+    private final InventoryOperationalValidator inventoryValidator;
 
     @Transactional
     public KardexMovimientoResponse execute(StockMovimientoRequest request) {
@@ -45,26 +56,135 @@ public class StockMovimientoUseCase {
         if (request.almacenDestinoId() != null) {
             authorizationService.validarAlmacen(usuarioId, request.almacenDestinoId());
         }
+        String operationKey = normalizeOperationKey(request.clientOperationId());
+        operationLockService.lockAll(List.of(operationKey == null ? "" : "inventory:" + operationKey));
         // The product lock serializes stock-row/lote creation and cost recalculation
         // for the same product across warehouses within the tenant schema.
         Producto producto = productoRepository.findByIdForUpdate(request.productoId())
                 .orElseThrow(() -> new BusinessException("PRODUCTO_NO_ENCONTRADO", "Producto no encontrado"));
-        validateProductoMovible(producto);
+        String tipo = normalizeTipo(request.tipoMovimiento());
+        BigDecimal cantidad = "AJUSTE".equals(tipo)
+                ? normalizeAdjustmentBalance(request.cantidad())
+                : normalizeCantidad(request.cantidad());
+        String requestHash = operationKey == null ? null : hashRequest(request, tipo, cantidad);
+
+        if (operationKey != null) {
+            InventoryOperationRequest completed = operationRequestRepository.findByOperationKey(operationKey)
+                    .orElse(null);
+            if (completed != null) {
+                validateSameOperation(completed, requestHash);
+                return toKardexResponse(completed.getKardexMovimiento());
+            }
+        }
+
+        inventoryValidator.requireStockProduct(producto);
 
         Almacen almacen = almacenRepository.findById(request.almacenId())
                 .orElseThrow(() -> new BusinessException("ALMACEN_NO_ENCONTRADO", "Almacen no encontrado"));
-        validateAlmacenOperativo(almacen);
+        inventoryValidator.requireOperationalWarehouse(almacen);
 
-        String tipo = normalizeTipo(request.tipoMovimiento());
-        BigDecimal cantidad = normalizeCantidad(request.cantidad());
-
-        return switch (tipo) {
+        KardexMovimientoResponse response = switch (tipo) {
             case "ENTRADA" -> registrarEntrada(producto, almacen, request, cantidad);
             case "SALIDA" -> registrarSalida(producto, almacen, request, cantidad);
             case "AJUSTE" -> registrarAjuste(producto, almacen, request, cantidad);
             case "TRASLADO" -> registrarTraslado(producto, almacen, request, cantidad);
             default -> throw new BusinessException("TIPO_MOVIMIENTO_INVALIDO", "Use ENTRADA, SALIDA, AJUSTE o TRASLADO");
         };
+
+        if (operationKey != null) {
+            registerCompletedOperation(operationKey, tipo, requestHash, response.id());
+        }
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public KardexMovimientoResponse findCompletedOperation(String rawOperationKey) {
+        String operationKey = normalizeOperationKey(rawOperationKey);
+        if (operationKey == null) {
+            throw new BusinessException("OPERACION_INVENTARIO_INVALIDA", "El identificador de operacion es obligatorio");
+        }
+        InventoryOperationRequest operation = operationRequestRepository.findByOperationKey(operationKey)
+                .orElseThrow(() -> new BusinessException(
+                        "OPERACION_INVENTARIO_NO_ENCONTRADA",
+                        "La operacion de inventario aun no ha sido confirmada"
+                ));
+        Long usuarioId = authorizationService.currentUsuarioId();
+        authorizationService.validarAlmacen(
+                usuarioId,
+                operation.getKardexMovimiento().getAlmacen().getId()
+        );
+        return toKardexResponse(operation.getKardexMovimiento());
+    }
+
+    private void registerCompletedOperation(
+            String operationKey,
+            String operationType,
+            String requestHash,
+            Long kardexMovimientoId
+    ) {
+        InventoryOperationRequest operation = new InventoryOperationRequest();
+        operation.setOperationKey(operationKey);
+        operation.setOperationType(operationType);
+        operation.setRequestHash(requestHash);
+        operation.setStatus("COMPLETED");
+        operation.setKardexMovimiento(kardexRepository.getReferenceById(kardexMovimientoId));
+        // Flush here so a repeated operation key fails inside this transaction and
+        // all stock/kardex changes are rolled back together.
+        operationRequestRepository.saveAndFlush(operation);
+    }
+
+    private void validateSameOperation(InventoryOperationRequest completed, String requestHash) {
+        if (!completed.getRequestHash().equals(requestHash)) {
+            throw new BusinessException(
+                    "OPERACION_INVENTARIO_REUTILIZADA",
+                    "El identificador de operacion ya fue usado con datos diferentes"
+            );
+        }
+    }
+
+    private String normalizeOperationKey(String rawOperationKey) {
+        String operationKey = trim(rawOperationKey);
+        if (operationKey != null && operationKey.length() > 100) {
+            throw new BusinessException(
+                    "OPERACION_INVENTARIO_INVALIDA",
+                    "El identificador de operacion no puede superar 100 caracteres"
+            );
+        }
+        return operationKey;
+    }
+
+    private String hashRequest(StockMovimientoRequest request, String tipo, BigDecimal cantidad) {
+        StringBuilder canonical = new StringBuilder();
+        appendHashField(canonical, request.productoId());
+        appendHashField(canonical, request.almacenId());
+        appendHashField(canonical, request.almacenDestinoId());
+        appendHashField(canonical, request.loteId());
+        appendHashField(canonical, trim(request.codigoLote()));
+        appendHashField(canonical, request.fechaFabricacion());
+        appendHashField(canonical, request.fechaVencimiento());
+        appendHashField(canonical, tipo);
+        appendHashField(canonical, normalizeDecimal(cantidad));
+        appendHashField(canonical, normalizeDecimal(request.costoUnitario()));
+        appendHashField(canonical, normalizeDecimal(request.precioCompra()));
+        appendHashField(canonical, normalizeDecimal(request.precioVenta()));
+        appendHashField(canonical, trim(request.usuarioId()));
+        appendHashField(canonical, trim(request.motivo()));
+        appendHashField(canonical, trim(request.referencia()));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 no esta disponible", exception);
+        }
+    }
+
+    private void appendHashField(StringBuilder canonical, Object rawValue) {
+        String value = rawValue == null ? "" : rawValue.toString();
+        canonical.append(value.length()).append(':').append(value).append('|');
+    }
+
+    private String normalizeDecimal(BigDecimal value) {
+        return value == null ? null : value.stripTrailingZeros().toPlainString();
     }
 
     private KardexMovimientoResponse registrarEntrada(Producto producto, Almacen almacen, StockMovimientoRequest request, BigDecimal cantidad) {
@@ -137,23 +257,58 @@ public class StockMovimientoUseCase {
     private KardexMovimientoResponse registrarAjuste(Producto producto, Almacen almacen, StockMovimientoRequest request, BigDecimal nuevoSaldo) {
         Stock stock = resolveStock(producto, almacen);
         BigDecimal saldoAnterior = stock.getCantidad();
-        BigDecimal diferencia = nuevoSaldo.subtract(saldoAnterior);
-        String tipoKardex = diferencia.compareTo(BigDecimal.ZERO) >= 0 ? "AJUSTE_POSITIVO" : "AJUSTE_NEGATIVO";
+        BigDecimal diferencia;
+        Lote loteAjustado = null;
 
         if (producto.isManejaLotes()) {
-            Lote lote = resolveRequiredExistingLote(producto, request.loteId(), "El ajuste de producto con lotes debe indicar loteId");
-            StockLote stockLote = resolveStockLote(lote, producto, almacen);
-            BigDecimal loteNuevoSaldo = stockLote.getStockActual().add(diferencia);
-            if (loteNuevoSaldo.compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException("STOCK_LOTE_INSUFICIENTE", "El ajuste dejaria stock negativo en el lote");
+            loteAjustado = resolveRequiredExistingLote(
+                    producto,
+                    request.loteId(),
+                    "El ajuste de un producto con lotes debe indicar loteId"
+            );
+            StockLote stockLote = stockLoteRepository.findByLoteIdAndAlmacenId(
+                            loteAjustado.getId(),
+                            almacen.getId()
+                    )
+                    .orElseThrow(() -> new BusinessException(
+                            "STOCK_LOTE_NO_ENCONTRADO",
+                            "El lote no tiene existencias registradas en el almacen"
+                    ));
+            BigDecimal loteAnterior = stockLote.getStockActual();
+            diferencia = nuevoSaldo.subtract(loteAnterior);
+            BigDecimal saldoGlobalNuevo = saldoAnterior.add(diferencia);
+            if (saldoGlobalNuevo.compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException(
+                        "STOCK_INSUFICIENTE",
+                        "El ajuste dejaria el stock total del almacen en negativo"
+                );
             }
-            stockLote.setStockActual(loteNuevoSaldo);
+            stockLote.setStockActual(nuevoSaldo);
             stockLoteRepository.save(stockLote);
+            nuevoSaldo = saldoGlobalNuevo;
+        } else {
+            diferencia = nuevoSaldo.subtract(saldoAnterior);
         }
+        if (diferencia.compareTo(BigDecimal.ZERO) == 0) {
+            throw new BusinessException(
+                    "AJUSTE_SIN_CAMBIOS",
+                    "El nuevo saldo es igual al saldo actual; no hay cambios que registrar"
+            );
+        }
+        String tipoKardex = diferencia.compareTo(BigDecimal.ZERO) >= 0 ? "AJUSTE_POSITIVO" : "AJUSTE_NEGATIVO";
 
         stock.setCantidad(nuevoSaldo);
         stockRepository.save(stock);
-        KardexMovimiento saved = saveMovimiento(producto, almacen, null, tipoKardex, request, diferencia.abs(), saldoAnterior, nuevoSaldo);
+        KardexMovimiento saved = saveMovimiento(
+                producto,
+                almacen,
+                loteAjustado,
+                tipoKardex,
+                request,
+                diferencia.abs(),
+                saldoAnterior,
+                nuevoSaldo
+        );
         return toKardexResponse(saved);
     }
 
@@ -168,7 +323,7 @@ public class StockMovimientoUseCase {
 
         Almacen almacenDestino = almacenRepository.findById(almacenDestinoId)
                 .orElseThrow(() -> new BusinessException("ALMACEN_DESTINO_NO_ENCONTRADO", "Almacen destino no encontrado"));
-        validateAlmacenOperativo(almacenDestino);
+        inventoryValidator.requireOperationalWarehouse(almacenDestino);
 
         Stock stockOrigen = resolveStock(producto, almacenOrigen);
         BigDecimal origenAnterior = stockOrigen.getCantidad();
@@ -272,6 +427,7 @@ public class StockMovimientoUseCase {
     }
 
     private Lote resolveOrCreateLote(Producto producto, StockMovimientoRequest request) {
+        inventoryValidator.validateLotDates(request.fechaFabricacion(), request.fechaVencimiento());
         if (request.loteId() != null) {
             return resolveRequiredExistingLote(producto, request.loteId(), "Lote no encontrado");
         }
@@ -402,24 +558,6 @@ public class StockMovimientoUseCase {
         return request.costoUnitario() == null ? BigDecimal.ZERO : request.costoUnitario();
     }
 
-    private void validateProductoMovible(Producto producto) {
-        if (!producto.isActivo() || !"ACTIVO".equalsIgnoreCase(producto.getEstado())) {
-            throw new BusinessException("PRODUCTO_INACTIVO", "No se puede mover stock de un producto inactivo");
-        }
-        if (!producto.isManejaStock()) {
-            throw new BusinessException("PRODUCTO_SIN_STOCK", "El producto esta configurado como servicio/sin stock");
-        }
-    }
-
-    private void validateAlmacenOperativo(Almacen almacen) {
-        if (!almacen.isActivo() || !"ACTIVO".equalsIgnoreCase(almacen.getEstado())) {
-            throw new BusinessException("ALMACEN_INACTIVO", "No se puede mover stock en un almacen inactivo");
-        }
-        if (almacen.getSucursal() == null || !almacen.getSucursal().isActivo()) {
-            throw new BusinessException("SUCURSAL_INACTIVA", "La sucursal del almacen esta inactiva y no permite movimientos");
-        }
-    }
-
     private void validateLoteVigente(Lote lote) {
         LocalDate vencimiento = lote.getFechaVencimiento();
         if (vencimiento != null && vencimiento.isBefore(LocalDate.now())) {
@@ -435,6 +573,17 @@ public class StockMovimientoUseCase {
         BigDecimal value = cantidad == null ? BigDecimal.ZERO : cantidad;
         if (value.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("CANTIDAD_INVALIDA", "La cantidad debe ser mayor a cero");
+        }
+        return value;
+    }
+
+    private BigDecimal normalizeAdjustmentBalance(BigDecimal cantidad) {
+        BigDecimal value = cantidad == null ? BigDecimal.ZERO : cantidad;
+        if (value.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(
+                    "CANTIDAD_INVALIDA",
+                    "El nuevo saldo no puede ser negativo"
+            );
         }
         return value;
     }
@@ -479,6 +628,8 @@ public class StockMovimientoUseCase {
                 stock.getAlmacen().getNombre(),
                 cantidad,
                 stockMinimo,
+                stock.getStockMaximo(),
+                stock.getUbicacionFisica(),
                 controlaStock && cantidad.compareTo(stockMinimo) <= 0,
                 controlaStock && cantidad.compareTo(BigDecimal.ZERO) <= 0
         );

@@ -1,6 +1,7 @@
 package com.azurion.saascore.crm.domain.repositories;
 
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -13,6 +14,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CrmOportunidadRepository extends JpaRepository<CrmOportunidad, Long>, JpaSpecificationExecutor<CrmOportunidad> {
+
+    interface AggregateProjection {
+        String getCodigo();
+        long getCantidad();
+        BigDecimal getMonto();
+    }
 
     boolean existsByProspecto_Id(Long prospectoId);
 
@@ -31,6 +38,56 @@ public interface CrmOportunidadRepository extends JpaRepository<CrmOportunidad, 
     long countByEstado(String estado);
 
     long countByResponsableIdAndEstado(String responsableId, String estado);
+
+    @Query("select count(o.id) from CrmOportunidad o where (:responsableId is null or o.responsableId = :responsableId)")
+    long countScoped(@Param("responsableId") String responsableId);
+
+    @Query("""
+            select count(o.id)
+            from CrmOportunidad o
+            where (:responsableId is null or o.responsableId = :responsableId)
+              and (o.etapa = 'COTIZADO' or o.estado = 'GANADA')
+            """)
+    long countQuotedScoped(@Param("responsableId") String responsableId);
+
+    @Query("""
+            select coalesce(sum(o.montoEstimado), 0)
+            from CrmOportunidad o
+            where (:responsableId is null or o.responsableId = :responsableId)
+              and o.estado = 'ABIERTA'
+            """)
+    BigDecimal sumOpenPipelineScoped(@Param("responsableId") String responsableId);
+
+    @Query("""
+            select coalesce(sum(coalesce(o.montoReal, o.montoEstimado)), 0)
+            from CrmOportunidad o
+            where (:responsableId is null or o.responsableId = :responsableId)
+              and o.estado = :estado
+            """)
+    BigDecimal sumRealByEstadoScoped(@Param("responsableId") String responsableId,
+                                     @Param("estado") String estado);
+
+    @Query("""
+            select e.codigo as codigo,
+                   count(o.id) as cantidad,
+                   coalesce(sum(o.montoEstimado), 0) as monto
+            from CrmOportunidad o
+            join o.etapaPipeline e
+            where (:responsableId is null or o.responsableId = :responsableId)
+            group by e.codigo
+            """)
+    List<AggregateProjection> summarizeByStageScoped(@Param("responsableId") String responsableId);
+
+    @Query("""
+            select coalesce(o.responsableId, 'SIN_ASIGNAR') as codigo,
+                   count(o.id) as cantidad,
+                   coalesce(sum(o.montoEstimado), 0) as monto
+            from CrmOportunidad o
+            where (:responsableId is null or o.responsableId = :responsableId)
+            group by coalesce(o.responsableId, 'SIN_ASIGNAR')
+            order by count(o.id) desc
+            """)
+    List<AggregateProjection> summarizeByOwnerScoped(@Param("responsableId") String responsableId);
 
     @Override
     @EntityGraph(attributePaths = {"prospecto", "cliente", "etapaPipeline"})

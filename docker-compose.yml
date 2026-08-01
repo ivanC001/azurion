@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - azurion_pg_data:/var/lib/postgresql/data
 
@@ -17,7 +17,7 @@ services:
     container_name: azurion-redis
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - azurion_redis_data:/data
     healthcheck:
@@ -58,12 +58,22 @@ services:
       SMTP_TLS_PROTOCOLS: ${SMTP_TLS_PROTOCOLS:-TLSv1.2 TLSv1.3}
       SMTP_CHECK_SERVER_IDENTITY: ${SMTP_CHECK_SERVER_IDENTITY:-true}
       FACTURADOR_BASE_URL: ${FACTURADOR_BASE_URL:-http://host.docker.internal:8000}
+      FACTURADOR_CLIENT_ID: ${FACTURADOR_CLIENT_ID:-azurion-core}
+      FACTURADOR_CLIENT_SECRET: ${FACTURADOR_CLIENT_SECRET:-}
+      FACTURADOR_SIGNATURE_VERSION: ${FACTURADOR_SIGNATURE_VERSION:-v2}
+      FACTURADOR_ALLOW_LEGACY_API_KEY: ${FACTURADOR_ALLOW_LEGACY_API_KEY:-false}
       FACTURADOR_API_KEY: ${FACTURADOR_API_KEY:-}
       FACTURADOR_WAIT_PROCESSED_ENABLED: ${FACTURADOR_WAIT_PROCESSED_ENABLED:-false}
       WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com}
       WHATSAPP_GRAPH_API_VERSION: ${WHATSAPP_GRAPH_API_VERSION:-v25.0}
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/actuator/health/readiness"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
     volumes:
       - azurion_app_data:/app/data
     extra_hosts:

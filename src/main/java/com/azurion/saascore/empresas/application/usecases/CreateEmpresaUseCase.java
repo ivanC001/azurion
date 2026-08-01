@@ -8,6 +8,7 @@ import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
 import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.saascore.modulos.domain.entities.Modulo;
 import com.azurion.saascore.modulos.domain.repositories.ModuloRepository;
 import com.azurion.shared.exception.BusinessException;
@@ -32,6 +33,7 @@ public class CreateEmpresaUseCase {
     private final TenantProvisioningService tenantProvisioningService;
     private final ModuloRepository moduloRepository;
     private final EmpresaModuloRepository empresaModuloRepository;
+    private final FacturadorTenantProvisioningService facturadorTenantProvisioningService;
 
     @Transactional
     public EmpresaResponse execute(CreateEmpresaRequest request) {
@@ -58,6 +60,7 @@ public class CreateEmpresaUseCase {
 
         Empresa saved = empresaRepository.save(empresa);
         syncInitialModules(saved, normalizedModuleCodes);
+        facturadorTenantProvisioningService.synchronizeForModules(saved, normalizedModuleCodes);
 
         return EmpresaMapper.toResponse(saved);
     }

@@ -7,16 +7,22 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
 public class ListCotizacionesUseCase {
 
+    private static final int LEGACY_MAX_SIZE = 200;
+
     private final CotizacionRepository cotizacionRepository;
 
     @Transactional(readOnly = true)
     public List<CotizacionResponse> execute() {
-        return CotizacionMapper.toResponses(cotizacionRepository.findAllByOrderByFechaEmisionDescIdDesc());
+        List<Long> ids = cotizacionRepository.findRecentIds(PageRequest.of(0, LEGACY_MAX_SIZE)).getContent();
+        return ids.isEmpty()
+                ? List.of()
+                : CotizacionMapper.toResponses(cotizacionRepository.findDetailedByIdIn(ids));
     }
 
     @Transactional(readOnly = true)

@@ -48,6 +48,16 @@ public class AuthorizationService {
         }
     }
 
+    public boolean esAdministradorActual() {
+        return esAdministrador();
+    }
+
+    public boolean tieneAutoridad(String authority) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(candidate -> authority.equals(candidate.getAuthority()));
+    }
+
     private void validarAlcance(Long usuarioId, Long recursoId, String tabla, String columna, String codigoError) {
         if (recursoId == null) {
             throw new BusinessException(codigoError, "El usuario y el recurso son obligatorios");
@@ -74,7 +84,7 @@ public class AuthorizationService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> switch (authority.getAuthority()) {
-                    case "ROLE_ADMIN_GENERAL", "ROLE_PLATFORM_ADMIN", "ROLE_ERP_ADMIN", "ROLE_CRM_ADMIN" -> true;
+                    case "ROLE_ADMIN_GENERAL", "ROLE_PLATFORM_ADMIN", "ROLE_ERP_ADMIN" -> true;
                     default -> false;
                 });
     }

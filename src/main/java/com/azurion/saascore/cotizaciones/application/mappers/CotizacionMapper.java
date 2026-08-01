@@ -40,6 +40,8 @@ public final class CotizacionMapper {
                 cotizacion.getMotivoRechazo(),
                 cotizacion.getDecisionSiguiente(),
                 cotizacion.getConvertidaEn(),
+                cotizacion.getWhatsappSendStatus(),
+                cotizacion.getWhatsappMessageId(),
                 cotizacion.getDetalles().stream().map(CotizacionMapper::toDetalleResponse).toList()
         );
     }

@@ -7,6 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -32,15 +34,31 @@ public class TenantProvisioningService {
             throw new BusinessException("TENANT_SCHEMA_EXISTS", "Schema already registered: " + schemaName);
         });
 
-        if (schemaExists(schemaName)) {
+        boolean existingSchema = schemaExists(schemaName);
+        if (existingSchema) {
+            if (schemaContainsTables(schemaName) && !schemaHasFlywayHistory(schemaName)) {
+                throw new BusinessException(
+                        "TENANT_SCHEMA_UNMANAGED",
+                        "El schema existente no tiene un historial Flyway valido y no puede adoptarse: " + schemaName
+                );
+            }
             log.warn(
-                    "Adopting existing tenant schema without running migrations tenantId={} schema={}",
+                    "Existing tenant schema detected; validating and applying pending migrations tenantId={} schema={}",
                     tenantId,
                     schemaName
             );
         } else {
             log.info("Creating tenant schema tenantId={} schema={}", tenantId, schemaName);
+            registerRollbackCleanup(schemaName);
+        }
+
+        try {
             tenantMigrationService.migrateSchema(schemaName, moduloCodigos, moduloCodigos == null);
+        } catch (RuntimeException exception) {
+            if (!existingSchema && !TransactionSynchronizationManager.isActualTransactionActive()) {
+                dropSchemaQuietly(schemaName);
+            }
+            throw exception;
         }
 
         TenantSchemaRegistry registry = new TenantSchemaRegistry();
@@ -64,5 +82,48 @@ public class TenantProvisioningService {
                 schemaName
         );
         return Boolean.TRUE.equals(exists);
+    }
+
+    private boolean schemaContainsTables(String schemaName) {
+        Boolean containsTables = jdbcTemplate.queryForObject(
+                "select exists (select 1 from information_schema.tables where table_schema = ?)",
+                Boolean.class,
+                schemaName
+        );
+        return Boolean.TRUE.equals(containsTables);
+    }
+
+    private boolean schemaHasFlywayHistory(String schemaName) {
+        Boolean hasHistory = jdbcTemplate.queryForObject(
+                "select exists (select 1 from information_schema.tables where table_schema = ? and table_name = 'flyway_schema_history')",
+                Boolean.class,
+                schemaName
+        );
+        return Boolean.TRUE.equals(hasHistory);
+    }
+
+    private void registerRollbackCleanup(String schemaName) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()
+                || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    dropSchemaQuietly(schemaName);
+                }
+            }
+        });
+    }
+
+    private void dropSchemaQuietly(String schemaName) {
+        try {
+            jdbcTemplate.execute("DROP SCHEMA IF EXISTS \"" + schemaName + "\" CASCADE");
+            log.warn("Removed tenant schema after failed provisioning schema={}", schemaName);
+        } catch (RuntimeException cleanupError) {
+            log.error("Could not remove tenant schema after failed provisioning schema={}", schemaName, cleanupError);
+        }
     }
 }

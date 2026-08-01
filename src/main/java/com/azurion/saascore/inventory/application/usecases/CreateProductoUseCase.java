@@ -5,6 +5,8 @@ import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
 import com.azurion.saascore.inventory.application.dto.CreateProductoRequest;
 import com.azurion.saascore.inventory.application.dto.ProductoResponse;
 import com.azurion.saascore.inventory.application.mappers.ProductoInventoryMapper;
+import com.azurion.saascore.inventory.application.services.ProductoPhotoValidator;
+import com.azurion.saascore.inventory.application.services.InventoryOperationalValidator;
 import com.azurion.saascore.inventory.domain.entities.Producto;
 import com.azurion.saascore.inventory.domain.entities.Stock;
 import com.azurion.saascore.inventory.domain.repositories.CategoriaRepository;
@@ -30,6 +32,7 @@ public class CreateProductoUseCase {
     private final MarcaRepository marcaRepository;
     private final UnidadMedidaRepository unidadMedidaRepository;
     private final TaxConfigurationValidator taxConfigurationValidator;
+    private final InventoryOperationalValidator inventoryValidator;
 
     @Transactional
     public ProductoResponse execute(CreateProductoRequest request) {
@@ -55,7 +58,13 @@ public class CreateProductoUseCase {
             );
         }
 
-        Almacen almacen = resolveAlmacen(request.almacenId());
+        validateMoney(request.precioCompraBase(), "PRECIO_COMPRA_INVALIDO", "El precio de compra no puede ser negativo");
+        validateMoney(request.precioVentaBase(), "PRECIO_VENTA_INVALIDO", "El precio de venta no puede ser negativo");
+        validateMoney(request.costoPromedio(), "COSTO_PROMEDIO_INVALIDO", "El costo promedio no puede ser negativo");
+
+        String tipoProducto = normalizeTipoProducto(request.tipoProducto());
+        boolean esServicio = "SERVICIO".equalsIgnoreCase(tipoProducto);
+        Almacen almacen = esServicio ? resolveOptionalAlmacen(request.almacenId()) : resolveRequiredAlmacen(request.almacenId());
 
         Producto producto = new Producto();
         producto.setSku(sku);
@@ -65,9 +74,12 @@ public class CreateProductoUseCase {
         producto.setDescripcion(trim(request.descripcion()));
         producto.setPrecio(precio);
         producto.setAlmacen(almacen);
-        producto.setTipoProducto(defaultIfBlank(request.tipoProducto(), "PRODUCTO").toUpperCase());
-        producto.setImagenUrl(trim(defaultIfBlank(request.imagenUrl(), request.foto())));
-        producto.setFoto(trim(defaultIfBlank(request.foto(), request.imagenUrl())));
+        producto.setTipoProducto(tipoProducto);
+        String photo = ProductoPhotoValidator.validateNewPhoto(
+                defaultIfBlank(request.foto(), request.imagenUrl())
+        );
+        producto.setImagenUrl(photo);
+        producto.setFoto(photo);
         producto.setPrecioCompraBase(request.precioCompraBase() == null ? BigDecimal.ZERO : request.precioCompraBase());
         producto.setPrecioVentaBase(request.precioVentaBase() == null ? precio : request.precioVentaBase());
         producto.setCostoPromedio(resolveCostoPromedio(request));
@@ -84,7 +96,7 @@ public class CreateProductoUseCase {
         producto.setManejaVencimiento(manejaVencimiento);
         producto.setManejaLotes(manejaVencimiento || resolveBoolean(request.lotes(), request.manejaLotes(), false));
         producto.setManejaStock(resolveBoolean(request.stock(), request.manejaStock(), true));
-        if ("SERVICIO".equalsIgnoreCase(producto.getTipoProducto())) {
+        if (esServicio) {
             producto.setManejaStock(false);
             producto.setManejaLotes(false);
             producto.setManejaVencimiento(false);
@@ -95,6 +107,12 @@ public class CreateProductoUseCase {
         producto.setStockMinimo(stockMinimo == null ? BigDecimal.ZERO : stockMinimo);
         producto.setEstado("ACTIVO");
         producto.setActivo(true);
+        if (!esServicio && request.categoriaId() == null) {
+            throw new BusinessException(
+                    "CATEGORIA_REQUERIDA",
+                    "Selecciona una categoria para el producto"
+            );
+        }
         if (request.categoriaId() != null) {
             producto.setCategoria(categoriaRepository.findById(request.categoriaId())
                     .orElseThrow(() -> new BusinessException("CATEGORIA_NO_ENCONTRADA", "Categoria no encontrada")));
@@ -134,6 +152,23 @@ public class CreateProductoUseCase {
         }
     }
 
+    private void validateMoney(BigDecimal value, String code, String message) {
+        if (value != null && value.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(code, message);
+        }
+    }
+
+    private String normalizeTipoProducto(String value) {
+        String tipo = defaultIfBlank(value, "PRODUCTO").toUpperCase();
+        if (!"PRODUCTO".equals(tipo) && !"SERVICIO".equals(tipo)) {
+            throw new BusinessException(
+                    "TIPO_PRODUCTO_INVALIDO",
+                    "El tipo de registro debe ser PRODUCTO o SERVICIO"
+            );
+        }
+        return tipo;
+    }
+
     private BigDecimal resolveCostoPromedio(CreateProductoRequest request) {
         if (request.costoPromedio() != null) {
             return request.costoPromedio();
@@ -144,14 +179,25 @@ public class CreateProductoUseCase {
         return BigDecimal.ZERO;
     }
 
-    private Almacen resolveAlmacen(Long almacenId) {
-        if (almacenId != null) {
-            return almacenRepository.findById(almacenId)
-                    .orElseThrow(() -> new BusinessException("ALMACEN_NO_ENCONTRADO", "Almacen no encontrado"));
+    private Almacen resolveRequiredAlmacen(Long almacenId) {
+        if (almacenId == null) {
+            throw new BusinessException(
+                    "ALMACEN_REQUERIDO",
+                    "Selecciona el almacen inicial del producto"
+            );
         }
-        return almacenRepository.findAll().stream()
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("ALMACEN_REQUERIDO", "Registra al menos un almacen antes de crear productos"));
+        Almacen almacen = almacenRepository.findById(almacenId)
+                .orElseThrow(() -> new BusinessException("ALMACEN_NO_ENCONTRADO", "Almacen no encontrado"));
+        inventoryValidator.requireOperationalWarehouse(almacen);
+        return almacen;
+    }
+
+    private Almacen resolveOptionalAlmacen(Long almacenId) {
+        if (almacenId == null) {
+            return null;
+        }
+        return almacenRepository.findById(almacenId)
+                .orElseThrow(() -> new BusinessException("ALMACEN_NO_ENCONTRADO", "Almacen no encontrado"));
     }
 
     private boolean resolveBoolean(Boolean preferred, Boolean fallback, boolean defaultValue) {

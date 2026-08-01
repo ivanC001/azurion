@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 public record CrmProspectoResponse(
         Long id,
         String tipoPersona,
+        String paisCodigo,
         String tipoDocumento,
         String numeroDocumento,
         String nombre,

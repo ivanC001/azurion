@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.azurion.saascore.empresas.application.dto.UpdateCurrentEmpresaProfileRequest;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.shared.exception.BusinessException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,9 @@ class UpdateCurrentEmpresaProfileUseCaseTest {
 
     @Mock
     private GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
+
+    @Mock
+    private FacturadorTenantProvisioningService facturadorTenantProvisioningService;
 
     @InjectMocks
     private UpdateCurrentEmpresaProfileUseCase useCase;
@@ -49,6 +53,7 @@ class UpdateCurrentEmpresaProfileUseCaseTest {
         assertEquals("USD", saved.getMonedaCodigo());
         assertEquals("contact@acme.test", saved.getCorreoPrincipal());
         assertEquals("America/New_York", saved.getZonaHoraria());
+        verify(facturadorTenantProvisioningService).enqueueProfileSynchronization(saved);
     }
 
     @Test

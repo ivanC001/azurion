@@ -6,25 +6,32 @@ import com.azurion.saascore.inventory.application.dto.LoteResponse;
 import com.azurion.saascore.inventory.application.dto.StockMovimientoRequest;
 import com.azurion.saascore.inventory.application.dto.StockLoteResponse;
 import com.azurion.saascore.inventory.application.dto.StockResponse;
+import com.azurion.saascore.inventory.application.dto.UpdateStockSettingsRequest;
+import com.azurion.saascore.inventory.application.dto.InventorySummaryResponse;
 import com.azurion.saascore.inventory.application.usecases.GetLoteOrigenUseCase;
+import com.azurion.saascore.inventory.application.usecases.GetInventorySummaryUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListKardexUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListLoteMovimientosUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListProductoLotesUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListStockLotesUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListStockUseCase;
 import com.azurion.saascore.inventory.application.usecases.StockMovimientoUseCase;
+import com.azurion.saascore.inventory.application.usecases.UpdateStockSettingsUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @RestController
 @RequestMapping({"/v1/saas/inventory", "/inventario"})
@@ -39,11 +46,28 @@ public class InventoryStockController {
     private final ListProductoLotesUseCase listProductoLotesUseCase;
     private final GetLoteOrigenUseCase getLoteOrigenUseCase;
     private final ListLoteMovimientosUseCase listLoteMovimientosUseCase;
+    private final UpdateStockSettingsUseCase updateStockSettingsUseCase;
+    private final GetInventorySummaryUseCase getInventorySummaryUseCase;
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ApiResponse<InventorySummaryResponse> summary() {
+        return ApiResponse.ok(getInventorySummaryUseCase.execute(), "Resumen de inventario");
+    }
 
     @PostMapping("/movimientos")
     @PreAuthorize("hasAnyAuthority('INVENTORY_ENTRY','INVENTORY_EXIT','INVENTORY_ADJUST','INVENTORY_TRANSFER')")
     public ApiResponse<KardexMovimientoResponse> mover(@Valid @RequestBody StockMovimientoRequest request) {
         return ApiResponse.ok(stockMovimientoUseCase.execute(request), "Movimiento registrado");
+    }
+
+    @GetMapping("/movimientos/operaciones/{operationId}")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ApiResponse<KardexMovimientoResponse> movimientoPorOperacion(@PathVariable String operationId) {
+        return ApiResponse.ok(
+                stockMovimientoUseCase.findCompletedOperation(operationId),
+                "Operacion de inventario confirmada"
+        );
     }
 
     @PostMapping("/entradas")
@@ -67,6 +91,32 @@ public class InventoryStockController {
         return ApiResponse.ok(listStockUseCase.execute(productoId, almacenId), "Stock");
     }
 
+    @GetMapping("/stock/page")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ApiResponse<PageResponse<StockResponse>> stockPage(
+            @RequestParam(required = false) Long productoId,
+            @RequestParam(required = false) Long almacenId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(
+                listStockUseCase.page(productoId, almacenId, page, size),
+                "Stock paginado"
+        );
+    }
+
+    @PutMapping("/stock/{stockId}/settings")
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
+    public ApiResponse<StockResponse> updateStockSettings(
+            @org.springframework.web.bind.annotation.PathVariable Long stockId,
+            @Valid @RequestBody UpdateStockSettingsRequest request
+    ) {
+        return ApiResponse.ok(
+                updateStockSettingsUseCase.execute(stockId, request),
+                "Configuracion de stock actualizada"
+        );
+    }
+
     @GetMapping({"/stock/lotes", "/stock-lotes"})
     @PreAuthorize("hasAuthority('INVENTORY_READ')")
     public ApiResponse<List<StockLoteResponse>> stockLotes(
@@ -74,6 +124,20 @@ public class InventoryStockController {
             @RequestParam(required = false) Long almacenId
     ) {
         return ApiResponse.ok(listStockLotesUseCase.execute(productoId, almacenId), "Stock por lote");
+    }
+
+    @GetMapping({"/stock/lotes/page", "/stock-lotes/page"})
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ApiResponse<PageResponse<StockLoteResponse>> stockLotesPage(
+            @RequestParam(required = false) Long productoId,
+            @RequestParam(required = false) Long almacenId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(
+                listStockLotesUseCase.page(productoId, almacenId, page, size),
+                "Stock por lote paginado"
+        );
     }
 
     @GetMapping("/stock/almacen/{almacenId}")
@@ -121,6 +185,20 @@ public class InventoryStockController {
         return ApiResponse.ok(listKardexUseCase.execute(productoId, almacenId), "Kardex");
     }
 
+    @GetMapping("/kardex/page")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ApiResponse<PageResponse<KardexMovimientoResponse>> kardexPage(
+            @RequestParam(required = false) Long productoId,
+            @RequestParam(required = false) Long almacenId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(
+                listKardexUseCase.page(productoId, almacenId, page, size),
+                "Kardex paginado"
+        );
+    }
+
     @GetMapping("/kardex/producto/{productoId}")
     @PreAuthorize("hasAuthority('INVENTORY_READ')")
     public ApiResponse<List<KardexMovimientoResponse>> kardexPorProducto(@org.springframework.web.bind.annotation.PathVariable Long productoId) {
@@ -161,7 +239,8 @@ public class InventoryStockController {
                 request.precioCompra(),
                 request.precioVenta(),
                 request.usuarioId(),
-                request.referencia()
+                request.referencia(),
+                request.clientOperationId()
         );
     }
 }

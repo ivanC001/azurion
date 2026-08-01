@@ -31,6 +31,8 @@ public record CotizacionResponse(
         String motivoRechazo,
         String decisionSiguiente,
         OffsetDateTime convertidaEn,
+        String whatsappSendStatus,
+        String whatsappMessageId,
         List<CotizacionDetalleResponse> detalles
 ) {
 }

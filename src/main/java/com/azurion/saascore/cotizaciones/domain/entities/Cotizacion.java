@@ -96,6 +96,21 @@ public class Cotizacion extends BaseEntity {
     @Column(name = "email_send_error", length = 500)
     private String emailSendError;
 
+    @Column(name = "whatsapp_send_status", length = 20)
+    private String whatsappSendStatus;
+
+    @Column(name = "whatsapp_send_token", length = 80)
+    private String whatsappSendToken;
+
+    @Column(name = "whatsapp_send_started_at")
+    private OffsetDateTime whatsappSendStartedAt;
+
+    @Column(name = "whatsapp_send_error", length = 500)
+    private String whatsappSendError;
+
+    @Column(name = "whatsapp_message_id", length = 255)
+    private String whatsappMessageId;
+
     @Column(name = "convertida_en")
     private OffsetDateTime convertidaEn;
 

@@ -60,7 +60,9 @@ WHATSAPP_CONNECT_TIMEOUT_MS=5000
 WHATSAPP_READ_TIMEOUT_MS=15000
 
 FACTURADOR_BASE_URL=http://facturador:8000
-FACTURADOR_API_KEY=CLAVE_COMPARTIDA
+FACTURADOR_CLIENT_ID=azurion-core
+FACTURADOR_CLIENT_SECRET=SECRETO_HMAC_ALEATORIO
+FACTURADOR_SIGNATURE_VERSION=v2
 FACTURADOR_WAIT_PROCESSED_ENABLED=false
 FACTURADOR_OUTBOX_ENABLED=true
 FACTURADOR_CALLBACK_ENABLED=true
@@ -68,7 +70,23 @@ FACTURADOR_CALLBACK_API_KEY=CLAVE_CALLBACK
 FACTURADOR_CALLBACK_SECRET=SECRETO_HMAC_CALLBACK
 ```
 
+Para varias replicas configura el mismo almacenamiento persistente compartido
+en `AZURION_PRIVATE_FILES_DIR` y `AZURION_PUBLIC_FILES_DIR`. Un volumen local por
+contenedor puede hacer que una replica registre el archivo y otra responda 404.
+No escales horizontalmente el backend con almacenamiento local independiente.
+
+Dimensiona Hikari junto con PostgreSQL: `replicas * DB_POOL_MAX`, mas las
+conexiones del facturador y una reserva operativa, debe quedar por debajo de
+`max_connections`. Los valores de hilos y conexiones son limites de proteccion;
+la capacidad real se valida con `deploy/load/k6-read-paths.js` en staging.
+
 `FACTURADOR_BASE_URL=http://127.0.0.1:8000` solo funciona cuando ambos procesos comparten el mismo host. Dentro de contenedores, `127.0.0.1` apunta al propio contenedor de Azurion y no al facturador.
+
+El mismo secreto debe configurarse como `AZURION_INTEGRATION_SECRET` en el
+facturador. `FACTURADOR_CLIENT_ID` es un identificador publico; el secreto no
+se envia por HTTP y solo se utiliza para calcular la firma HMAC v2. Para rotar
+sin interrupciones, el facturador acepta temporalmente el secreto anterior en
+`AZURION_INTEGRATION_PREVIOUS_SECRET`.
 
 ## Landings externas
 
@@ -112,6 +130,10 @@ El CORS abierto ya esta limitado por codigo a la ruta publica de formularios.
 5. Un lead de landing devuelve `200`; varios visitantes no comparten el mismo limite por IP.
 6. Un pago conserva el comprobante despues de reiniciar el contenedor.
 7. Una venta devuelve rapido y su estado SUNAT se actualiza por outbox/callback.
+8. Dos solicitudes con el mismo `clientOperationId` devuelven la misma operacion
+   y no duplican existencias, caja ni comprobante.
+9. Reiniciar una replica no elimina PDFs, XML, CDR, logos ni adjuntos creados por
+   otra replica.
 
 Comprueba el enrutamiento con:
 

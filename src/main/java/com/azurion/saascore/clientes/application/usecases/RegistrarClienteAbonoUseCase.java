@@ -7,6 +7,7 @@ import com.azurion.saascore.clientes.domain.entities.ClienteAbono;
 import com.azurion.saascore.clientes.domain.repositories.ClienteAbonoRepository;
 import com.azurion.saascore.clientes.domain.repositories.ClienteRepository;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.util.RequestFingerprint;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +23,25 @@ public class RegistrarClienteAbonoUseCase {
 
     @Transactional
     public ClienteAbonoResponse execute(Long clienteId, RegistrarClienteAbonoRequest request) {
-        Cliente cliente = clienteRepository.findById(clienteId)
+        Cliente cliente = clienteRepository.findByIdForUpdate(clienteId)
                 .orElseThrow(() -> new BusinessException("CLIENTE_NO_ENCONTRADO", "Cliente no encontrado"));
+        String operationKey = clean(request.clientOperationId());
+        String requestHash = operationKey == null
+                ? null
+                : RequestFingerprint.sha256(clienteId, request);
+        if (operationKey != null) {
+            ClienteAbono completed = clienteAbonoRepository.findByClientOperationId(operationKey)
+                    .orElse(null);
+            if (completed != null) {
+                if (!completed.getRequestHash().equals(requestHash)) {
+                    throw new BusinessException(
+                            "OPERACION_ABONO_REUTILIZADA",
+                            "El identificador de operacion ya fue usado con datos diferentes"
+                    );
+                }
+                return toResponse(completed);
+            }
+        }
 
         BigDecimal deuda = money(cliente.getSaldoDeuda());
         BigDecimal monto = money(request.monto());
@@ -44,8 +62,12 @@ public class RegistrarClienteAbonoUseCase {
         abono.setSaldoAnterior(deuda);
         abono.setSaldoResultante(saldoResultante);
         abono.setObservacion(clean(request.observacion()));
+        abono.setClientOperationId(operationKey);
+        abono.setRequestHash(requestHash);
 
-        return toResponse(clienteAbonoRepository.save(abono));
+        return toResponse(operationKey == null
+                ? clienteAbonoRepository.save(abono)
+                : clienteAbonoRepository.saveAndFlush(abono));
     }
 
     private ClienteAbonoResponse toResponse(ClienteAbono abono) {

@@ -5,10 +5,15 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select cliente from Cliente cliente where cliente.id = :id")
+    Optional<Cliente> findByIdForUpdate(@Param("id") Long id);
     Optional<Cliente> findByTipoDocumentoAndNumeroDocumento(String tipoDocumento, String numeroDocumento);
     boolean existsByTipoDocumentoAndNumeroDocumentoAndIdNot(String tipoDocumento, String numeroDocumento, Long id);
 

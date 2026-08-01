@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -19,6 +20,7 @@ public record CreateCompraRequest(
         @NotNull LocalDate fechaEmision,
         OffsetDateTime fechaIngreso,
         @NotNull Long almacenId,
-        @NotEmpty List<@Valid CompraDetalleRequest> detalles
+        @NotEmpty List<@Valid CompraDetalleRequest> detalles,
+        @NotBlank @Size(max = 100) String clientOperationId
 ) {
 }

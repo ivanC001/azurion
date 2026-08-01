@@ -8,8 +8,9 @@ import java.time.OffsetDateTime;
 
 public record UpdateCrmProspectoRequest(
         String tipoPersona,
-        String tipoDocumento,
-        String numeroDocumento,
+        @Size(max = 2) String paisCodigo,
+        @Size(max = 30) String tipoDocumento,
+        @Size(max = 30) String numeroDocumento,
         @Size(max = 180) String nombre,
         @Size(max = 220) String razonSocial,
         @Size(max = 180) String nombreComercial,

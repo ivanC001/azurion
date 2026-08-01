@@ -2,6 +2,7 @@ package com.azurion.saascore.inventory.application.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -20,6 +21,7 @@ public record StockMovimientoRequest(
         BigDecimal precioCompra,
         BigDecimal precioVenta,
         String usuarioId,
-        String referencia
+        String referencia,
+        @NotBlank @Size(max = 100) String clientOperationId
 ) {
 }

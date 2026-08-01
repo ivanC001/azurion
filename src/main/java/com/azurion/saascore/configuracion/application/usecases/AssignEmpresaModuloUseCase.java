@@ -1,5 +1,6 @@
 package com.azurion.saascore.configuracion.application.usecases;
 
+import com.azurion.multitenancy.TenantMigrationService;
 import com.azurion.saascore.configuracion.application.dto.AssignEmpresaModuloRequest;
 import com.azurion.saascore.configuracion.application.dto.EmpresaModuloResponse;
 import com.azurion.saascore.configuracion.application.mappers.EmpresaModuloMapper;
@@ -8,6 +9,7 @@ import com.azurion.saascore.configuracion.domain.entities.EmpresaModulo;
 import com.azurion.saascore.configuracion.domain.repositories.EmpresaModuloRepository;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.saascore.modulos.application.services.PlatformModuleAuditService;
 import com.azurion.saascore.modulos.domain.entities.Modulo;
 import com.azurion.saascore.modulos.domain.repositories.ModuloRepository;
@@ -26,6 +28,8 @@ public class AssignEmpresaModuloUseCase {
     private final ModuloRepository moduloRepository;
     private final EmpresaModuloAdminAccessService accessService;
     private final PlatformModuleAuditService auditService;
+    private final TenantMigrationService tenantMigrationService;
+    private final FacturadorTenantProvisioningService facturadorTenantProvisioningService;
 
     @Transactional
     public EmpresaModuloResponse execute(Long empresaId, AssignEmpresaModuloRequest request) {
@@ -49,6 +53,9 @@ public class AssignEmpresaModuloUseCase {
         empresaModulo.setConfiguracionExtra(request.configuracionExtra());
 
         EmpresaModulo saved = empresaModuloRepository.save(empresaModulo);
+        var activeModuleCodes = empresaModuloRepository.findActiveModuleCodes(empresaId, LocalDate.now());
+        tenantMigrationService.migrateSchema(empresa.getSchemaName(), activeModuleCodes, false);
+        facturadorTenantProvisioningService.synchronizeForModules(empresa, activeModuleCodes);
         auditService.record(
                 "/companies/" + empresaId + "/modules/" + modulo.getCodigo(),
                 "Cambio de modulo contratado " + modulo.getCodigo() + " para empresa " + empresa.getTenantId()

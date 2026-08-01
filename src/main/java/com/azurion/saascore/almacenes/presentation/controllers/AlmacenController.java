@@ -2,8 +2,10 @@ package com.azurion.saascore.almacenes.presentation.controllers;
 
 import com.azurion.saascore.almacenes.application.dto.AlmacenResponse;
 import com.azurion.saascore.almacenes.application.dto.CreateAlmacenRequest;
+import com.azurion.saascore.almacenes.application.dto.UpdateAlmacenRequest;
 import com.azurion.saascore.almacenes.application.usecases.CreateAlmacenUseCase;
 import com.azurion.saascore.almacenes.application.usecases.ListAlmacenesUseCase;
+import com.azurion.saascore.almacenes.application.usecases.UpdateAlmacenUseCase;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
 import com.azurion.shared.api.PageResponse;
@@ -13,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,11 +30,21 @@ public class AlmacenController {
 
     private final CreateAlmacenUseCase createAlmacenUseCase;
     private final ListAlmacenesUseCase listAlmacenesUseCase;
+    private final UpdateAlmacenUseCase updateAlmacenUseCase;
 
     @PostMapping
     @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     public ApiResponse<AlmacenResponse> create(@Valid @RequestBody CreateAlmacenRequest request) {
         return ApiResponse.ok(createAlmacenUseCase.execute(request), "Almacen creado");
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
+    public ApiResponse<AlmacenResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateAlmacenRequest request
+    ) {
+        return ApiResponse.ok(updateAlmacenUseCase.execute(id, request), "Almacen actualizado");
     }
 
     @GetMapping

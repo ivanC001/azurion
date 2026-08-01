@@ -19,8 +19,8 @@ import lombok.Setter;
 public class CajaMovimiento extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "caja_id", nullable = false)
-    private Caja caja;
+    @JoinColumn(name = "turno_id", nullable = false)
+    private CajaTurno turno;
 
     @Column(name = "tipo_movimiento", nullable = false, length = 30)
     private String tipoMovimiento;
@@ -43,6 +43,24 @@ public class CajaMovimiento extends BaseEntity {
     @Column(name = "cuenta_empresarial", length = 120)
     private String cuentaEmpresarial;
 
+    @Column(name = "origen", nullable = false, length = 30)
+    private String origen;
+
+    @Column(name = "medio_pago", nullable = false, length = 30)
+    private String medioPago;
+
+    @Column(name = "afecta_efectivo", nullable = false)
+    private boolean afectaEfectivo;
+
+    @Column(name = "venta_id")
+    private Long ventaId;
+
+    @Column(name = "anulado", nullable = false)
+    private boolean anulado;
+
+    @Column(name = "motivo_anulacion", length = 500)
+    private String motivoAnulacion;
+
     @Column(name = "responsable_id", nullable = false, length = 80)
     private String responsableId;
 
@@ -51,4 +69,10 @@ public class CajaMovimiento extends BaseEntity {
 
     @Column(name = "fecha_movimiento", nullable = false)
     private OffsetDateTime fechaMovimiento;
+
+    @Column(name = "client_operation_id", length = 100)
+    private String clientOperationId;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
 }

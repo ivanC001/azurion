@@ -10,6 +10,7 @@ import com.azurion.saascore.configuracion.domain.entities.EmpresaModulo;
 import com.azurion.saascore.configuracion.domain.repositories.EmpresaModuloRepository;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.saascore.modulos.application.services.PlatformModuleAuditService;
 import com.azurion.saascore.modulos.domain.entities.Modulo;
 import com.azurion.saascore.modulos.domain.repositories.ModuloRepository;
@@ -32,6 +33,7 @@ public class AsignarModulosEmpresaUseCase {
     private final PlatformModuleAuditService auditService;
     private final TenantMigrationService tenantMigrationService;
     private final ListEmpresaModulosUseCase listEmpresaModulosUseCase;
+    private final FacturadorTenantProvisioningService facturadorTenantProvisioningService;
 
     @Transactional
     public List<EmpresaModuloResponse> execute(Long empresaId, SyncEmpresaModulosRequest request) {
@@ -57,11 +59,9 @@ public class AsignarModulosEmpresaUseCase {
             empresaModuloRepository.save(empresaModulo);
         }
 
-        tenantMigrationService.migrateSchema(
-                empresa.getSchemaName(),
-                empresaModuloRepository.findActiveModuleCodes(empresaId, LocalDate.now()),
-                false
-        );
+        List<String> activeModuleCodes = empresaModuloRepository.findActiveModuleCodes(empresaId, LocalDate.now());
+        tenantMigrationService.migrateSchema(empresa.getSchemaName(), activeModuleCodes, false);
+        facturadorTenantProvisioningService.synchronizeForModules(empresa, activeModuleCodes);
 
         auditService.record(
                 "/companies/" + empresaId + "/modules",

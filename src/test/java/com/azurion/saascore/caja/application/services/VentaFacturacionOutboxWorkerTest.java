@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.azurion.saascore.caja.application.usecases.ProcessVentaFacturacionAsyncUseCase;
 import com.azurion.saascore.caja.domain.entities.VentaFacturacionOutbox;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class VentaFacturacionOutboxWorkerTest {
@@ -98,6 +100,29 @@ class VentaFacturacionOutboxWorkerTest {
                 eq("error definitivo"),
                 any(LocalDateTime.class)
         );
+    }
+
+    @Test
+    void startsTheLeaseHeartbeatBeforeTheExecutorRunsTheClaimedJob() {
+        VentaFacturacionOutbox job = job(1);
+        AtomicReference<Runnable> queued = new AtomicReference<>();
+        VentaFacturacionOutboxWorker queuedWorker = new VentaFacturacionOutboxWorker(
+                repository,
+                processUseCase,
+                new ObjectMapper(),
+                queued::set,
+                heartbeatExecutor
+        );
+        when(repository.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByIdAsc(any(), any()))
+                .thenReturn(List.of(job));
+        when(repository.claim(eq(job.getId()), anyString(), any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(1);
+        when(repository.findByIdAndStatusAndLeaseOwner(eq(job.getId()), eq("PROCESSING"), anyString())).thenReturn(Optional.of(job));
+
+        queuedWorker.poll();
+
+        assertNotNull(queued.get());
+        verify(heartbeatExecutor).scheduleAtFixedRate(any(), anyLong(), anyLong(), any());
+        verify(processUseCase, never()).execute(any());
     }
 
     private VentaFacturacionOutbox job(int attempts) {

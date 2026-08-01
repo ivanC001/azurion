@@ -13,6 +13,9 @@ public record RegisterVentaRequest(
         @NotBlank String clienteNombre,
         @NotBlank String moneda,
         @NotNull BigDecimal total,
+        Long cajaTurnoId,
+        String formaPago,
+        String metodoPago,
         @NotEmpty List<@Valid VentaItemRequest> items
 ) {
 

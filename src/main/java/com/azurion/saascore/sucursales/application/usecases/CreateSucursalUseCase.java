@@ -1,5 +1,9 @@
 package com.azurion.saascore.sucursales.application.usecases;
 
+import com.azurion.multitenancy.TenantContext;
+import com.azurion.saascore.almacenes.application.dto.CreateAlmacenRequest;
+import com.azurion.saascore.almacenes.application.services.OperationalCodeGenerator;
+import com.azurion.saascore.almacenes.application.usecases.CreateAlmacenUseCase;
 import com.azurion.saascore.sucursales.application.dto.CreateSucursalRequest;
 import com.azurion.saascore.sucursales.application.dto.SucursalResponse;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
@@ -7,9 +11,12 @@ import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
 import com.azurion.saascore.ubigeos.domain.entities.Ubigeo;
 import com.azurion.saascore.ubigeos.domain.repositories.UbigeoRepository;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.math.BigDecimal;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -17,9 +24,17 @@ public class CreateSucursalUseCase {
 
     private final SucursalRepository sucursalRepository;
     private final UbigeoRepository ubigeoRepository;
+    private final OperationalCodeGenerator codeGenerator;
+    private final CreateAlmacenUseCase createAlmacenUseCase;
+    private final BusinessOperationLockService operationLockService;
 
+    @Transactional
     public SucursalResponse execute(CreateSucursalRequest request) {
-        String codigo = request.codigo().trim().toUpperCase();
+        operationLockService.lockAll(List.of("branch-create:" + TenantContext.getTenantId()));
+        String requestedCode = trim(request.codigo());
+        String codigo = requestedCode == null
+                ? codeGenerator.nextSucursalCode()
+                : requestedCode.toUpperCase();
         if (sucursalRepository.existsByCodigoIgnoreCase(codigo)) {
             throw new BusinessException("SUCURSAL_DUPLICADA", "Ya existe una sucursal con ese codigo");
         }
@@ -46,6 +61,16 @@ public class CreateSucursalUseCase {
         sucursal.setActivo(true);
 
         Sucursal saved = sucursalRepository.save(sucursal);
+        if (Boolean.TRUE.equals(request.crearAlmacenPrincipal())) {
+            createAlmacenUseCase.execute(new CreateAlmacenRequest(
+                    null,
+                    "Almacen principal - " + saved.getNombre(),
+                    saved.getDireccion(),
+                    saved.getId(),
+                    "PRINCIPAL",
+                    true
+            ));
+        }
         return toResponse(saved);
     }
 

@@ -17,9 +17,11 @@ import com.azurion.saascore.clientes.domain.repositories.ClienteRepository;
 import com.azurion.saascore.cotizaciones.application.usecases.CreateCotizacionUseCase;
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
+import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
 import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
+import com.azurion.saascore.crm.application.dto.SendCrmOpportunityEmailRequest;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
@@ -27,7 +29,9 @@ import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.CrmIngressLockService;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
+import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
+import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmLandingConfig;
@@ -43,11 +47,13 @@ import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
+import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.shared.exception.BusinessException;
 import java.util.List;
 import java.util.Optional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -128,6 +134,9 @@ class CrmUseCaseServiceTest {
     @Mock
     CrmPhoneNormalizationService phoneNormalizationService;
 
+    @Mock
+    EmailSenderService emailSenderService;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -153,7 +162,8 @@ class CrmUseCaseServiceTest {
                 leadAssignmentService,
                 publicLeadSubmissionRepository,
                 ingressLockService,
-                phoneNormalizationService
+                phoneNormalizationService,
+                emailSenderService
         );
     }
 
@@ -189,6 +199,7 @@ class CrmUseCaseServiceTest {
         ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
         verify(prospectoRepository).save(captor.capture());
         assertEquals("20", captor.getValue().getResponsableId());
+        assertEquals("PE", captor.getValue().getPaisCodigo());
     }
 
     @Test
@@ -236,6 +247,28 @@ class CrmUseCaseServiceTest {
 
         assertEquals("CRM_LEAD_IDENTIDAD_CONFLICTO", exception.getCode());
         verify(prospectoRepository, never()).save(any());
+    }
+
+    @Test
+    void leadPublicoSinTipoNiDocumentoQuedaPorClasificar() {
+        preparePublicLeadCapture();
+
+        service.capturePublicLead(publicLeadRequest(null, null, null), "BROWSER", null);
+
+        ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
+        verify(prospectoRepository).save(captor.capture());
+        assertEquals("SIN_DEFINIR", captor.getValue().getTipoPersona());
+    }
+
+    @Test
+    void leadPublicoConRucSeClasificaComoEmpresa() {
+        preparePublicLeadCapture();
+
+        service.capturePublicLead(publicLeadRequest(null, "RUC", "20123456789"), "SERVER", null);
+
+        ArgumentCaptor<CrmProspecto> captor = ArgumentCaptor.forClass(CrmProspecto.class);
+        verify(prospectoRepository).save(captor.capture());
+        assertEquals("JURIDICA", captor.getValue().getTipoPersona());
     }
 
     @Test
@@ -316,6 +349,24 @@ class CrmUseCaseServiceTest {
 
         assertEquals("CRM_PROSPECTO_CON_HISTORIAL", error.getCode());
         verify(prospectoRepository, never()).delete(prospecto);
+    }
+
+    @Test
+    void prospectoSinClasificarNoPuedeConvertirseACliente() {
+        authenticate("CRM_VIEW_ALL");
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setTipoPersona("SIN_DEFINIR");
+        prospecto.setNombre("Contacto por clasificar");
+        prospecto.setResponsableId("10");
+        when(prospectoRepository.findById(17L)).thenReturn(Optional.of(prospecto));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.convertirProspectoCliente(17L)
+        );
+
+        assertEquals("CRM_TIPO_CLIENTE_REQUERIDO", exception.getCode());
+        verify(createClienteUseCase, never()).execute(any());
     }
 
     @Test
@@ -426,6 +477,125 @@ class CrmUseCaseServiceTest {
     }
 
     @Test
+    void oportunidadRechazaMontoCeroAunqueLaPeticionOmitaLaValidacionHttp() {
+        authenticate("CRM_VIEW_ALL");
+        when(authorizationService.currentUsuarioId()).thenReturn(10L);
+        Cliente cliente = new Cliente();
+        cliente.setId(8L);
+        cliente.setNombre("Cliente pipeline");
+        CrmCatalogoItem catalogo = new CrmCatalogoItem();
+        catalogo.setId(5L);
+        catalogo.setTipoItem("SERVICIO");
+        catalogo.setNombre("Implementacion CRM");
+        catalogo.setPrecioReferencial(BigDecimal.valueOf(450));
+        catalogo.setEstado("ACTIVO");
+        CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
+        interesado.setProbabilidadDefault(30);
+        when(clienteRepository.findById(8L)).thenReturn(Optional.of(cliente));
+        when(catalogoItemRepository.findById(5L)).thenReturn(Optional.of(catalogo));
+        when(etapaPipelineRepository.findByCodigo("INTERESADO")).thenReturn(Optional.of(interesado));
+
+        BusinessException error = assertThrows(BusinessException.class, () -> service.createOportunidad(
+                new CreateCrmOportunidadRequest(
+                        null,
+                        8L,
+                        "SERVICIO",
+                        5L,
+                        "Implementacion CRM",
+                        null,
+                        BigDecimal.ZERO,
+                        30,
+                        "INTERESADO",
+                        LocalDate.now().plusDays(15),
+                        "10",
+                        "Llamada inicial",
+                        OffsetDateTime.now().plusDays(1)
+                )
+        ));
+
+        assertEquals("CRM_OPORTUNIDAD_MONTO_REQUERIDO", error.getCode());
+        verify(oportunidadRepository, never()).save(any(CrmOportunidad.class));
+    }
+
+    @Test
+    void oportunidadNuevaCreaLaSiguienteAccionObligatoria() {
+        authenticate("CRM_VIEW_ALL");
+        when(authorizationService.currentUsuarioId()).thenReturn(10L);
+        Cliente cliente = new Cliente();
+        cliente.setId(8L);
+        cliente.setNombre("Cliente pipeline");
+        CrmCatalogoItem catalogo = new CrmCatalogoItem();
+        catalogo.setId(5L);
+        catalogo.setTipoItem("SERVICIO");
+        catalogo.setNombre("Implementacion CRM");
+        catalogo.setPrecioReferencial(BigDecimal.valueOf(450));
+        catalogo.setEstado("ACTIVO");
+        CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
+        interesado.setProbabilidadDefault(30);
+        when(clienteRepository.findById(8L)).thenReturn(Optional.of(cliente));
+        when(catalogoItemRepository.findById(5L)).thenReturn(Optional.of(catalogo));
+        when(etapaPipelineRepository.findByCodigo("INTERESADO")).thenReturn(Optional.of(interesado));
+        when(oportunidadRepository.save(any(CrmOportunidad.class))).thenAnswer(invocation -> {
+            CrmOportunidad saved = invocation.getArgument(0);
+            saved.setId(71L);
+            return saved;
+        });
+
+        service.createOportunidad(new CreateCrmOportunidadRequest(
+                null,
+                8L,
+                "SERVICIO",
+                5L,
+                "Implementacion CRM",
+                null,
+                BigDecimal.valueOf(450),
+                30,
+                "INTERESADO",
+                LocalDate.now().plusDays(15),
+                "10",
+                "Llamada inicial",
+                OffsetDateTime.now().plusDays(1)
+        ));
+
+        ArgumentCaptor<CrmActividad> activityCaptor = ArgumentCaptor.forClass(CrmActividad.class);
+        verify(actividadRepository).save(activityCaptor.capture());
+        assertEquals("Llamada inicial", activityCaptor.getValue().getAsunto());
+        assertEquals("PENDIENTE", activityCaptor.getValue().getEstado());
+        assertEquals(71L, activityCaptor.getValue().getOportunidad().getId());
+    }
+
+    @Test
+    void correoDeOportunidadUsaSmtpDelTenantYRegistraActividad() {
+        authenticate("CRM_VIEW_ALL");
+        when(authorizationService.currentUsuarioId()).thenReturn(10L);
+        CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
+        CrmOportunidad oportunidad = oportunidad(71L, interesado, "ABIERTA");
+        Cliente cliente = new Cliente();
+        cliente.setId(8L);
+        cliente.setEmail("cliente@empresa.com");
+        oportunidad.setCliente(cliente);
+        when(oportunidadRepository.findById(71L)).thenReturn(Optional.of(oportunidad));
+
+        var response = service.sendOpportunityEmail(
+                71L,
+                new SendCrmOpportunityEmailRequest("Propuesta comercial", "Hola, adjunto el seguimiento.")
+        );
+
+        assertEquals("cliente@empresa.com", response.destinatario());
+        verify(emailSenderService).sendEmail(
+                "public",
+                "cliente@empresa.com",
+                "Propuesta comercial",
+                "Hola, adjunto el seguimiento.",
+                List.of()
+        );
+        ArgumentCaptor<CrmActividad> activityCaptor = ArgumentCaptor.forClass(CrmActividad.class);
+        verify(actividadRepository).save(activityCaptor.capture());
+        assertEquals("CORREO", activityCaptor.getValue().getTipoActividad());
+        assertEquals("REALIZADA", activityCaptor.getValue().getEstado());
+    }
+
+    @Test
     void resultadosComercialesUsanPaginacionDeVeinteYCierreReal() {
         authenticate("CRM_VIEW_ALL");
         CrmEtapaPipeline ganado = etapa(4L, "GANADO", 4, true, false);
@@ -452,6 +622,7 @@ class CrmUseCaseServiceTest {
     private CreateCrmProspectoRequest prospectoRequestAsignadoA(String responsableId) {
         return new CreateCrmProspectoRequest(
                 "NATURAL",
+                "PE",
                 "1",
                 "12345678",
                 "Cliente interesado",
@@ -524,12 +695,19 @@ class CrmUseCaseServiceTest {
     }
 
     private PublicCrmLeadRequest publicLeadRequest() {
+        return publicLeadRequest("NATURAL", null, null);
+    }
+
+    private PublicCrmLeadRequest publicLeadRequest(
+            String tipoPersona,
+            String tipoDocumento,
+            String numeroDocumento) {
         return new PublicCrmLeadRequest(
                 "empresa_demo",
                 "lnd_publica",
-                "NATURAL",
-                null,
-                null,
+                tipoPersona,
+                tipoDocumento,
+                numeroDocumento,
                 "Juan Perez",
                 null,
                 "juan@perez.com",
@@ -550,6 +728,24 @@ class CrmUseCaseServiceTest {
                 "",
                 null
         );
+    }
+
+    private void preparePublicLeadCapture() {
+        CrmLandingConfig landing = new CrmLandingConfig();
+        landing.setValidarDuplicadosPor("NINGUNO");
+        when(landingLeadValidationService.validate(any())).thenReturn(
+                new LandingLeadContext(landing, null, false, true, "LANDING", "municipios", null)
+        );
+        when(phoneNormalizationService.normalize(any())).thenReturn(
+                new CrmPhoneNormalizationService.NormalizedPhone(null, List.of())
+        );
+        when(prospectoRepository.save(any(CrmProspecto.class))).thenAnswer(invocation -> {
+            CrmProspecto prospecto = invocation.getArgument(0);
+            prospecto.setId(81L);
+            return prospecto;
+        });
+        when(publicLeadSubmissionRepository.save(any(CrmPublicLeadSubmission.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private void authenticate(String... authorities) {

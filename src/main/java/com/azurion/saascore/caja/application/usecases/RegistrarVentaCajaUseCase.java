@@ -1,7 +1,6 @@
 package com.azurion.saascore.caja.application.usecases;
 
 import com.azurion.multitenancy.TenantContext;
-import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.caja.application.dto.FacturadorVentaResponse;
 import com.azurion.saascore.caja.application.dto.RegistrarVentaCajaRequest;
 import com.azurion.saascore.caja.application.dto.RegistrarVentaCajaResponse;
@@ -9,13 +8,16 @@ import com.azurion.saascore.caja.application.dto.TipoComprobanteVenta;
 import com.azurion.saascore.caja.application.dto.VentaFacturacionAsyncTask;
 import com.azurion.saascore.caja.application.mappers.CajaMapper;
 import com.azurion.saascore.caja.application.services.VentaSucursalStockPolicy;
+import com.azurion.saascore.caja.application.services.CajaTurnoService;
 import com.azurion.saascore.clientes.domain.entities.Cliente;
 import com.azurion.saascore.clientes.domain.repositories.ClienteRepository;
-import com.azurion.saascore.caja.domain.entities.Caja;
+import com.azurion.saascore.caja.domain.entities.CajaFisica;
 import com.azurion.saascore.caja.domain.entities.CajaMovimiento;
-import com.azurion.saascore.caja.domain.repositories.CajaRepository;
+import com.azurion.saascore.caja.domain.entities.CajaTurno;
+import com.azurion.saascore.caja.domain.repositories.CajaTurnoRepository;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
+import com.azurion.saascore.facturacion.application.services.FacturadorEmissionCapabilityPolicy;
 import com.azurion.saascore.inventory.application.dto.StockMovimientoRequest;
 import com.azurion.saascore.inventory.application.usecases.StockMovimientoUseCase;
 import com.azurion.saascore.inventory.domain.entities.Producto;
@@ -28,6 +30,7 @@ import com.azurion.saascore.ventas.application.dto.VentaResponse;
 import com.azurion.saascore.ventas.application.usecases.RegisterVentaUseCase;
 import com.azurion.saascore.ventas.domain.entities.Venta;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.util.RequestFingerprint;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -55,27 +58,48 @@ public class RegistrarVentaCajaUseCase {
             "11", "12", "13", "14", "15", "16", "17", "21", "31", "32", "33", "34", "35", "36"
     );
 
-    private final CajaRepository cajaRepository;
+    private final CajaTurnoRepository cajaTurnoRepository;
     private final CajaMovimientoService cajaMovimientoService;
+    private final CajaTurnoService cajaTurnoService;
     private final EmpresaRepository empresaRepository;
     private final ClienteRepository clienteRepository;
     private final ProductoRepository productoRepository;
     private final StockMovimientoUseCase stockMovimientoUseCase;
     private final RegisterVentaUseCase registerVentaUseCase;
     private final DispatchVentaFacturacionAsyncUseCase dispatchVentaFacturacionAsyncUseCase;
-    private final AuthorizationService authorizationService;
     private final VentaSucursalStockPolicy ventaSucursalStockPolicy;
     private final TaxResolverService taxResolverService;
+    private final FacturadorEmissionCapabilityPolicy facturadorEmissionCapabilityPolicy;
 
     @Transactional
-    public RegistrarVentaCajaResponse execute(Long cajaId, RegistrarVentaCajaRequest request) {
-        authorizationService.validarCaja(authorizationService.currentUsuarioId(), cajaId);
-        Caja caja = cajaRepository.findById(cajaId)
-                .orElseThrow(() -> new BusinessException("CAJA_NO_ENCONTRADA", "Caja no encontrada"));
+    public RegistrarVentaCajaResponse execute(Long turnoId, RegistrarVentaCajaRequest request) {
+        CajaTurno turno = cajaTurnoService.findForUpdate(turnoId);
+        cajaTurnoService.requireAccess(turno, true);
+        String operationKey = normalizeOperationKey(request.clientOperationId());
+        String requestHash = operationKey == null
+                ? null
+                : RequestFingerprint.sha256(turnoId, request);
+        if (operationKey != null) {
+            RegisterVentaUseCase.CompletedVentaOperation completed = registerVentaUseCase
+                    .findCompletedOperation(operationKey)
+                    .orElse(null);
+            if (completed != null) {
+                if (!completed.requestHash().equals(requestHash)) {
+                    throw new BusinessException(
+                            "OPERACION_VENTA_REUTILIZADA",
+                            "El identificador de operacion ya fue usado con datos diferentes"
+                    );
+                }
+                return recoveredSaleResponse(completed.venta(), request.tipoComprobante());
+            }
+        }
+        cajaTurnoService.requireOpen(turno);
+        CajaFisica caja = turno.getCaja();
 
         String tenantId = TenantContext.getTenantId();
         Empresa empresa = empresaRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new BusinessException("TENANT_NO_ENCONTRADO", "Empresa no encontrada para tenant: " + tenantId));
+        facturadorEmissionCapabilityPolicy.validate(empresa, request.tipoComprobante());
         LocalDate fechaEmision = resolveFechaEmisionDate(request);
         ResolvedVentaCliente clienteVenta = resolveVentaCliente(request);
         validateFacturaCliente(request, clienteVenta);
@@ -90,7 +114,8 @@ public class RegistrarVentaCajaUseCase {
         }
         applyClienteCredito(request, clienteVenta);
 
-        for (ResolvedVentaItem item : resolvedItems) {
+        for (int itemIndex = 0; itemIndex < resolvedItems.size(); itemIndex++) {
+            ResolvedVentaItem item = resolvedItems.get(itemIndex);
             stockMovimientoUseCase.execute(new StockMovimientoRequest(
                     item.producto().getId(),
                     item.almacenId(),
@@ -106,68 +131,63 @@ public class RegistrarVentaCajaUseCase {
                     null,
                     null,
                     null,
-                    item.referencia()
+                    item.referencia(),
+                    buildStockOperationId(operationKey, itemIndex)
             ));
         }
 
-        boolean requiereFacturador = request.tipoComprobante() != TipoComprobanteVenta.TICKET_VENTA;
+        String externalId = buildExternalId(operationKey);
         VentaResponse venta = registerVentaUseCase.execute(
-                buildVentaRequest(request, resolvedItems, clienteVenta),
-                requiereFacturador ? Venta.FACTURACION_ESTADO_PENDIENTE : Venta.FACTURACION_ESTADO_NO_REQUIERE
+                buildVentaRequest(turnoId, request, resolvedItems, clienteVenta, externalId),
+                Venta.FACTURACION_ESTADO_PENDIENTE,
+                operationKey,
+                requestHash
         );
 
-        FacturadorTarget target = requiereFacturador ? resolveTarget(request.tipoComprobante()) : null;
-        if (requiereFacturador) {
-            Map<String, Object> payload = buildPayload(request, empresa, caja, target.tipoSunat(), resolvedItems, venta.externalId(), clienteVenta, fechaEmision);
-            dispatchVentaFacturacionAsyncUseCase.dispatch(new VentaFacturacionAsyncTask(
-                    tenantId,
-                    empresa.getRuc(),
-                    venta.id(),
-                    venta.externalId(),
-                    target.endpoint(),
-                    request.tipoComprobante().name(),
-                    payload
-            ));
-        }
+        FacturadorTarget target = resolveTarget(request.tipoComprobante());
+        Map<String, Object> payload = buildPayload(request, empresa, caja, target.tipoSunat(), resolvedItems, venta.externalId(), clienteVenta, fechaEmision);
+        dispatchVentaFacturacionAsyncUseCase.dispatch(new VentaFacturacionAsyncTask(
+                tenantId,
+                empresa.getRuc(),
+                venta.id(),
+                venta.externalId(),
+                target.endpoint(),
+                request.tipoComprobante().name(),
+                payload
+        ));
 
         String referencia = buildReferenciaPendiente(request.tipoComprobante(), venta.externalId());
         String descripcion = buildMovimientoDescripcion(request, clienteVenta);
 
-        CajaMovimiento movimiento = null;
-        if (!"CREDITO".equalsIgnoreCase(safeTrim(request.formaPago()))) {
-            movimiento = cajaMovimientoService.registrar(
-                    caja,
-                    "ENTRADA",
-                    request.total(),
-                    descripcion,
-                    referencia,
-                    null,
-                    request.responsableId(),
-                    request.responsableNombre()
-            );
-            cajaRepository.save(caja);
-        }
+        String medioPago = resolveMetodoPago(request);
+        CajaMovimiento movimiento = cajaMovimientoService.registrar(
+                turno,
+                "VENTA",
+                "VENTA",
+                medioPago,
+                request.total(),
+                descripcion,
+                referencia,
+                null,
+                venta.id(),
+                buildCashOperationId(operationKey),
+                operationKey == null ? null : RequestFingerprint.sha256(turnoId, "VENTA", request.total(), operationKey)
+        );
+        cajaTurnoRepository.save(turno);
 
         return new RegistrarVentaCajaResponse(
                 venta,
                 movimiento == null ? null : CajaMapper.toMovimientoResponse(movimiento),
-                requiereFacturador
-                        ? new FacturadorVentaResponse(
-                                true,
-                                202,
-                                target.endpoint(),
-                                request.tipoComprobante().name(),
-                                "Venta registrada. Facturacion en cola para procesamiento.",
-                                Map.of("estado", "PENDIENTE", "external_id", venta.externalId())
-                        )
-                        : new FacturadorVentaResponse(
-                                true,
-                                200,
-                                "",
-                                request.tipoComprobante().name(),
-                                "Ticket interno registrado. No requiere Facturador ni SUNAT.",
-                                Map.of("estado", "NO_REQUIERE", "external_id", venta.externalId())
-                        )
+                new FacturadorVentaResponse(
+                        true,
+                        202,
+                        target.endpoint(),
+                        request.tipoComprobante().name(),
+                        request.tipoComprobante() == TipoComprobanteVenta.TICKET_VENTA
+                                ? "Venta registrada. Ticket en cola; no se enviara a SUNAT."
+                                : "Venta registrada. Documento electronico en cola para procesamiento.",
+                        Map.of("estado", "PENDIENTE", "external_id", venta.externalId())
+                )
         );
     }
 
@@ -175,13 +195,13 @@ public class RegistrarVentaCajaUseCase {
         return switch (tipo) {
             case FACTURA -> new FacturadorTarget("/facturas", "01");
             case BOLETA, BOLETA_SIN_NOMBRE -> new FacturadorTarget("/boletas", "03");
-            case TICKET_VENTA -> throw new BusinessException("TICKET_INTERNO", "El ticket interno no se envia al facturador");
+            case TICKET_VENTA -> new FacturadorTarget("/tickets", "TK");
         };
     }
 
     private Map<String, Object> buildPayload(RegistrarVentaCajaRequest request,
                                              Empresa empresa,
-                                             Caja caja,
+                                             CajaFisica caja,
                                              String tipoSunat,
                                              List<ResolvedVentaItem> items,
                                              String externalId,
@@ -727,7 +747,7 @@ public class RegistrarVentaCajaUseCase {
         return value == null ? "" : value.trim();
     }
 
-    private List<ResolvedVentaItem> resolveVentaItems(RegistrarVentaCajaRequest request, Caja caja) {
+    private List<ResolvedVentaItem> resolveVentaItems(RegistrarVentaCajaRequest request, CajaFisica caja) {
         List<ResolvedVentaItem> resolved = new ArrayList<>();
         ConfiguracionTributariaEmpresa taxEmpresa = taxResolverService.configuracionEmpresa();
         for (RegistrarVentaCajaRequest.VentaProductoRequest item : request.items()) {
@@ -791,11 +811,11 @@ public class RegistrarVentaCajaUseCase {
         return resolved;
     }
 
-    private RegisterVentaRequest buildVentaRequest(RegistrarVentaCajaRequest request, List<ResolvedVentaItem> items, ResolvedVentaCliente clienteVenta) {
-        String externalId = "VENTA-CAJA-"
-                + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(OffsetDateTime.now())
-                + "-"
-                + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    private RegisterVentaRequest buildVentaRequest(Long turnoId,
+                                                   RegistrarVentaCajaRequest request,
+                                                   List<ResolvedVentaItem> items,
+                                                   ResolvedVentaCliente clienteVenta,
+                                                   String externalId) {
         String clienteDocumento = clienteVenta != null ? clienteVenta.numeroDocumento() : safeTrim(request.clienteNumeroDocumento());
         String clienteNombre = clienteVenta != null ? clienteVenta.nombre() : safeTrim(request.clienteNombre());
 
@@ -835,8 +855,86 @@ public class RegistrarVentaCajaUseCase {
                 clienteNombre,
                 items.getFirst().moneda(),
                 request.total(),
+                turnoId,
+                normalizeFormaPago(request.formaPago()),
+                resolveMetodoPago(request),
                 ventaItems
         );
+    }
+
+    private RegistrarVentaCajaResponse recoveredSaleResponse(
+            VentaResponse venta,
+            TipoComprobanteVenta tipoComprobante
+    ) {
+        FacturadorTarget target = resolveTarget(tipoComprobante);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("estado", venta.facturacionEstado());
+        data.put("external_id", venta.externalId());
+        data.put("recuperada", true);
+        return new RegistrarVentaCajaResponse(
+                venta,
+                null,
+                new FacturadorVentaResponse(
+                        true,
+                        venta.facturadorHttpStatus() == null ? 200 : venta.facturadorHttpStatus(),
+                        venta.facturadorEndpoint() == null ? target.endpoint() : venta.facturadorEndpoint(),
+                        venta.facturadorTipoComprobante() == null
+                                ? tipoComprobante.name()
+                                : venta.facturadorTipoComprobante(),
+                        "La venta ya estaba registrada; se recupero el resultado sin duplicarla.",
+                        data
+                )
+        );
+    }
+
+    private String buildExternalId(String operationKey) {
+        if (operationKey != null) {
+            return "VENTA-OP-" + RequestFingerprint.sha256(operationKey)
+                    .substring(0, 32)
+                    .toUpperCase();
+        }
+        return "VENTA-CAJA-"
+                + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(OffsetDateTime.now())
+                + "-"
+                + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    }
+
+    private String buildStockOperationId(String operationKey, int itemIndex) {
+        return operationKey == null
+                ? null
+                : "sale-stock-" + RequestFingerprint.sha256(operationKey, itemIndex);
+    }
+
+    private String buildCashOperationId(String operationKey) {
+        return operationKey == null
+                ? null
+                : "sale-cash-" + RequestFingerprint.sha256(operationKey);
+    }
+
+    private String normalizeOperationKey(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String operationKey = value.trim();
+        if (operationKey.length() > 100) {
+            throw new BusinessException(
+                    "OPERACION_VENTA_INVALIDA",
+                    "El identificador de operacion no puede superar 100 caracteres"
+            );
+        }
+        return operationKey;
+    }
+
+    private String normalizeFormaPago(String value) {
+        return "CREDITO".equalsIgnoreCase(safeTrim(value)) ? "CREDITO" : "CONTADO";
+    }
+
+    private String resolveMetodoPago(RegistrarVentaCajaRequest request) {
+        if ("CREDITO".equalsIgnoreCase(safeTrim(request.formaPago()))) {
+            return "CREDITO";
+        }
+        String value = safeTrim(request.metodoPago()).toUpperCase();
+        return value.isBlank() ? "EFECTIVO" : value;
     }
 
     private record ResolvedVentaItem(

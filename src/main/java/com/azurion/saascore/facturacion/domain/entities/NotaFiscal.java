@@ -30,6 +30,12 @@ public class NotaFiscal extends BaseEntity {
     @Column(name = "external_id", nullable = false, unique = true, length = 80)
     private String externalId;
 
+    @Column(name = "client_operation_id", length = 100)
+    private String clientOperationId;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
     @Column(name = "tipo_documento", nullable = false, length = 2)
     private String tipoDocumento;
 

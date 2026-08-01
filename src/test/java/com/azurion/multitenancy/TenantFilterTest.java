@@ -17,7 +17,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 class TenantFilterTest {
 
     private final TenantSchemaLookupService lookupService = mock(TenantSchemaLookupService.class);
-    private final TenantFilter filter = new TenantFilter(lookupService);
+    private final TenantMigrationReadiness migrationReadiness = new TenantMigrationReadiness();
+    private final TenantFilter filter = new TenantFilter(lookupService, migrationReadiness);
 
     TenantFilterTest() {
         ReflectionTestUtils.setField(filter, "tenantHeader", "X-Tenant-Id");
@@ -55,6 +56,22 @@ class TenantFilterTest {
         assertThat(response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
         assertThat(response.getContentAsString()).contains("TENANT_ACCESS_DENIED");
         verify(lookupService, never()).resolveSchema("../../otro-schema");
+        verify(chain, never()).doFilter(request, response);
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenTenantMigrationFailed() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Tenant-Id", "tenant_demo");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+        when(lookupService.resolveSchema("tenant_demo")).thenReturn("tenant_demo");
+        migrationReadiness.markFailed("tenant_demo", new IllegalStateException("missing column"));
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
+        assertThat(response.getContentAsString()).contains("TENANT_SCHEMA_UNAVAILABLE");
         verify(chain, never()).doFilter(request, response);
     }
 }

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.azurion.saascore.almacenes.domain.entities.Almacen;
 import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
-import com.azurion.saascore.caja.domain.entities.Caja;
+import com.azurion.saascore.caja.domain.entities.CajaFisica;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.shared.exception.BusinessException;
 import java.util.List;
@@ -25,14 +25,14 @@ class VentaSucursalStockPolicyTest {
     private AlmacenRepository almacenRepository;
 
     private VentaSucursalStockPolicy policy;
-    private Caja caja;
+    private CajaFisica caja;
 
     @BeforeEach
     void setUp() {
         policy = new VentaSucursalStockPolicy(almacenRepository);
         Sucursal sucursal = new Sucursal();
         sucursal.setId(10L);
-        caja = new Caja();
+        caja = new CajaFisica();
         caja.setSucursal(sucursal);
     }
 

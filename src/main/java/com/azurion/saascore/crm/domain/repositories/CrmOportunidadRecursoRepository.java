@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 
 public interface CrmOportunidadRecursoRepository extends JpaRepository<CrmOportunidadRecurso, Long> {
 
@@ -15,7 +16,16 @@ public interface CrmOportunidadRecursoRepository extends JpaRepository<CrmOportu
     List<CrmOportunidadRecurso> findAllByOrderByCreatedAtDescIdDesc();
 
     @EntityGraph(attributePaths = {"oportunidad"})
+    List<CrmOportunidadRecurso> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"oportunidad"})
     List<CrmOportunidadRecurso> findByOportunidadResponsableIdOrderByCreatedAtDescIdDesc(String responsableId);
+
+    @EntityGraph(attributePaths = {"oportunidad"})
+    List<CrmOportunidadRecurso> findByOportunidadResponsableIdOrderByCreatedAtDescIdDesc(
+            String responsableId,
+            Pageable pageable
+    );
 
     @EntityGraph(attributePaths = {"oportunidad"})
     Optional<CrmOportunidadRecurso> findWithOportunidadById(Long id);

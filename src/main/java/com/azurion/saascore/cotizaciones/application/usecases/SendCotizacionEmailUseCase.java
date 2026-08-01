@@ -1,16 +1,14 @@
 package com.azurion.saascore.cotizaciones.application.usecases;
 
 import com.azurion.multitenancy.TenantContext;
-import com.azurion.saascore.clientes.domain.entities.Cliente;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.saascore.cotizaciones.application.dto.SendCotizacionEmailResponse;
 import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
+import com.azurion.saascore.cotizaciones.application.services.CotizacionClienteData;
+import com.azurion.saascore.cotizaciones.application.services.CotizacionClienteDataResolver;
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
-import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
-import com.azurion.saascore.crm.domain.entities.CrmProspecto;
-import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.settings.email.application.services.EmailAttachment;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.shared.exception.BusinessException;
@@ -33,7 +31,7 @@ public class SendCotizacionEmailUseCase {
     private final GetCotizacionUseCase getCotizacionUseCase;
     private final GenerateCotizacionPdfUseCase generateCotizacionPdfUseCase;
     private final UpdateCotizacionEstadoUseCase updateCotizacionEstadoUseCase;
-    private final CrmOportunidadRepository oportunidadRepository;
+    private final CotizacionClienteDataResolver clienteDataResolver;
     private final EmailSenderService emailSenderService;
     private final PlatformTransactionManager transactionManager;
     private final CotizacionRepository cotizacionRepository;
@@ -98,7 +96,8 @@ public class SendCotizacionEmailUseCase {
     private EmailContent prepareEmail(Long id) {
         EmailContent content = new TransactionTemplate(transactionManager).execute(status -> {
             Cotizacion cotizacion = getCotizacionUseCase.find(id);
-            return new EmailContent(resolveRecipient(cotizacion), subject(cotizacion), body(cotizacion));
+            CotizacionClienteData cliente = clienteDataResolver.resolveForEmission(cotizacion);
+            return new EmailContent(resolveRecipient(cliente), subject(cotizacion), body(cotizacion, cliente));
         });
         if (content == null) {
             throw BusinessException.internal("COTIZACION_EMAIL_PREPARATION_ERROR", "No se pudo preparar el correo de cotizacion.");
@@ -111,25 +110,9 @@ public class SendCotizacionEmailUseCase {
         return message.length() <= 500 ? message : message.substring(0, 500);
     }
 
-    private String resolveRecipient(Cotizacion cotizacion) {
-        String clientEmail = email(cotizacion.getCliente());
-        if (clientEmail != null) {
-            return clientEmail;
-        }
-        if (cotizacion.getCrmOportunidadId() != null) {
-            CrmOportunidad oportunidad = oportunidadRepository.findWithRelationsById(cotizacion.getCrmOportunidadId())
-                    .orElseThrow(() -> new BusinessException(
-                            "COTIZACION_OPORTUNIDAD_NO_ENCONTRADA",
-                            "No se encontro la oportunidad vinculada a la cotizacion."
-                    ));
-            String opportunityClientEmail = email(oportunidad.getCliente());
-            if (opportunityClientEmail != null) {
-                return opportunityClientEmail;
-            }
-            CrmProspecto prospecto = oportunidad.getProspecto();
-            if (prospecto != null && hasText(prospecto.getCorreo())) {
-                return prospecto.getCorreo().trim();
-            }
+    private String resolveRecipient(CotizacionClienteData cliente) {
+        if (hasText(cliente.correo())) {
+            return cliente.correo().trim();
         }
         throw new BusinessException(
                 "COTIZACION_DESTINATARIO_SIN_CORREO",
@@ -137,18 +120,12 @@ public class SendCotizacionEmailUseCase {
         );
     }
 
-    private String email(Cliente cliente) {
-        return cliente != null && hasText(cliente.getEmail()) ? cliente.getEmail().trim() : null;
-    }
-
     private String subject(Cotizacion cotizacion) {
         return "Cotizacion COT-" + String.format("%03d", cotizacion.getId());
     }
 
-    private String body(Cotizacion cotizacion) {
-        String nombre = cotizacion.getCliente() != null && hasText(cotizacion.getCliente().getNombre())
-                ? cotizacion.getCliente().getNombre().trim()
-                : "cliente";
+    private String body(Cotizacion cotizacion, CotizacionClienteData cliente) {
+        String nombre = hasText(cliente.nombre()) ? cliente.nombre().trim() : "cliente";
         return "Hola " + nombre + ",\n\n"
                 + "Adjuntamos la cotizacion COT-" + String.format("%03d", cotizacion.getId())
                 + " por un total de S/ " + money(cotizacion.getTotal()) + ".\n\n"

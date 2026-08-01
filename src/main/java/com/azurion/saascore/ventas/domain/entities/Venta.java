@@ -37,6 +37,15 @@ public class Venta extends BaseEntity {
     @Column(name = "total", nullable = false, precision = 18, scale = 2)
     private BigDecimal total;
 
+    @Column(name = "caja_turno_id")
+    private Long cajaTurnoId;
+
+    @Column(name = "forma_pago", length = 20)
+    private String formaPago;
+
+    @Column(name = "metodo_pago", length = 30)
+    private String metodoPago;
+
     @Column(name = "fecha_venta", nullable = false)
     private OffsetDateTime fechaVenta;
 
@@ -81,4 +90,10 @@ public class Venta extends BaseEntity {
 
     @Column(name = "facturacion_actualizado_en")
     private OffsetDateTime facturacionActualizadoEn;
+
+    @Column(name = "client_operation_id", length = 100)
+    private String clientOperationId;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
 }

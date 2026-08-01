@@ -60,6 +60,12 @@ public class Compra extends BaseEntity {
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "REGISTRADA";
 
+    @Column(name = "client_operation_id", length = 100)
+    private String clientOperationId;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
     @OneToMany(mappedBy = "compra")
     private List<CompraDetalle> detalles = new ArrayList<>();
 }

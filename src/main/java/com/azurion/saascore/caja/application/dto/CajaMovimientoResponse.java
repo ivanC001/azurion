@@ -5,8 +5,13 @@ import java.time.OffsetDateTime;
 
 public record CajaMovimientoResponse(
         Long id,
+        Long turnoId,
         Long cajaId,
         String tipoMovimiento,
+        String origen,
+        String medioPago,
+        boolean afectaEfectivo,
+        Long ventaId,
         BigDecimal monto,
         BigDecimal saldoAnterior,
         BigDecimal saldoResultante,
@@ -15,6 +20,8 @@ public record CajaMovimientoResponse(
         String cuentaEmpresarial,
         String responsableId,
         String responsableNombre,
-        OffsetDateTime fechaMovimiento
+        OffsetDateTime fechaMovimiento,
+        boolean anulado,
+        String motivoAnulacion
 ) {
 }

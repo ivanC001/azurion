@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface GuiaRemisionRepository extends JpaRepository<GuiaRemision, Long> {
     Optional<GuiaRemision> findByExternalId(String externalId);
 
+    Optional<GuiaRemision> findByClientOperationId(String clientOperationId);
+
     @Query("""
             select guia from GuiaRemision guia
              where :query = ''

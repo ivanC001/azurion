@@ -12,6 +12,8 @@ public record StockResponse(
         String almacenNombre,
         BigDecimal cantidad,
         BigDecimal stockMinimo,
+        BigDecimal stockMaximo,
+        String ubicacionFisica,
         boolean stockBajo,
         boolean sinStock
 ) {

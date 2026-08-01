@@ -6,6 +6,8 @@ import com.azurion.saascore.empresas.application.dto.UpdateCurrentEmpresaProfile
 import com.azurion.saascore.empresas.application.usecases.GetCurrentEmpresaUseCase;
 import com.azurion.saascore.empresas.application.usecases.UpdateCurrentEmpresaBrandingUseCase;
 import com.azurion.saascore.empresas.application.usecases.UpdateCurrentEmpresaProfileUseCase;
+import com.azurion.saascore.facturacion.application.usecases.SynchronizeCurrentEmpresaFacturadorUseCase;
+import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,6 +30,7 @@ public class EmpresaBrandingController {
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
     private final UpdateCurrentEmpresaBrandingUseCase updateCurrentEmpresaBrandingUseCase;
     private final UpdateCurrentEmpresaProfileUseCase updateCurrentEmpresaProfileUseCase;
+    private final SynchronizeCurrentEmpresaFacturadorUseCase synchronizeCurrentEmpresaFacturadorUseCase;
 
     @GetMapping
     public ApiResponse<EmpresaResponse> getCurrent() {
@@ -41,5 +45,14 @@ public class EmpresaBrandingController {
     @PutMapping(value = "/branding", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<EmpresaResponse> updateBranding(@ModelAttribute UpdateEmpresaBrandingRequest request) {
         return ApiResponse.ok(updateCurrentEmpresaBrandingUseCase.execute(request), "Branding de empresa actualizado");
+    }
+
+    @PostMapping("/facturador/synchronize")
+    @RequireModule("ERP")
+    public ApiResponse<EmpresaResponse> synchronizeFacturador() {
+        return ApiResponse.ok(
+                synchronizeCurrentEmpresaFacturadorUseCase.execute(),
+                "Capacidades del facturador sincronizadas"
+        );
     }
 }

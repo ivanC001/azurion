@@ -27,7 +27,11 @@ public class FacturadorCallbackVerifier {
 
     public void verify(HttpServletRequest request, String rawBody) {
         if (!properties.isEnabled()) {
-            return;
+            throw new BusinessException(
+                    "FACTURADOR_CALLBACK_DISABLED",
+                    "El receptor de callbacks del facturador esta deshabilitado.",
+                    HttpStatus.SERVICE_UNAVAILABLE
+            );
         }
 
         String configuredApiKey = normalize(properties.getApiKey());

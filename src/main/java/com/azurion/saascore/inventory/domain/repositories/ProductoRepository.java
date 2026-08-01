@@ -26,17 +26,24 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
     boolean existsByCodigoBarrasIgnoreCaseAndIdNot(String codigoBarras, Long id);
     boolean existsByCodigoIgnoreCase(String codigo);
     boolean existsByCodigoIgnoreCaseAndIdNot(String codigo, Long id);
+    long countByActivoTrue();
+    long countByTipoProductoIgnoreCase(String tipoProducto);
 
-    @EntityGraph(attributePaths = "almacen")
+    @EntityGraph(attributePaths = {"almacen", "categoria", "marca", "unidadMedida"})
     List<Producto> findByAlmacenIdOrderByNombreAsc(Long almacenId);
 
-    @EntityGraph(attributePaths = "almacen")
+    @EntityGraph(attributePaths = {"almacen", "categoria", "marca", "unidadMedida"})
     List<Producto> findAllByOrderByNombreAsc();
 
     @EntityGraph(attributePaths = {"almacen", "categoria", "marca", "unidadMedida"})
     @Query("""
             select producto from Producto producto
-             where (:almacenId is null or producto.almacen.id = :almacenId)
+             where (:almacenId is null or exists (
+                       select stock.id
+                         from Stock stock
+                        where stock.producto = producto
+                          and stock.almacen.id = :almacenId
+                   ))
                and (:query = ''
                     or lower(producto.nombre) like lower(concat('%', :query, '%'))
                     or lower(producto.sku) like lower(concat('%', :query, '%'))

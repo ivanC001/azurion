@@ -12,6 +12,7 @@ import com.azurion.shared.contracts.ventas.SaleRegisteredEvent;
 import com.azurion.shared.event.InternalEventBus;
 import com.azurion.shared.exception.BusinessException;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,11 +29,21 @@ public class RegisterVentaUseCase {
 
     @Transactional
     public VentaResponse execute(RegisterVentaRequest request) {
-        return execute(request, Venta.FACTURACION_ESTADO_PENDIENTE);
+        return execute(request, Venta.FACTURACION_ESTADO_PENDIENTE, null, null);
     }
 
     @Transactional
     public VentaResponse execute(RegisterVentaRequest request, String facturacionEstadoInicial) {
+        return execute(request, facturacionEstadoInicial, null, null);
+    }
+
+    @Transactional
+    public VentaResponse execute(
+            RegisterVentaRequest request,
+            String facturacionEstadoInicial,
+            String clientOperationId,
+            String requestHash
+    ) {
         ventaRepository.findByExternalId(request.externalId()).ifPresent(existing -> {
             throw new BusinessException("VENTA_DUPLICATED", "A sale with same externalId already exists");
         });
@@ -43,12 +54,19 @@ public class RegisterVentaUseCase {
         venta.setClienteNombre(request.clienteNombre());
         venta.setMoneda(request.moneda());
         venta.setTotal(request.total());
+        venta.setCajaTurnoId(request.cajaTurnoId());
+        venta.setFormaPago(request.formaPago());
+        venta.setMetodoPago(request.metodoPago());
         venta.setFechaVenta(OffsetDateTime.now());
         venta.setFacturacionEstado(facturacionEstadoInicial);
         venta.setFacturacionIntentos(0);
         venta.setFacturacionActualizadoEn(OffsetDateTime.now());
+        venta.setClientOperationId(clientOperationId);
+        venta.setRequestHash(requestHash);
 
-        Venta saved = ventaRepository.save(venta);
+        Venta saved = clientOperationId == null
+                ? ventaRepository.save(venta)
+                : ventaRepository.saveAndFlush(venta);
         request.items().forEach(item -> {
             VentaDetalle detalle = new VentaDetalle();
             detalle.setVenta(saved);
@@ -83,6 +101,19 @@ public class RegisterVentaUseCase {
                 OffsetDateTime.now()
         ));
 
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<CompletedVentaOperation> findCompletedOperation(String clientOperationId) {
+        if (clientOperationId == null || clientOperationId.isBlank()) {
+            return Optional.empty();
+        }
+        return ventaRepository.findByClientOperationId(clientOperationId.trim())
+                .map(venta -> new CompletedVentaOperation(toResponse(venta), venta.getRequestHash()));
+    }
+
+    private VentaResponse toResponse(Venta saved) {
         return new VentaResponse(
                 saved.getId(),
                 saved.getExternalId(),
@@ -90,6 +121,9 @@ public class RegisterVentaUseCase {
                 saved.getClienteNombre(),
                 saved.getMoneda(),
                 saved.getTotal(),
+                saved.getCajaTurnoId(),
+                saved.getFormaPago(),
+                saved.getMetodoPago(),
                 saved.getFechaVenta(),
                 saved.getFacturacionEstado(),
                 saved.getFacturacionIntentos(),
@@ -106,5 +140,8 @@ public class RegisterVentaUseCase {
                 saved.getFacturadorRespuestaJson(),
                 saved.getFacturacionActualizadoEn()
         );
+    }
+
+    public record CompletedVentaOperation(VentaResponse venta, String requestHash) {
     }
 }

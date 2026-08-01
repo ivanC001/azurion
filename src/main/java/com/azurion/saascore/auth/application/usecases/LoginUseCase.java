@@ -299,6 +299,20 @@ public class LoginUseCase {
                 empresa.getTenantId(),
                 empresa.getSchemaName(),
                 empresa.getLogoPanelUrl(),
+                empresa.getTipoDocumentoFiscal(),
+                empresa.getNombreComercial(),
+                empresa.getPaisCodigo(),
+                empresa.getPaisNombre(),
+                empresa.getZonaHoraria(),
+                empresa.getIdioma(),
+                empresa.getFormatoFecha(),
+                empresa.getFormatoHora(),
+                empresa.getMonedaCodigo(),
+                empresa.getMonedaSimbolo(),
+                empresa.getFacturadorStatus(),
+                empresa.getFacturadorDocumentMode(),
+                empresa.getFacturadorFiscalStatus(),
+                empresa.getFacturadorSunatMode(),
                 empresa.isActivo()
         );
     }

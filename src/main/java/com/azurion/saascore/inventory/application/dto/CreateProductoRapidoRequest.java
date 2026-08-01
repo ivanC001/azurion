@@ -2,7 +2,6 @@ package com.azurion.saascore.inventory.application.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,10 +14,10 @@ public record CreateProductoRapidoRequest(
         Long categoriaId,
         Long unidadMedidaId,
         String tipoProducto,
-        @NotNull @DecimalMin("0.00") BigDecimal precioVenta,
+        @jakarta.validation.constraints.NotNull @DecimalMin("0.00") BigDecimal precioVenta,
         @DecimalMin("0.00") BigDecimal costoInicial,
         @DecimalMin("0.00") BigDecimal cantidadInicial,
-        @NotNull Long almacenId,
+        Long almacenId,
         Boolean manejaVencimiento,
         @DecimalMin("0.00") BigDecimal stockMinimo,
         @Size(max = 100) String codigoLote,

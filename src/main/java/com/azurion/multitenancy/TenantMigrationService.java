@@ -14,7 +14,6 @@ import lombok.Cleanup;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.exception.FlywayValidateException;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +26,7 @@ public class TenantMigrationService {
     private final EmpresaRepository empresaRepository;
     private final EmpresaModuloRepository empresaModuloRepository;
     private final TenantModuleMigrationPlanner migrationPlanner;
+    private final TenantMigrationReadiness migrationReadiness;
 
     public void migrateSchema(String schemaName) {
         migrateLegacySchema(schemaName);
@@ -71,7 +71,9 @@ public class TenantMigrationService {
                         registry.getSchemaName()
                 );
                 migrateTenant(registry.getTenantId(), registry.getSchemaName());
+                migrationReadiness.markReady(registry.getTenantId());
             } catch (Exception ex) {
+                migrationReadiness.markFailed(registry.getTenantId(), ex);
                 log.error(
                         "Tenant migration failed for tenant={} schema={}",
                         registry.getTenantId(),
@@ -90,7 +92,7 @@ public class TenantMigrationService {
                 .baselineOnMigrate(true)
                 .outOfOrder(true)
                 .load();
-        migrateWithRepair(schemaName, flyway);
+        migrateWithoutRepair(flyway);
     }
 
     private void migrateSchemaScripts(String schemaName, List<String> scriptNames) {
@@ -114,7 +116,7 @@ public class TenantMigrationService {
                     .outOfOrder(true)
                     .ignoreMigrationPatterns("*:missing")
                     .load();
-            migrateWithRepair(schemaName, flyway);
+            migrateWithoutRepair(flyway);
         } catch (IOException ex) {
             throw new IllegalStateException(
                     "No se pudieron preparar las migraciones modulares del tenant",
@@ -125,18 +127,10 @@ public class TenantMigrationService {
         }
     }
 
-    private void migrateWithRepair(String schemaName, Flyway flyway) {
-        try {
-            flyway.migrate();
-        } catch (FlywayValidateException ex) {
-            log.warn(
-                    "Flyway validation failed for schema={}. Running repair before retrying migration.",
-                    schemaName,
-                    ex
-            );
-            flyway.repair();
-            flyway.migrate();
-        }
+    private void migrateWithoutRepair(Flyway flyway) {
+        // migrate() valida el historial aplicado y luego ejecuta las migraciones pendientes.
+        // No se ejecuta repair automaticamente: un historial alterado debe bloquear el alta.
+        flyway.migrate();
     }
 
     private void copyMigrationScript(String scriptName, Path tempDirectory) throws IOException {

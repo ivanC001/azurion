@@ -4,16 +4,24 @@ import com.azurion.multitenancy.TenantContext;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.ventas.application.dto.RegisterVentaRequest;
 import com.azurion.saascore.ventas.application.dto.VentaResponse;
+import com.azurion.saascore.ventas.application.dto.VentaSummaryResponse;
+import com.azurion.saascore.ventas.application.usecases.DownloadVentaComprobanteUseCase;
 import com.azurion.saascore.ventas.application.usecases.ListVentasUseCase;
 import com.azurion.saascore.ventas.application.usecases.RegisterVentaUseCase;
 import com.azurion.saascore.ventas.infrastructure.realtime.VentaStatusRealtimeStreamService;
 import com.azurion.shared.api.ApiResponse;
+import com.azurion.shared.api.PageResponse;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,12 +37,45 @@ public class VentasController {
 
     private final RegisterVentaUseCase registerVentaUseCase;
     private final ListVentasUseCase listVentasUseCase;
+    private final DownloadVentaComprobanteUseCase downloadVentaComprobanteUseCase;
     private final VentaStatusRealtimeStreamService ventaStatusRealtimeStreamService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('VENTAS_READ')")
     public ApiResponse<List<VentaResponse>> list(@RequestParam(required = false) String q) {
         return ApiResponse.ok(listVentasUseCase.execute(q), "Ventas");
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAuthority('VENTAS_READ')")
+    public ApiResponse<PageResponse<VentaResponse>> page(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(listVentasUseCase.page(q, page, size), "Ventas paginadas");
+    }
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasAuthority('VENTAS_READ')")
+    public ApiResponse<VentaSummaryResponse> summary() {
+        return ApiResponse.ok(listVentasUseCase.summary(), "Resumen de ventas");
+    }
+
+    @GetMapping(value = "/{ventaId}/comprobante/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAuthority('VENTAS_READ')")
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable Long ventaId) {
+        var artifact = downloadVentaComprobanteUseCase.execute(ventaId);
+        String disposition = ContentDisposition.attachment()
+                .filename(artifact.filename(), StandardCharsets.UTF_8)
+                .build()
+                .toString();
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(artifact.content().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store, max-age=0")
+                .body(artifact.content());
     }
 
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

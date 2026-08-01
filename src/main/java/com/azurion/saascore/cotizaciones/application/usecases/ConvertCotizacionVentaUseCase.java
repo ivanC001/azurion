@@ -30,7 +30,11 @@ public class ConvertCotizacionVentaUseCase {
 
     @Transactional
     public ConvertCotizacionVentaResponse execute(Long id, ConvertCotizacionVentaRequest request) {
-        Cotizacion cotizacion = getCotizacionUseCase.find(id);
+        Cotizacion cotizacion = cotizacionRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new BusinessException(
+                        "COTIZACION_NO_ENCONTRADA",
+                        "Cotizacion no encontrada"
+                ));
         if (cotizacion.getVentaId() != null || "CONVERTIDA".equals(cotizacion.getEstado())) {
             throw new BusinessException("COTIZACION_YA_CONVERTIDA", "La cotizacion ya fue convertida en venta");
         }
@@ -54,8 +58,6 @@ public class ConvertCotizacionVentaUseCase {
         return new RegistrarVentaCajaRequest(
                 tipo,
                 cotizacion.getTotal(),
-                request.responsableId(),
-                request.responsableNombre(),
                 cliente == null ? null : cliente.getId(),
                 cliente == null ? null : cliente.getTipoDocumento(),
                 cliente == null ? null : cliente.getNumeroDocumento(),
@@ -64,6 +66,7 @@ public class ConvertCotizacionVentaUseCase {
                 request.moneda() == null || request.moneda().isBlank() ? cotizacion.getMoneda() : request.moneda(),
                 request.tipoCambio(),
                 request.formaPago(),
+                "EFECTIVO",
                 false,
                 null,
                 null,
@@ -72,7 +75,8 @@ public class ConvertCotizacionVentaUseCase {
                 null,
                 null,
                 "Venta generada desde cotizacion #" + cotizacion.getId(),
-                buildItems(cotizacion.getDetalles())
+                buildItems(cotizacion.getDetalles()),
+                "quote-conversion-" + cotizacion.getId()
         );
     }
 

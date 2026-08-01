@@ -1,6 +1,7 @@
 package com.azurion.saascore.clientes.application.dto;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -11,6 +12,10 @@ public record RegistrarClienteAbonoRequest(
         BigDecimal monto,
 
         @Size(max = 500, message = "La observacion no puede superar 500 caracteres")
-        String observacion
+        String observacion,
+
+        @NotBlank(message = "El identificador de operacion es obligatorio")
+        @Size(max = 100, message = "El identificador de operacion no puede superar 100 caracteres")
+        String clientOperationId
 ) {
 }

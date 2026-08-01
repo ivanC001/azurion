@@ -43,6 +43,8 @@ import com.azurion.saascore.crm.application.dto.PublicLeadReceiptResponse;
 import com.azurion.saascore.crm.application.dto.RealizarCrmActividadRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
+import com.azurion.saascore.crm.application.dto.SendCrmOpportunityEmailRequest;
+import com.azurion.saascore.crm.application.dto.SendCrmOpportunityEmailResponse;
 import com.azurion.saascore.crm.application.dto.UpdateCrmEtapaPipelineRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmCanalTokenConfigRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmCatalogoItemRequest;
@@ -80,6 +82,8 @@ import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
+import com.azurion.saascore.settings.email.application.services.EmailSenderService;
+import com.azurion.multitenancy.TenantContext;
 import com.azurion.shared.api.PageResponse;
 import com.azurion.shared.exception.BusinessException;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -121,7 +125,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CrmUseCaseService {
 
     private static final String PUBLIC_LEAD_OWNER = "crm-public";
-    private static final Set<String> TIPOS_PERSONA = Set.of("NATURAL", "JURIDICA");
+    private static final Set<String> TIPOS_PERSONA = Set.of("SIN_DEFINIR", "NATURAL", "JURIDICA");
     private static final Set<String> ORIGENES = Set.of("WHATSAPP", "FACEBOOK", "INSTAGRAM", "WEB", "REFERIDO", "LLAMADA", "VISITA", "OTRO");
     private static final Set<String> ESTADOS_PROSPECTO = Set.of(
             "NUEVO", "CONTACTADO", "EN_ESPERA", "INTERESADO", "CALIFICADO", "PERDIDO", "CONVERTIDO", "NO_INTERESADO", "DESCARTADO"
@@ -175,6 +179,7 @@ public class CrmUseCaseService {
     private final CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
     private final CrmIngressLockService ingressLockService;
     private final CrmPhoneNormalizationService phoneNormalizationService;
+    private final EmailSenderService emailSenderService;
 
     @Transactional(readOnly = true)
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
@@ -307,6 +312,7 @@ public class CrmUseCaseService {
         CrmCatalogoItem catalogoItem = request.catalogoItemId() == null ? null : findCatalogoItem(request.catalogoItemId());
         CrmProspecto prospecto = new CrmProspecto();
         prospecto.setTipoPersona(requireEnum(request.tipoPersona(), TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
+        prospecto.setPaisCodigo(normalizeCountryCode(request.paisCodigo()));
         prospecto.setTipoDocumento(trim(request.tipoDocumento()));
         prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
         prospecto.setNombre(required(request.nombre(), "El nombre del prospecto es obligatorio"));
@@ -378,7 +384,7 @@ public class CrmUseCaseService {
         CrmProspecto prospecto = findDuplicatePublicLead(request, leadContext).orElseGet(CrmProspecto::new);
         boolean isNew = prospecto.getId() == null;
         if (isNew) {
-            prospecto.setTipoPersona(defaultEnum(request.tipoPersona(), "NATURAL", TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
+            prospecto.setTipoPersona(resolvePublicPersonType(request));
             prospecto.setTipoDocumento(trim(request.tipoDocumento()));
             prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
             prospecto.setNombre(required(request.nombre(), "El nombre del lead es obligatorio"));
@@ -577,9 +583,7 @@ public class CrmUseCaseService {
 
     @Transactional(readOnly = true)
     public List<CrmProspectoResponse> listProspectos() {
-        return CrmMapper.toProspectoResponses(canViewAll()
-                ? prospectoRepository.findAllByOrderByIdDesc()
-                : prospectoRepository.findByResponsableIdInOrderByIdDesc(List.of(currentUserKey(), PUBLIC_LEAD_OWNER)));
+        return pageProspectos(null, null, null, null, null, null, null, null, 0, 100).content();
     }
 
     @Transactional(readOnly = true)
@@ -635,6 +639,7 @@ public class CrmUseCaseService {
         CrmProspecto prospecto = findProspecto(id);
         ensureCanWrite(prospecto.getResponsableId());
         updateIfPresent(request.tipoPersona(), value -> prospecto.setTipoPersona(requireEnum(value, TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO")));
+        updateIfPresent(request.paisCodigo(), value -> prospecto.setPaisCodigo(normalizeCountryCode(value)));
         updateIfPresent(request.tipoDocumento(), value -> prospecto.setTipoDocumento(trim(value)));
         updateIfPresent(request.numeroDocumento(), value -> prospecto.setNumeroDocumento(trim(value)));
         updateIfPresent(request.nombre(), value -> prospecto.setNombre(required(value, "El nombre del prospecto es obligatorio")));
@@ -798,6 +803,7 @@ public class CrmUseCaseService {
         oportunidad.setFechaCierreEstimada(request.fechaCierreEstimada());
         oportunidad.setResponsableId(responsableId);
         oportunidad.setEstado("ABIERTA");
+        ensureOpportunityPipelineData(oportunidad);
         ensureNoActiveOpportunityDuplicate(oportunidad);
         CrmOportunidad saved = oportunidadRepository.save(oportunidad);
         if (saved.getProspecto() != null) {
@@ -807,14 +813,29 @@ public class CrmUseCaseService {
             prospecto.setFechaConversion(OffsetDateTime.now());
             prospectoRepository.save(prospecto);
         }
+        createInitialOpportunityActivity(saved, request);
         return CrmMapper.toOportunidadResponse(saved);
+    }
+
+    private void createInitialOpportunityActivity(
+            CrmOportunidad opportunity,
+            CreateCrmOportunidadRequest request) {
+        CrmActividad activity = new CrmActividad();
+        activity.setProspecto(opportunity.getProspecto());
+        activity.setOportunidad(opportunity);
+        activity.setCliente(opportunity.getCliente());
+        activity.setTipoActividad("TAREA");
+        activity.setAsunto(required(request.proximaAccion(), "La siguiente accion es obligatoria"));
+        activity.setDescripcion("Siguiente paso definido al crear la oportunidad");
+        activity.setFechaProgramada(request.fechaProximaAccion());
+        activity.setEstado("PENDIENTE");
+        activity.setUsuarioId(opportunity.getResponsableId());
+        actividadRepository.save(activity);
     }
 
     @Transactional(readOnly = true)
     public List<CrmOportunidadResponse> listOportunidades() {
-        return CrmMapper.toOportunidadResponses(canViewAll()
-                ? oportunidadRepository.findAllByOrderByIdDesc()
-                : oportunidadRepository.findByResponsableIdOrderByIdDesc(currentUserKey()));
+        return pageOportunidades(null, null, null, null, null, null, null, 0, 100).content();
     }
 
     @Transactional(readOnly = true)
@@ -930,6 +951,7 @@ public class CrmUseCaseService {
         if (request.responsableId() != null) {
             oportunidad.setResponsableId(resolveResponsable(request.responsableId()));
         }
+        ensureOpportunityPipelineData(oportunidad);
         ensureNoActiveOpportunityDuplicate(oportunidad);
         return CrmMapper.toOportunidadResponse(oportunidadRepository.save(oportunidad));
     }
@@ -959,6 +981,83 @@ public class CrmUseCaseService {
         return CrmMapper.toOportunidadResponse(oportunidadRepository.save(oportunidad));
     }
 
+    public SendCrmOpportunityEmailResponse sendOpportunityEmail(
+            Long id,
+            SendCrmOpportunityEmailRequest request) {
+        CrmOportunidad oportunidad = findOportunidad(id);
+        ensureCanWrite(oportunidad.getResponsableId());
+        String recipient = firstNonBlank(
+                oportunidad.getCliente() == null ? null : oportunidad.getCliente().getEmail(),
+                oportunidad.getProspecto() == null ? null : oportunidad.getProspecto().getCorreo()
+        );
+        if (!hasText(recipient)) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_CORREO_REQUERIDO",
+                    "El prospecto o cliente no tiene un correo registrado"
+            );
+        }
+        String subject = required(request.asunto(), "El asunto del correo es obligatorio");
+        String message = required(request.mensaje(), "El mensaje del correo es obligatorio");
+        emailSenderService.sendEmail(TenantContext.getTenantId(), recipient, subject, message, List.of());
+
+        OffsetDateTime sentAt = OffsetDateTime.now();
+        recordSentEmailActivity(
+                oportunidad.getProspecto(),
+                oportunidad,
+                oportunidad.getCliente(),
+                subject,
+                message,
+                sentAt
+        );
+        return new SendCrmOpportunityEmailResponse(recipient, subject, sentAt);
+    }
+
+    public SendCrmOpportunityEmailResponse sendProspectEmail(
+            Long id,
+            SendCrmOpportunityEmailRequest request) {
+        CrmProspecto prospecto = findProspecto(id);
+        ensureCanWrite(prospecto.getResponsableId());
+        String recipient = required(prospecto.getCorreo(), "El prospecto no tiene un correo registrado");
+        String subject = required(request.asunto(), "El asunto del correo es obligatorio");
+        String message = required(request.mensaje(), "El mensaje del correo es obligatorio");
+        emailSenderService.sendEmail(TenantContext.getTenantId(), recipient, subject, message, List.of());
+
+        OffsetDateTime sentAt = OffsetDateTime.now();
+        recordSentEmailActivity(
+                prospecto,
+                null,
+                prospecto.getClienteId() == null
+                        ? null
+                        : clienteRepository.findById(prospecto.getClienteId()).orElse(null),
+                subject,
+                message,
+                sentAt
+        );
+        return new SendCrmOpportunityEmailResponse(recipient, subject, sentAt);
+    }
+
+    private void recordSentEmailActivity(
+            CrmProspecto prospecto,
+            CrmOportunidad oportunidad,
+            Cliente cliente,
+            String subject,
+            String message,
+            OffsetDateTime sentAt) {
+        CrmActividad activity = new CrmActividad();
+        activity.setProspecto(prospecto);
+        activity.setOportunidad(oportunidad);
+        activity.setCliente(cliente);
+        activity.setTipoActividad("CORREO");
+        activity.setAsunto(subject);
+        activity.setDescripcion(message.length() <= 1000 ? message : message.substring(0, 1000));
+        activity.setFechaProgramada(sentAt);
+        activity.setFechaRealizada(sentAt);
+        activity.setEstado("REALIZADA");
+        activity.setUsuarioId(currentUserKey());
+        activity.setResultado("Correo enviado desde el SMTP configurado del tenant");
+        actividadRepository.save(activity);
+    }
+
     @Transactional
     public CrmOportunidadResponse marcarPerdida(Long id, MarcarPerdidaRequest request) {
         CrmOportunidad oportunidad = findOportunidad(id);
@@ -983,6 +1082,9 @@ public class CrmUseCaseService {
         }
         Long clienteId = request.clienteId() != null ? request.clienteId()
                 : oportunidad.getCliente() == null ? null : oportunidad.getCliente().getId();
+        if (clienteId == null && oportunidad.getProspecto() != null) {
+            ensureProspectClassified(oportunidad.getProspecto());
+        }
         CotizacionResponse cotizacion = createCotizacionUseCase.execute(new CreateCotizacionRequest(
                 clienteId,
                 request.usuarioId(),
@@ -1079,9 +1181,7 @@ public class CrmUseCaseService {
 
     @Transactional(readOnly = true)
     public List<CrmActividadResponse> listActividades() {
-        return CrmMapper.toActividadResponses(canViewAll()
-                ? actividadRepository.findAllByOrderByFechaProgramadaAscIdDesc()
-                : actividadRepository.findByUsuarioIdInOrderByFechaProgramadaAscIdDesc(List.of(currentUserKey(), PUBLIC_LEAD_OWNER)));
+        return pageActividades(null, null, null, null, null, null, null, null, 0, 100).content();
     }
 
     @Transactional(readOnly = true)
@@ -1156,9 +1256,9 @@ public class CrmUseCaseService {
 
     @Transactional(readOnly = true)
     public CrmDashboardResponse dashboard() {
-        List<CrmOportunidad> oportunidades = scopedOportunidades();
         boolean viewAll = canViewAll();
         String current = currentUserKey();
+        String ownerScope = viewAll ? null : current;
         return new CrmDashboardResponse(
                 viewAll ? prospectoRepository.countByEstado("NUEVO") : prospectoRepository.countByResponsableIdAndEstado(current, "NUEVO"),
                 viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO"),
@@ -1171,8 +1271,8 @@ public class CrmUseCaseService {
                         : actividadRepository.countByUsuarioIdAndEstadoAndFechaProgramadaBefore(current, "PENDIENTE", OffsetDateTime.now()),
                 viewAll ? prospectoRepository.countByCanalIngresoNot("MANUAL") : 0,
                 viewAll ? prospectoRepository.countByCanalIngreso("MANUAL") : 0,
-                sumPipeline(oportunidades),
-                resumenPorEtapa(oportunidades)
+                money(oportunidadRepository.sumOpenPipelineScoped(ownerScope)),
+                resumenPorEtapaScoped(ownerScope)
         );
     }
 
@@ -1181,7 +1281,7 @@ public class CrmUseCaseService {
         boolean viewAll = canViewAll();
         String current = currentUserKey();
         return new CrmReportesResponse(
-                resumenPorEtapa(scopedOportunidades()),
+                resumenPorEtapaScoped(viewAll ? null : current),
                 viewAll ? actividadRepository.countByEstado("PENDIENTE") : actividadRepository.countByUsuarioIdAndEstado(current, "PENDIENTE"),
                 viewAll ? actividadRepository.countByEstado("REALIZADA") : actividadRepository.countByUsuarioIdAndEstado(current, "REALIZADA"),
                 viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO"),
@@ -1191,25 +1291,20 @@ public class CrmUseCaseService {
 
     @Transactional(readOnly = true)
     public List<CrmReporteBucketResponse> reporteOportunidadesEtapa() {
-        return resumenPorEtapa(scopedOportunidades()).stream()
+        return resumenPorEtapaScoped(canViewAll() ? null : currentUserKey()).stream()
                 .map(item -> new CrmReporteBucketResponse(item.etapa(), item.etapa(), item.cantidad(), item.monto()))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<CrmReporteBucketResponse> reporteOportunidadesVendedor() {
-        return scopedOportunidades().stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        CrmOportunidad::getResponsableId,
-                        LinkedHashMap::new,
-                        java.util.stream.Collectors.toList()
-                ))
-                .entrySet().stream()
-                .map(entry -> new CrmReporteBucketResponse(
-                        entry.getKey(),
-                        entry.getKey(),
-                        entry.getValue().size(),
-                        sumAmount(entry.getValue())
+        String ownerScope = canViewAll() ? null : currentUserKey();
+        return oportunidadRepository.summarizeByOwnerScoped(ownerScope).stream()
+                .map(row -> new CrmReporteBucketResponse(
+                        row.getCodigo(),
+                        row.getCodigo(),
+                        row.getCantidad(),
+                        money(row.getMonto())
                 ))
                 .toList();
     }
@@ -1218,12 +1313,14 @@ public class CrmUseCaseService {
     public Map<String, Object> reporteConversiones() {
         boolean viewAll = canViewAll();
         String current = currentUserKey();
-        List<CrmOportunidad> oportunidadesScope = scopedOportunidades();
+        String ownerScope = viewAll ? null : current;
         long prospectos = viewAll ? prospectoRepository.count() : prospectoRepository.countByResponsableId(current);
         long convertidos = viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO");
-        long oportunidades = oportunidadesScope.size();
-        long ganadas = oportunidadesScope.stream().filter(item -> "GANADA".equals(item.getEstado())).count();
-        long cotizadas = oportunidadesScope.stream().filter(item -> "COTIZADO".equals(item.getEtapa()) || "GANADA".equals(item.getEstado())).count();
+        long oportunidades = oportunidadRepository.countScoped(ownerScope);
+        long ganadas = viewAll
+                ? oportunidadRepository.countByEstado("GANADA")
+                : oportunidadRepository.countByResponsableIdAndEstado(current, "GANADA");
+        long cotizadas = oportunidadRepository.countQuotedScoped(ownerScope);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("prospectoCliente", conversion(convertidos, prospectos));
         response.put("oportunidadGanada", conversion(ganadas, oportunidades));
@@ -1237,28 +1334,30 @@ public class CrmUseCaseService {
 
     @Transactional(readOnly = true)
     public List<CrmReporteBucketResponse> reporteProspectosOrigen() {
-        List<CrmProspecto> prospectos = canViewAll()
-                ? prospectoRepository.findAllByOrderByIdDesc()
-                : prospectoRepository.findByResponsableIdOrderByIdDesc(currentUserKey());
-        return prospectos.stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        CrmProspecto::getOrigen,
-                        LinkedHashMap::new,
-                        java.util.stream.Collectors.counting()
+        String ownerScope = canViewAll() ? null : currentUserKey();
+        return prospectoRepository.summarizeByOriginScoped(ownerScope).stream()
+                .map(row -> new CrmReporteBucketResponse(
+                        row.getCodigo(), row.getCodigo(), row.getCantidad(), BigDecimal.ZERO
                 ))
-                .entrySet().stream()
-                .map(entry -> new CrmReporteBucketResponse(entry.getKey(), entry.getKey(), entry.getValue(), BigDecimal.ZERO))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> reporteGanadasPerdidas() {
-        List<CrmOportunidad> oportunidades = scopedOportunidades();
+        boolean viewAll = canViewAll();
+        String current = currentUserKey();
+        String ownerScope = viewAll ? null : current;
+        long ganadas = viewAll
+                ? oportunidadRepository.countByEstado("GANADA")
+                : oportunidadRepository.countByResponsableIdAndEstado(current, "GANADA");
+        long perdidas = viewAll
+                ? oportunidadRepository.countByEstado("PERDIDA")
+                : oportunidadRepository.countByResponsableIdAndEstado(current, "PERDIDA");
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("ganadas", oportunidades.stream().filter(item -> "GANADA".equals(item.getEstado())).count());
-        response.put("perdidas", oportunidades.stream().filter(item -> "PERDIDA".equals(item.getEstado())).count());
-        response.put("montoGanado", sumAmount(oportunidades.stream().filter(item -> "GANADA".equals(item.getEstado())).toList()));
-        response.put("montoPerdido", sumAmount(oportunidades.stream().filter(item -> "PERDIDA".equals(item.getEstado())).toList()));
+        response.put("ganadas", ganadas);
+        response.put("perdidas", perdidas);
+        response.put("montoGanado", money(oportunidadRepository.sumRealByEstadoScoped(ownerScope, "GANADA")));
+        response.put("montoPerdido", money(oportunidadRepository.sumRealByEstadoScoped(ownerScope, "PERDIDA")));
         return response;
     }
 
@@ -1386,6 +1485,7 @@ public class CrmUseCaseService {
         if (prospecto.getClienteId() != null) {
             return findCliente(prospecto.getClienteId());
         }
+        ensureProspectClassified(prospecto);
         String tipoDocumento = normalizeClienteTipoDocumento(required(prospecto.getTipoDocumento(), "El prospecto necesita tipo de documento para convertirse en cliente"));
         String numeroDocumento = required(prospecto.getNumeroDocumento(), "El prospecto necesita numero de documento para convertirse en cliente");
         String nombre = "JURIDICA".equals(prospecto.getTipoPersona())
@@ -1649,6 +1749,46 @@ public class CrmUseCaseService {
                 : oportunidadRepository.findByResponsableIdOrderByIdDesc(currentUserKey());
     }
 
+    private void ensureOpportunityPipelineData(CrmOportunidad oportunidad) {
+        if (oportunidad.getProspecto() == null && oportunidad.getCliente() == null) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_CONTACTO_REQUERIDO",
+                    "Relaciona la oportunidad con un prospecto o cliente"
+            );
+        }
+        if (oportunidad.getCatalogoItemId() == null) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_OFERTA_REQUERIDA",
+                    "Selecciona una oferta del catalogo CRM"
+            );
+        }
+        if (oportunidad.getMontoEstimado() == null
+                || oportunidad.getMontoEstimado().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_MONTO_REQUERIDO",
+                    "El monto estimado debe ser mayor que cero"
+            );
+        }
+        if (oportunidad.getProbabilidad() == null) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_PROBABILIDAD_REQUERIDA",
+                    "Define la probabilidad de cierre"
+            );
+        }
+        if (oportunidad.getFechaCierreEstimada() == null) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_CIERRE_REQUERIDO",
+                    "Define la fecha estimada de cierre"
+            );
+        }
+        if (!hasText(oportunidad.getResponsableId())) {
+            throw new BusinessException(
+                    "CRM_OPORTUNIDAD_RESPONSABLE_REQUERIDO",
+                    "Asigna un responsable a la oportunidad"
+            );
+        }
+    }
+
     private PageResponse<CrmOportunidadResponse> pageOportunidades(String query,
                                                                   Long etapaId,
                                                                   String etapa,
@@ -1907,6 +2047,24 @@ public class CrmUseCaseService {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
+    private List<CrmEtapaResumenResponse> resumenPorEtapaScoped(String ownerScope) {
+        Map<String, CrmOportunidadRepository.AggregateProjection> totals = new LinkedHashMap<>();
+        for (CrmOportunidadRepository.AggregateProjection row
+                : oportunidadRepository.summarizeByStageScoped(ownerScope)) {
+            totals.put(row.getCodigo(), row);
+        }
+        return activeStages().stream()
+                .map(stage -> {
+                    CrmOportunidadRepository.AggregateProjection aggregate = totals.get(stage.getCodigo());
+                    return new CrmEtapaResumenResponse(
+                            stage.getCodigo(),
+                            aggregate == null ? 0 : aggregate.getCantidad(),
+                            aggregate == null ? BigDecimal.ZERO.setScale(2) : money(aggregate.getMonto())
+                    );
+                })
+                .toList();
+    }
+
     private List<CrmEtapaResumenResponse> resumenPorEtapa(List<CrmOportunidad> oportunidades) {
         return activeStages().stream()
                 .map(etapa -> {
@@ -2028,6 +2186,12 @@ public class CrmUseCaseService {
     }
 
     private void mergeMissingPublicContactFields(CrmProspecto prospecto, PublicCrmLeadRequest request) {
+        if (!hasText(prospecto.getTipoPersona()) || "SIN_DEFINIR".equals(prospecto.getTipoPersona())) {
+            String incomingType = resolvePublicPersonType(request);
+            if (!"SIN_DEFINIR".equals(incomingType)) {
+                prospecto.setTipoPersona(incomingType);
+            }
+        }
         if (!hasText(prospecto.getTelefono())) {
             prospecto.setTelefono(trim(request.telefono()));
         }
@@ -2048,6 +2212,42 @@ public class CrmUseCaseService {
         }
         if (!hasText(prospecto.getDireccion())) {
             prospecto.setDireccion(trim(request.direccion()));
+        }
+    }
+
+    private String resolvePublicPersonType(PublicCrmLeadRequest request) {
+        String explicitType = optionalEnum(request.tipoPersona(), TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO");
+        if ("NATURAL".equals(explicitType) || "JURIDICA".equals(explicitType)) {
+            return explicitType;
+        }
+
+        String rawDocumentType = trim(request.tipoDocumento());
+        String documentType = rawDocumentType == null ? null : rawDocumentType.toUpperCase(Locale.ROOT);
+        if ("6".equals(documentType) || "RUC".equals(documentType)) {
+            return "JURIDICA";
+        }
+        if ("1".equals(documentType) || "DNI".equals(documentType)) {
+            return "NATURAL";
+        }
+
+        String documentNumber = trim(request.numeroDocumento());
+        String digits = documentNumber == null ? "" : documentNumber.replaceAll("\\D", "");
+        if (digits.length() == 11) {
+            return "JURIDICA";
+        }
+        if (digits.length() == 8) {
+            return "NATURAL";
+        }
+        return "SIN_DEFINIR";
+    }
+
+    private void ensureProspectClassified(CrmProspecto prospecto) {
+        if (!"NATURAL".equals(prospecto.getTipoPersona())
+                && !"JURIDICA".equals(prospecto.getTipoPersona())) {
+            throw new BusinessException(
+                    "CRM_TIPO_CLIENTE_REQUERIDO",
+                    "Clasifica el prospecto como persona natural o empresa antes de cotizar o convertirlo en cliente"
+            );
         }
     }
 
@@ -2447,6 +2647,18 @@ public class CrmUseCaseService {
 
     private String normalizeCode(String value) {
         return normalize(value).replaceAll("[^A-Z0-9_]", "_");
+    }
+
+    private String normalizeCountryCode(String value) {
+        String normalized = trim(value);
+        if (normalized == null) {
+            return null;
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!normalized.matches("^[A-Z]{2}$")) {
+            throw new BusinessException("PAIS_CRM_INVALIDO", "El país del prospecto debe usar un código ISO de dos letras");
+        }
+        return normalized;
     }
 
     private String trim(String value) {

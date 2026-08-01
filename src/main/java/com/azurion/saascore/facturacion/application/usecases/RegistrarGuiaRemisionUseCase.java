@@ -15,6 +15,8 @@ import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
+import com.azurion.shared.util.RequestFingerprint;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -29,6 +31,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -39,8 +42,34 @@ public class RegistrarGuiaRemisionUseCase {
     private final ProductoRepository productoRepository;
     private final GuiaRemisionRepository guiaRemisionRepository;
     private final FacturadorClient facturadorClient;
+    private final BusinessOperationLockService operationLockService;
 
+    @Transactional
     public RegistrarGuiaRemisionResponse execute(RegistrarGuiaRemisionRequest request) {
+        String clientOperationId = normalizeOperationId(request.clientOperationId());
+        String requestHash = RequestFingerprint.sha256(
+                request.sucursalOrigenId(),
+                request.sucursalDestinoId(),
+                request.fechaTraslado(),
+                request.motivoTraslado(),
+                request.transportista(),
+                request.observacion(),
+                request.responsableId(),
+                request.items()
+        );
+        GuiaRemision retryGuia = null;
+        if (clientOperationId != null) {
+            operationLockService.lockAll(List.of("remission-guide:" + clientOperationId));
+            GuiaRemision existing = guiaRemisionRepository.findByClientOperationId(clientOperationId).orElse(null);
+            if (existing != null) {
+                validateSameRequest(existing.getRequestHash(), requestHash);
+                if (!GuiaRemision.ESTADO_ERROR.equals(existing.getFacturacionEstado())) {
+                    return existingResponse(existing);
+                }
+                retryGuia = existing;
+            }
+        }
+
         if (request.sucursalOrigenId().equals(request.sucursalDestinoId())) {
             throw new BusinessException("GUIA_SUCURSAL_DESTINO_INVALIDA", "La sucursal destino debe ser distinta a origen.");
         }
@@ -60,18 +89,24 @@ public class RegistrarGuiaRemisionUseCase {
 
         LocalDate fechaTraslado = parseFechaTraslado(request.fechaTraslado());
         LocalDate fechaEmision = LocalDate.now(ZoneId.of("America/Lima"));
-        String externalId = "GUIA-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase(Locale.ROOT);
+        String externalId = retryGuia == null
+                ? buildExternalId(clientOperationId)
+                : retryGuia.getExternalId();
         List<ResolvedGuiaItem> items = resolveItems(request.items());
 
-        GuiaRemision guia = createGuia(
-                request,
-                origen,
-                destino,
-                items,
-                externalId,
-                fechaEmision,
-                fechaTraslado
-        );
+        GuiaRemision guia = retryGuia == null
+                ? createGuia(
+                        request,
+                        origen,
+                        destino,
+                        items,
+                        externalId,
+                        fechaEmision,
+                        fechaTraslado,
+                        clientOperationId,
+                        requestHash
+                )
+                : retryGuia;
 
         Map<String, Object> payload = buildPayload(
                 request,
@@ -148,10 +183,14 @@ public class RegistrarGuiaRemisionUseCase {
             List<ResolvedGuiaItem> items,
             String externalId,
             LocalDate fechaEmision,
-            LocalDate fechaTraslado
+            LocalDate fechaTraslado,
+            String clientOperationId,
+            String requestHash
     ) {
         GuiaRemision guia = new GuiaRemision();
         guia.setExternalId(externalId);
+        guia.setClientOperationId(clientOperationId);
+        guia.setRequestHash(requestHash);
         guia.setSucursalOrigenId(origen.getId());
         guia.setSucursalOrigenNombre(trimToMax(origen.getNombre(), 255));
         guia.setSucursalDestinoId(destino.getId());
@@ -170,7 +209,9 @@ public class RegistrarGuiaRemisionUseCase {
         guia.setFacturadorTipoComprobante("09");
         guia.setFacturadorMensaje("Guia registrada en Azurion. Pendiente de envio al facturador.");
         guia.setFacturacionActualizadoEn(OffsetDateTime.now());
-        return guiaRemisionRepository.save(guia);
+        return clientOperationId == null
+                ? guiaRemisionRepository.save(guia)
+                : guiaRemisionRepository.saveAndFlush(guia);
     }
 
     private void markGuiaProcessing(GuiaRemision guia) {
@@ -471,6 +512,52 @@ public class RegistrarGuiaRemisionUseCase {
             return trimmed;
         }
         return trimmed.substring(0, maxLength);
+    }
+
+    private String buildExternalId(String clientOperationId) {
+        if (clientOperationId != null) {
+            return "GUIA-" + RequestFingerprint.sha256(clientOperationId)
+                    .substring(0, 16).toUpperCase(Locale.ROOT);
+        }
+        return "GUIA-" + UUID.randomUUID().toString().replace("-", "")
+                .substring(0, 16).toUpperCase(Locale.ROOT);
+    }
+
+    private RegistrarGuiaRemisionResponse existingResponse(GuiaRemision guia) {
+        String estado = normalizeEstado(defaultIfBlank(
+                guia.getFacturadorSunatEstado(),
+                guia.getFacturacionEstado()
+        ));
+        boolean success = !GuiaRemision.ESTADO_ERROR.equals(estado)
+                && !GuiaRemision.ESTADO_RECHAZADO.equals(estado);
+        return new RegistrarGuiaRemisionResponse(
+                guia.getExternalId(),
+                toResponse(guia),
+                new FacturadorVentaResponse(
+                        success,
+                        guia.getFacturadorHttpStatus() == null ? 200 : guia.getFacturadorHttpStatus(),
+                        guia.getFacturadorEndpoint(),
+                        guia.getFacturadorTipoComprobante(),
+                        guia.getFacturadorMensaje(),
+                        null
+                )
+        );
+    }
+
+    private void validateSameRequest(String storedHash, String requestHash) {
+        if (!requestHash.equals(storedHash)) {
+            throw new BusinessException(
+                    "OPERACION_ID_REUTILIZADA",
+                    "El identificador de operacion ya fue usado con datos diferentes."
+            );
+        }
+    }
+
+    private String normalizeOperationId(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private record ResolvedGuiaItem(

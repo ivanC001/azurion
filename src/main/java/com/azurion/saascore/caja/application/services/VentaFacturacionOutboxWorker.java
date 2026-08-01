@@ -75,9 +75,23 @@ public class VentaFacturacionOutboxWorker {
     }
 
     private void submit(VentaFacturacionOutbox job) {
+        // Start renewing the lease before the task enters the bounded executor.
+        // Otherwise a saturated executor can retain a claimed task in its queue
+        // longer than LEASE_DURATION and another instance may recover it.
+        ScheduledFuture<?> heartbeat = null;
         try {
-            facturacionExecutor.execute(() -> process(job));
+            heartbeat = heartbeatExecutor.scheduleAtFixedRate(
+                    () -> renewLease(job),
+                    HEARTBEAT_SECONDS,
+                    HEARTBEAT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+            ScheduledFuture<?> scheduledHeartbeat = heartbeat;
+            facturacionExecutor.execute(() -> process(job, scheduledHeartbeat));
         } catch (RejectedExecutionException error) {
+            if (heartbeat != null) {
+                heartbeat.cancel(false);
+            }
             LocalDateTime now = LocalDateTime.now();
             outboxRepository.markFailedAttempt(
                     job.getId(), workerId, "RETRY", now.plusSeconds(30),
@@ -87,13 +101,7 @@ public class VentaFacturacionOutboxWorker {
         }
     }
 
-    private void process(VentaFacturacionOutbox job) {
-        ScheduledFuture<?> heartbeat = heartbeatExecutor.scheduleAtFixedRate(
-                () -> renewLease(job),
-                HEARTBEAT_SECONDS,
-                HEARTBEAT_SECONDS,
-                TimeUnit.SECONDS
-        );
+    private void process(VentaFacturacionOutbox job, ScheduledFuture<?> heartbeat) {
         try {
             processUseCase.execute(toTask(job));
             int updated = outboxRepository.markCompleted(job.getId(), workerId, LocalDateTime.now());

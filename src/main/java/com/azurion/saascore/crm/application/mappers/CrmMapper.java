@@ -27,6 +27,7 @@ public final class CrmMapper {
         return new CrmProspectoResponse(
                 prospecto.getId(),
                 prospecto.getTipoPersona(),
+                prospecto.getPaisCodigo(),
                 prospecto.getTipoDocumento(),
                 prospecto.getNumeroDocumento(),
                 prospecto.getNombre(),

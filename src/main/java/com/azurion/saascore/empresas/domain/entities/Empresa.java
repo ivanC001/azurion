@@ -4,6 +4,7 @@ import com.azurion.shared.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,6 +13,22 @@ import lombok.Setter;
 @Entity
 @Table(name = "empresas", schema = "public")
 public class Empresa extends BaseEntity {
+    public static final String FACTURADOR_STATUS_NO_REQUERIDO = "NO_REQUERIDO";
+    public static final String FACTURADOR_STATUS_PENDIENTE = "PENDIENTE";
+    public static final String FACTURADOR_STATUS_PROVISIONANDO = "PROVISIONANDO";
+    public static final String FACTURADOR_STATUS_PROVISIONADO = "PROVISIONADO";
+    public static final String FACTURADOR_STATUS_REINTENTO = "REINTENTO";
+    public static final String FACTURADOR_STATUS_ERROR = "ERROR";
+    public static final String FACTURADOR_STATUS_SUSPENDIDO = "SUSPENDIDO";
+
+    public static final String FACTURADOR_DOCUMENT_MODE_TICKET_ONLY = "TICKET_ONLY";
+    public static final String FACTURADOR_DOCUMENT_MODE_ELECTRONIC = "ELECTRONIC";
+    public static final String FACTURADOR_FISCAL_STATUS_NOT_CONFIGURED = "NOT_CONFIGURED";
+    public static final String FACTURADOR_FISCAL_STATUS_ACTIVE = "ACTIVE";
+    public static final String FACTURADOR_FISCAL_STATUS_SUSPENDED = "SUSPENDED";
+    public static final String FACTURADOR_SUNAT_MODE_DISABLED = "DISABLED";
+    public static final String FACTURADOR_SUNAT_MODE_BETA = "BETA";
+    public static final String FACTURADOR_SUNAT_MODE_PRODUCTION = "PRODUCTION";
 
     @Column(name = "ruc", nullable = false, unique = true, length = 40)
     private String ruc;
@@ -105,6 +122,36 @@ public class Empresa extends BaseEntity {
 
     @Column(name = "logo_panel_url", length = 500)
     private String logoPanelUrl;
+
+    @Column(name = "facturador_status", nullable = false, length = 30)
+    private String facturadorStatus = FACTURADOR_STATUS_NO_REQUERIDO;
+
+    @Column(name = "facturador_document_mode", nullable = false, length = 30)
+    private String facturadorDocumentMode = FACTURADOR_DOCUMENT_MODE_TICKET_ONLY;
+
+    @Column(name = "facturador_fiscal_status", nullable = false, length = 30)
+    private String facturadorFiscalStatus = FACTURADOR_FISCAL_STATUS_NOT_CONFIGURED;
+
+    @Column(name = "facturador_sunat_mode", nullable = false, length = 20)
+    private String facturadorSunatMode = FACTURADOR_SUNAT_MODE_DISABLED;
+
+    @Column(name = "facturador_last_error", length = 1000)
+    private String facturadorLastError;
+
+    @Column(name = "facturador_provisioned_at")
+    private OffsetDateTime facturadorProvisionedAt;
+
+    @Column(name = "facturador_next_attempt_at")
+    private OffsetDateTime facturadorNextAttemptAt;
+
+    @Column(name = "facturador_attempts", nullable = false)
+    private Integer facturadorAttempts = 0;
+
+    @Column(name = "facturador_lease_owner", length = 120)
+    private String facturadorLeaseOwner;
+
+    @Column(name = "facturador_lease_until")
+    private OffsetDateTime facturadorLeaseUntil;
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;

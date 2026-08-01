@@ -33,6 +33,12 @@ public record EmpresaResponse(
         String tenantId,
         String schemaName,
         String logoPanelUrl,
+        String facturadorStatus,
+        String facturadorDocumentMode,
+        String facturadorFiscalStatus,
+        String facturadorSunatMode,
+        String facturadorLastError,
+        java.time.OffsetDateTime facturadorProvisionedAt,
         boolean activo
 ) {
 }

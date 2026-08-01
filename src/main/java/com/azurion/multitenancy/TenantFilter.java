@@ -20,6 +20,7 @@ public class TenantFilter extends OncePerRequestFilter {
     private static final String TENANT_PATTERN = "^[a-z][a-z0-9_]{2,62}$";
 
     private final TenantSchemaLookupService tenantSchemaLookupService;
+    private final TenantMigrationReadiness migrationReadiness;
 
     @Value("${azurion.multitenancy.tenant-header:X-Tenant-Id}")
     private String tenantHeader;
@@ -32,13 +33,19 @@ public class TenantFilter extends OncePerRequestFilter {
         try {
             String tenantId = normalizeAndValidateTenant(request.getHeader(tenantHeader));
             tenantSchemaLookupService.resolveSchema(tenantId);
+            migrationReadiness.requireReady(tenantId);
             TenantContext.setTenantId(tenantId);
             MDC.put("tenant", tenantId);
             filterChain.doFilter(request, response);
         } catch (BusinessException ex) {
-            response.setStatus(HttpStatus.FORBIDDEN.value());
+            boolean schemaUnavailable = "TENANT_SCHEMA_UNAVAILABLE".equals(ex.getCode());
+            response.setStatus(schemaUnavailable
+                    ? HttpStatus.SERVICE_UNAVAILABLE.value()
+                    : HttpStatus.FORBIDDEN.value());
             response.setContentType("application/json");
-            response.getWriter().write("{\"code\":\"TENANT_ACCESS_DENIED\",\"message\":\"El tenant solicitado no existe, esta inactivo o no esta disponible\",\"details\":[],\"userActionable\":true}");
+            response.getWriter().write(schemaUnavailable
+                    ? "{\"code\":\"TENANT_SCHEMA_UNAVAILABLE\",\"message\":\"La base de datos de la empresa se encuentra temporalmente en mantenimiento\",\"details\":[],\"userActionable\":false}"
+                    : "{\"code\":\"TENANT_ACCESS_DENIED\",\"message\":\"El tenant solicitado no existe, esta inactivo o no esta disponible\",\"details\":[],\"userActionable\":true}");
         } finally {
             TenantContext.clear();
             MDC.remove("tenant");

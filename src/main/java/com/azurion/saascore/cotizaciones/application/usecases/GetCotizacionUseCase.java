@@ -21,7 +21,7 @@ public class GetCotizacionUseCase {
     }
 
     Cotizacion find(Long id) {
-        return cotizacionRepository.findById(id)
+        return cotizacionRepository.findDetailedById(id)
                 .orElseThrow(() -> new BusinessException("COTIZACION_NO_ENCONTRADA", "Cotizacion no encontrada"));
     }
 }

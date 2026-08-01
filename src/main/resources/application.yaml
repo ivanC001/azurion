@@ -8,9 +8,14 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASS}
     hikari:
-      maximum-pool-size: ${DB_POOL_MAX:30}
+      maximum-pool-size: ${DB_POOL_MAX:20}
       minimum-idle: ${DB_POOL_MIN:5}
-      connection-timeout: 30000
+      # Fail fast during saturation instead of retaining web threads for 30 s.
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:5000}
+      validation-timeout: ${DB_POOL_VALIDATION_TIMEOUT_MS:2000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      keepalive-time: ${DB_POOL_KEEPALIVE_MS:300000}
   jpa:
     open-in-view: false
     hibernate:
@@ -45,8 +50,21 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_THREADS_MAX:200}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:10}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:200}
+    connection-timeout: ${SERVER_TOMCAT_CONNECTION_TIMEOUT:5s}
+  compression:
+    enabled: true
+    min-response-size: 2KB
   servlet:
     context-path: /api
+
+spring.lifecycle.timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
 
 management:
   endpoints:
@@ -116,12 +134,19 @@ azurion:
       root-dir: ${AZURION_PRIVATE_FILES_DIR:${user.dir}/storage/private-files}
   facturador:
     base-url: ${FACTURADOR_BASE_URL:http://127.0.0.1:8000}
+    artifact-base-url: ${FACTURADOR_ARTIFACT_BASE_URL:}
     api-prefix: ${FACTURADOR_API_PREFIX:/api}
     connect-timeout-millis: ${FACTURADOR_CONNECT_TIMEOUT_MS:5000}
     read-timeout-millis: ${FACTURADOR_READ_TIMEOUT_MS:20000}
     wait-processed-enabled: ${FACTURADOR_WAIT_PROCESSED_ENABLED:false}
     wait-processed-timeout-millis: ${FACTURADOR_WAIT_PROCESSED_TIMEOUT_MS:90000}
     wait-processed-poll-interval-millis: ${FACTURADOR_WAIT_PROCESSED_POLL_INTERVAL_MS:1500}
+    provisioning-enabled: ${FACTURADOR_PROVISIONING_ENABLED:true}
+    client-id: ${FACTURADOR_CLIENT_ID:azurion-core}
+    client-secret: ${FACTURADOR_CLIENT_SECRET:}
+    signature-version: ${FACTURADOR_SIGNATURE_VERSION:v2}
+    allow-legacy-api-key: ${FACTURADOR_ALLOW_LEGACY_API_KEY:false}
+    # Compatibilidad temporal. Retirar cuando todos los ambientes usen client-secret.
     default-api-key: ${FACTURADOR_API_KEY:}
     tenant-api-keys: {}
     callback:
@@ -139,6 +164,9 @@ azurion:
       initial-delay-millis: ${FACTURADOR_OUTBOX_INITIAL_DELAY_MS:5000}
       poll-delay-millis: ${FACTURADOR_OUTBOX_POLL_DELAY_MS:2000}
       cleanup-cron: ${FACTURADOR_OUTBOX_CLEANUP_CRON:0 30 3 * * *}
+    provisioning:
+      initial-delay-millis: ${FACTURADOR_PROVISIONING_INITIAL_DELAY_MS:3000}
+      poll-delay-millis: ${FACTURADOR_PROVISIONING_POLL_DELAY_MS:5000}
 
 springdoc:
   api-docs:

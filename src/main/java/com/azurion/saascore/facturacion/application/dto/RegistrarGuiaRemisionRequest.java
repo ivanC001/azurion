@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -17,7 +18,8 @@ public record RegistrarGuiaRemisionRequest(
         String observacion,
         @NotBlank String responsableId,
         @NotBlank String responsableNombre,
-        @NotEmpty List<@Valid GuiaItemRequest> items
+        @NotEmpty List<@Valid GuiaItemRequest> items,
+        @NotBlank @Size(max = 100) String clientOperationId
 ) {
     public record GuiaItemRequest(
             @NotNull Long productoId,

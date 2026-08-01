@@ -104,7 +104,8 @@ public class CreateProductoRapidoUseCase {
                     costoInicial,
                     request.precioVenta(),
                     null,
-                    "Alta rapida de producto"
+                    "Alta rapida de producto",
+                    null
             ));
         }
 

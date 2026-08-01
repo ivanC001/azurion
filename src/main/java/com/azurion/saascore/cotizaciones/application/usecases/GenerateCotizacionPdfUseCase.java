@@ -1,6 +1,8 @@
 package com.azurion.saascore.cotizaciones.application.usecases;
 
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
+import com.azurion.saascore.cotizaciones.application.services.CotizacionClienteData;
+import com.azurion.saascore.cotizaciones.application.services.CotizacionClienteDataResolver;
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.cotizaciones.domain.entities.CotizacionDetalle;
 import com.azurion.saascore.empresas.application.usecases.GetCurrentEmpresaUseCase;
@@ -29,7 +31,6 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -42,14 +43,15 @@ public class GenerateCotizacionPdfUseCase {
 
     private final GetCotizacionUseCase getCotizacionUseCase;
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
+    private final CotizacionClienteDataResolver clienteDataResolver;
 
     @Value("${azurion.storage.public-files.root-dir:${user.dir}/storage/public-files}")
     private String publicFilesRootDir;
 
-    @Transactional(readOnly = true)
     public CotizacionPdfResponse execute(Long id) {
         Cotizacion cotizacion = getCotizacionUseCase.find(id);
         Empresa empresa = getCurrentEmpresaUseCase.resolveCurrentEmpresa();
+        CotizacionClienteData cliente = clienteDataResolver.resolveForEmission(cotizacion);
 
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PDPage page = new PDPage(PDRectangle.A4);
@@ -58,8 +60,8 @@ public class GenerateCotizacionPdfUseCase {
 
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
                 drawHeader(document, content, fonts, empresa, cotizacion);
-                drawClientBox(content, fonts, cotizacion);
-                drawIntroduction(content, fonts, cotizacion);
+                drawClientBox(content, fonts, cliente);
+                drawIntroduction(content, fonts, cliente);
                 float afterTable = drawDetailsTable(content, fonts, cotizacion);
                 float totalsY = drawTotals(content, fonts, cotizacion, afterTable);
                 drawCommercialConditions(content, fonts, cotizacion, Math.max(70, totalsY - 112));
@@ -121,7 +123,7 @@ public class GenerateCotizacionPdfUseCase {
         }
     }
 
-    private void drawClientBox(PDPageContentStream content, Fonts fonts, Cotizacion cotizacion) throws IOException {
+    private void drawClientBox(PDPageContentStream content, Fonts fonts, CotizacionClienteData cliente) throws IOException {
         float y = 650;
         strokeRect(content, PAGE_LEFT, y - 82, PAGE_WIDTH, 82, 191, 205, 222);
         fillRect(content, PAGE_LEFT, y - 24, PAGE_WIDTH, 24, 234, 245, 255);
@@ -129,19 +131,19 @@ public class GenerateCotizacionPdfUseCase {
         write(content, fonts.bold, 10, 80, y - 17, "DATOS DEL CLIENTE", 210, 0, 75, 155);
 
         write(content, fonts.bold, 8, 62, y - 43, "CLIENTE", 58);
-        write(content, fonts.regular, 9, 122, y - 43, clientName(cotizacion), 180);
+        write(content, fonts.regular, 9, 122, y - 43, clientName(cliente), 180);
         write(content, fonts.bold, 8, 320, y - 43, "CORREO", 55);
-        write(content, fonts.regular, 9, 380, y - 43, clientEmail(cotizacion), 150);
+        write(content, fonts.regular, 9, 380, y - 43, defaultText(cliente.correo(), "-"), 150);
         write(content, fonts.bold, 8, 62, y - 62, "RUC / DNI", 58);
-        write(content, fonts.regular, 9, 122, y - 62, clientDocument(cotizacion), 180);
+        write(content, fonts.regular, 9, 122, y - 62, defaultText(cliente.numeroDocumento(), "-"), 180);
         write(content, fonts.bold, 8, 320, y - 62, "TELEFONO", 55);
-        write(content, fonts.regular, 9, 380, y - 62, clientPhone(cotizacion), 150);
+        write(content, fonts.regular, 9, 380, y - 62, defaultText(cliente.telefono(), "-"), 150);
         write(content, fonts.bold, 8, 62, y - 78, "DIRECCION", 58);
-        write(content, fonts.regular, 8, 122, y - 78, clientAddress(cotizacion), 408);
+        write(content, fonts.regular, 8, 122, y - 78, defaultText(cliente.direccion(), "-"), 408);
     }
 
-    private void drawIntroduction(PDPageContentStream content, Fonts fonts, Cotizacion cotizacion) throws IOException {
-        write(content, fonts.bold, 9, PAGE_LEFT, 550, "Estimado(a) " + clientFirstName(cotizacion) + ",", PAGE_WIDTH);
+    private void drawIntroduction(PDPageContentStream content, Fonts fonts, CotizacionClienteData cliente) throws IOException {
+        write(content, fonts.bold, 9, PAGE_LEFT, 550, "Estimado(a) " + clientFirstName(cliente) + ",", PAGE_WIDTH);
         write(content, fonts.regular, 9, PAGE_LEFT, 533,
                 "De acuerdo con su solicitud, presentamos la siguiente propuesta comercial.", PAGE_WIDTH);
         write(content, fonts.regular, 9, PAGE_LEFT, 517,
@@ -390,28 +392,12 @@ public class GenerateCotizacionPdfUseCase {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private String clientName(Cotizacion cotizacion) {
-        return cotizacion.getCliente() == null ? "Cliente no especificado" : cotizacion.getCliente().getNombre();
+    private String clientName(CotizacionClienteData cliente) {
+        return defaultText(cliente.nombre(), "Cliente");
     }
 
-    private String clientDocument(Cotizacion cotizacion) {
-        return cotizacion.getCliente() == null ? "-" : defaultText(cotizacion.getCliente().getNumeroDocumento(), "-");
-    }
-
-    private String clientAddress(Cotizacion cotizacion) {
-        return cotizacion.getCliente() == null ? "-" : defaultText(cotizacion.getCliente().getDireccion(), "-");
-    }
-
-    private String clientEmail(Cotizacion cotizacion) {
-        return cotizacion.getCliente() == null ? "-" : defaultText(cotizacion.getCliente().getEmail(), "-");
-    }
-
-    private String clientPhone(Cotizacion cotizacion) {
-        return cotizacion.getCliente() == null ? "-" : defaultText(cotizacion.getCliente().getTelefono(), "-");
-    }
-
-    private String clientFirstName(Cotizacion cotizacion) {
-        String name = clientName(cotizacion).trim();
+    private String clientFirstName(CotizacionClienteData cliente) {
+        String name = clientName(cliente).trim();
         int separator = name.indexOf(' ');
         return separator > 0 ? name.substring(0, separator) : name;
     }

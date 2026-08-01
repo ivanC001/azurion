@@ -1,119 +1,62 @@
 package com.azurion.saascore.ventas.application.usecases;
 
-import com.azurion.multitenancy.TenantContext;
-import com.azurion.saascore.empresas.domain.entities.Empresa;
-import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
-import com.azurion.saascore.facturacion.infrastructure.http.FacturadorClient;
 import com.azurion.saascore.ventas.application.dto.VentaResponse;
+import com.azurion.saascore.ventas.application.dto.VentaSummaryResponse;
 import com.azurion.saascore.ventas.domain.entities.Venta;
 import com.azurion.saascore.ventas.domain.repositories.VentaRepository;
+import com.azurion.shared.api.PageRequestSupport;
+import com.azurion.shared.api.PageResponse;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ListVentasUseCase {
 
     private final VentaRepository ventaRepository;
-    private final EmpresaRepository empresaRepository;
-    private final FacturadorClient facturadorClient;
 
     @Transactional(readOnly = true)
     public List<VentaResponse> execute(String query) {
-        String normalized = query == null ? "" : query.trim().toLowerCase();
-
-        List<Venta> ventas = ventaRepository.findAllByOrderByFechaVentaDesc().stream()
-                .filter(venta -> normalized.isBlank() || matches(venta, normalized))
-                .toList();
-
-        Map<String, FacturadorClient.FacturadorDocumentoStatusResult> statusByExternalId = consultarEstadosFacturador(ventas);
-
-        return ventas.stream()
-                .map(venta -> toResponse(venta, statusByExternalId.get(venta.getExternalId())))
-                .toList();
+        // Compatibility endpoint: it is intentionally bounded. Consumers that
+        // need the complete history must traverse /page explicitly.
+        return page(query, 0, PageRequestSupport.MAX_SIZE).content();
     }
 
-    private boolean matches(Venta venta, String query) {
-        return contains(venta.getExternalId(), query)
-                || contains(venta.getClienteNombre(), query)
-                || contains(venta.getClienteDocumento(), query)
-                || contains(venta.getMoneda(), query)
-                || contains(venta.getFacturacionEstado(), query)
-                || contains(venta.getFacturadorSunatEstado(), query)
-                || contains(venta.getFacturadorMensaje(), query);
+    @Transactional(readOnly = true)
+    public PageResponse<VentaResponse> page(String query, int page, int size) {
+        String normalized = query == null ? "" : query.trim();
+        var result = ventaRepository.search(
+                normalized,
+                PageRequestSupport.of(page, size, Sort.by("fechaVenta").descending().and(Sort.by("id").descending()))
+        );
+        return PageResponse.from(result, result.getContent().stream().map(this::toResponse).toList());
     }
 
-    private boolean contains(String value, String query) {
-        return value != null && value.toLowerCase().contains(query);
+    @Transactional(readOnly = true)
+    public VentaSummaryResponse summary() {
+        ZoneId zone = ZoneId.of("America/Lima");
+        LocalDate today = LocalDate.now(zone);
+        OffsetDateTime dayStart = today.atStartOfDay(zone).toOffsetDateTime();
+        OffsetDateTime dayEnd = today.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
+        return ventaRepository.summarize(dayStart, dayEnd);
     }
 
-    private Map<String, FacturadorClient.FacturadorDocumentoStatusResult> consultarEstadosFacturador(List<Venta> ventas) {
-        if (ventas.isEmpty()) {
-            return Map.of();
-        }
-
-        String tenantId = TenantContext.getTenantId();
-        if (tenantId == null || tenantId.isBlank() || "public".equalsIgnoreCase(tenantId)) {
-            return Map.of();
-        }
-
-        Empresa empresa = empresaRepository.findByTenantId(tenantId).orElse(null);
-        if (empresa == null || empresa.getRuc() == null || empresa.getRuc().isBlank()) {
-            return Map.of();
-        }
-
-        List<String> externalIds = ventas.stream()
-                .filter(venta -> !Venta.FACTURACION_ESTADO_NO_REQUIERE.equalsIgnoreCase(venta.getFacturacionEstado()))
-                .map(Venta::getExternalId)
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(id -> !id.isBlank())
-                .distinct()
-                .limit(150)
-                .toList();
-
-        if (externalIds.isEmpty()) {
-            return Map.of();
-        }
-
-        try {
-            return facturadorClient.consultarDocumentosPorExternalIds(tenantId, empresa.getRuc(), externalIds);
-        } catch (Exception exception) {
-            log.warn("No se pudo consultar estados en facturador para tenant {}: {}", tenantId, exception.getMessage());
-            return Map.of();
-        }
-    }
-
-    private VentaResponse toResponse(Venta venta, FacturadorClient.FacturadorDocumentoStatusResult facturador) {
+    private VentaResponse toResponse(Venta venta) {
         String localEstado = normalizeEstado(venta.getFacturacionEstado());
-        String remoteEstado = normalizeEstado(facturador == null ? null : facturador.estadoInterno());
         String localSunatEstado = normalizeEstado(venta.getFacturadorSunatEstado());
-        String remoteSunatEstado = normalizeEstado(facturador == null ? null : facturador.sunatEstado());
 
-        String sunatEstado = firstNonBlank(remoteSunatEstado, localSunatEstado, remoteEstado, localEstado);
-        String estadoFinal = resolveEstadoFinal(localEstado, remoteEstado, localSunatEstado, remoteSunatEstado);
+        String sunatEstado = firstNonBlank(localSunatEstado, localEstado);
+        String estadoFinal = resolveEstadoFinal(localEstado, null, localSunatEstado, null);
 
-        Integer httpStatus = venta.getFacturadorHttpStatus() != null
-                ? venta.getFacturadorHttpStatus()
-                : (facturador == null ? null : facturador.httpStatus());
-
-        String mensajeFacturador = firstNonBlank(
-                preferRemoteMessage(estadoFinal, facturador == null ? null : facturador.sunatMensaje()),
-                venta.getFacturadorMensaje(),
-                facturador == null ? null : facturador.sunatMensaje(),
-                facturador == null ? null : facturador.estadoInterno()
-        );
-
-        String rawJson = firstNonBlank(
-                venta.getFacturadorRespuestaJson(),
-                facturador == null || facturador.rawData() == null ? null : facturador.rawData().toString()
-        );
+        Integer httpStatus = venta.getFacturadorHttpStatus();
+        String mensajeFacturador = venta.getFacturadorMensaje();
+        String rawJson = venta.getFacturadorRespuestaJson();
 
         return new VentaResponse(
                 venta.getId(),
@@ -122,19 +65,22 @@ public class ListVentasUseCase {
                 venta.getClienteNombre(),
                 venta.getMoneda(),
                 venta.getTotal(),
+                venta.getCajaTurnoId(),
+                venta.getFormaPago(),
+                venta.getMetodoPago(),
                 venta.getFechaVenta(),
                 estadoFinal,
                 venta.getFacturacionIntentos(),
                 httpStatus,
-                firstNonBlank(venta.getFacturadorEndpoint(), facturador == null ? null : "/documentos"),
-                firstNonBlank(venta.getFacturadorTipoComprobante(), facturador == null ? null : facturador.tipoDocumento()),
+                venta.getFacturadorEndpoint(),
+                venta.getFacturadorTipoComprobante(),
                 mensajeFacturador,
                 sunatEstado,
-                firstNonBlank(venta.getFacturadorDocumentoId(), facturador == null || facturador.documentoId() == null ? null : String.valueOf(facturador.documentoId())),
-                firstNonBlank(venta.getFacturadorTicket(), facturador == null ? null : facturador.ticket()),
-                firstNonBlank(venta.getFacturadorPdfUrl(), facturador == null ? null : facturador.pdfUrl()),
-                firstNonBlank(venta.getFacturadorXmlUrl(), facturador == null ? null : facturador.xmlUrl()),
-                firstNonBlank(venta.getFacturadorCdrUrl(), facturador == null ? null : facturador.cdrUrl()),
+                venta.getFacturadorDocumentoId(),
+                venta.getFacturadorTicket(),
+                venta.getFacturadorPdfUrl(),
+                venta.getFacturadorXmlUrl(),
+                venta.getFacturadorCdrUrl(),
                 rawJson,
                 venta.getFacturacionActualizadoEn()
         );
@@ -164,13 +110,6 @@ public class ListVentasUseCase {
             return Venta.FACTURACION_ESTADO_PENDIENTE;
         }
         return moving;
-    }
-
-    private String preferRemoteMessage(String estadoFinal, String remoteMessage) {
-        if (!isTerminal(estadoFinal)) {
-            return null;
-        }
-        return remoteMessage;
     }
 
     private boolean isTerminal(String estado) {

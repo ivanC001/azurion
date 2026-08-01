@@ -8,6 +8,7 @@ public record UpdateProductoRequest(
         @NotBlank String nombre,
         BigDecimal precio,
         @NotNull Boolean activo,
+        Long almacenId,
         String codigo,
         String sku,
         String codigoBarras,

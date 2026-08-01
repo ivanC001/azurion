@@ -48,8 +48,8 @@ public class Producto extends BaseEntity {
     @JoinColumn(name = "unidad_medida_id")
     private UnidadMedida unidadMedida;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "almacen_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "almacen_id")
     private Almacen almacen;
 
     @Column(name = "tipo_producto", nullable = false, length = 30)

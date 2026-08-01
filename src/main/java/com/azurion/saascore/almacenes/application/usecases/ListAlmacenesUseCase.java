@@ -2,9 +2,11 @@ package com.azurion.saascore.almacenes.application.usecases;
 
 import com.azurion.saascore.almacenes.application.dto.AlmacenResponse;
 import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
+import com.azurion.saascore.almacenes.application.mappers.AlmacenMapper;
 import com.azurion.shared.api.PageRequestSupport;
 import com.azurion.shared.api.PageResponse;
 import java.util.List;
+import java.util.Comparator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,25 +20,17 @@ public class ListAlmacenesUseCase {
 
     @Transactional(readOnly = true)
     public List<AlmacenResponse> execute() {
-        return page(0, PageRequestSupport.MAX_SIZE).content();
+        return almacenRepository.findAll().stream()
+                .map(AlmacenMapper::toResponse)
+                .sorted(Comparator.comparing(AlmacenResponse::nombre))
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public PageResponse<AlmacenResponse> page(int page, int size) {
         var result = almacenRepository.findAll(PageRequestSupport.of(page, size, Sort.by("nombre").ascending()));
         List<AlmacenResponse> content = result.getContent().stream()
-                .map(a -> new AlmacenResponse(
-                        a.getId(),
-                        a.getCodigo(),
-                        a.getNombre(),
-                        a.getDireccion(),
-                        a.getSucursal().getId(),
-                        a.getSucursal().getCodigo(),
-                        a.getSucursal().getNombre(),
-                        a.getTipoAlmacen(),
-                        a.getEstado(),
-                        a.isActivo()
-                ))
+                .map(AlmacenMapper::toResponse)
                 .toList();
         return PageResponse.from(result, content);
     }

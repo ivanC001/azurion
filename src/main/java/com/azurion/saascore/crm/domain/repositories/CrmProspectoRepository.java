@@ -12,6 +12,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long>, JpaSpecificationExecutor<CrmProspecto> {
 
+    interface OriginAggregateProjection {
+        String getCodigo();
+        long getCantidad();
+    }
+
     List<CrmProspecto> findAllByOrderByIdDesc();
 
     List<CrmProspecto> findByResponsableIdOrderByIdDesc(String responsableId);
@@ -27,6 +32,15 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
     long countByCanalIngreso(String canalIngreso);
 
     long countByCanalIngresoNot(String canalIngreso);
+
+    @Query("""
+            select coalesce(p.origen, 'SIN_ORIGEN') as codigo, count(p.id) as cantidad
+            from CrmProspecto p
+            where (:responsableId is null or p.responsableId = :responsableId)
+            group by coalesce(p.origen, 'SIN_ORIGEN')
+            order by count(p.id) desc
+            """)
+    List<OriginAggregateProjection> summarizeByOriginScoped(@Param("responsableId") String responsableId);
 
     Optional<CrmProspecto> findFirstByTelefonoOrderByIdDesc(String telefono);
 

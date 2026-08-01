@@ -9,6 +9,8 @@ import com.azurion.saascore.inventory.application.usecases.CreateProductoUseCase
 import com.azurion.saascore.inventory.application.usecases.CreateProductoRapidoUseCase;
 import com.azurion.saascore.inventory.application.usecases.ListProductosUseCase;
 import com.azurion.saascore.inventory.application.usecases.UpdateProductoUseCase;
+import com.azurion.saascore.inventory.application.usecases.GetProductSummaryUseCase;
+import com.azurion.saascore.inventory.application.dto.ProductSummaryResponse;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.shared.api.ApiResponse;
 import com.azurion.shared.api.PageResponse;
@@ -36,6 +38,13 @@ public class InventoryProductoController {
     private final BuscarProductoPorCodigoUseCase buscarProductoPorCodigoUseCase;
     private final ListProductosUseCase listProductosUseCase;
     private final UpdateProductoUseCase updateProductoUseCase;
+    private final GetProductSummaryUseCase getProductSummaryUseCase;
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasAuthority('PRODUCTOS_READ')")
+    public ApiResponse<ProductSummaryResponse> summary() {
+        return ApiResponse.ok(getProductSummaryUseCase.execute(), "Resumen de productos");
+    }
 
     @PostMapping
     @PreAuthorize("hasAuthority('PRODUCTOS_WRITE')")

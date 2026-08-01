@@ -32,4 +32,10 @@ public class ClienteAbono extends BaseEntity {
 
     @Column(name = "observacion", length = 500)
     private String observacion;
+
+    @Column(name = "client_operation_id", length = 100)
+    private String clientOperationId;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
 }

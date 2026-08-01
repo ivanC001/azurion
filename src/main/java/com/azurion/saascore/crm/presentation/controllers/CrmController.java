@@ -38,6 +38,8 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmCatalogoItemRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
+import com.azurion.saascore.crm.application.dto.SendCrmOpportunityEmailRequest;
+import com.azurion.saascore.crm.application.dto.SendCrmOpportunityEmailResponse;
 import com.azurion.saascore.crm.application.dto.UpdateCrmLeadAssignmentConfigRequest;
 import com.azurion.saascore.crm.application.dto.SaveCrmLandingConfigRequest;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
@@ -241,6 +243,17 @@ public class CrmController {
         return ApiResponse.ok(crmUseCaseService.getProspecto(id), "Prospecto CRM");
     }
 
+    @PostMapping("/prospectos/{id}/correo")
+    @PreAuthorize("hasAnyAuthority('CRM_ACTIVITIES_WRITE','CRM_LEADS_WRITE')")
+    public ApiResponse<SendCrmOpportunityEmailResponse> sendProspectEmail(
+            @PathVariable Long id,
+            @Valid @RequestBody SendCrmOpportunityEmailRequest request) {
+        return ApiResponse.ok(
+                crmUseCaseService.sendProspectEmail(id, request),
+                "Correo enviado al prospecto desde el CRM"
+        );
+    }
+
     @GetMapping("/prospectos/{id}/intereses")
     @PreAuthorize("hasAuthority('CRM_LEADS_READ')")
     public ApiResponse<List<CrmProspectoInteresResponse>> listProspectoIntereses(@PathVariable Long id) {
@@ -336,6 +349,17 @@ public class CrmController {
     @PreAuthorize("hasAuthority('CRM_OPPORTUNITIES_READ')")
     public ApiResponse<CrmOportunidadResponse> getOportunidad(@PathVariable Long id) {
         return ApiResponse.ok(crmUseCaseService.getOportunidad(id), "Oportunidad CRM");
+    }
+
+    @PostMapping("/oportunidades/{id}/correo")
+    @PreAuthorize("hasAnyAuthority('CRM_ACTIVITIES_WRITE','CRM_OPPORTUNITIES_WRITE')")
+    public ApiResponse<SendCrmOpportunityEmailResponse> sendOpportunityEmail(
+            @PathVariable Long id,
+            @Valid @RequestBody SendCrmOpportunityEmailRequest request) {
+        return ApiResponse.ok(
+                crmUseCaseService.sendOpportunityEmail(id, request),
+                "Correo enviado desde el CRM"
+        );
     }
 
     @GetMapping("/oportunidades/{id}/historial")

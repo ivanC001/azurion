@@ -25,7 +25,23 @@ public class ListProductosUseCase {
 
     @Transactional(readOnly = true)
     public List<ProductoResponse> execute(Long almacenId) {
-        return page("", almacenId, 0, PageRequestSupport.MAX_SIZE).content();
+        List<com.azurion.saascore.inventory.domain.entities.Producto> productos =
+                almacenId == null
+                        ? productoRepository.findAllByOrderByNombreAsc()
+                        : productoRepository.findByAlmacenIdOrderByNombreAsc(almacenId);
+        Map<Long, BigDecimal> stockByProducto = new HashMap<>();
+        if (!productos.isEmpty()) {
+            List<Long> productoIds = productos.stream().map(producto -> producto.getId()).toList();
+            for (Object[] row : stockRepository.sumCantidadByProductoIds(productoIds, almacenId)) {
+                stockByProducto.put((Long) row[0], row[1] == null ? BigDecimal.ZERO : (BigDecimal) row[1]);
+            }
+        }
+        return productos.stream()
+                .map(producto -> ProductoInventoryMapper.toResponse(
+                        producto,
+                        stockByProducto.getOrDefault(producto.getId(), BigDecimal.ZERO)
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)

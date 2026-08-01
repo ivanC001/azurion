@@ -1,8 +1,12 @@
 package com.azurion.saascore.inventory.application.usecases;
 
+import com.azurion.saascore.almacenes.domain.entities.Almacen;
+import com.azurion.saascore.almacenes.domain.repositories.AlmacenRepository;
 import com.azurion.saascore.inventory.application.dto.ProductoResponse;
 import com.azurion.saascore.inventory.application.dto.UpdateProductoRequest;
 import com.azurion.saascore.inventory.application.mappers.ProductoInventoryMapper;
+import com.azurion.saascore.inventory.application.services.InventoryOperationalValidator;
+import com.azurion.saascore.inventory.application.services.ProductoPhotoValidator;
 import com.azurion.saascore.inventory.domain.entities.Producto;
 import com.azurion.saascore.inventory.domain.entities.Stock;
 import com.azurion.saascore.inventory.domain.repositories.CategoriaRepository;
@@ -23,10 +27,12 @@ public class UpdateProductoUseCase {
 
     private final ProductoRepository productoRepository;
     private final StockRepository stockRepository;
+    private final AlmacenRepository almacenRepository;
     private final CategoriaRepository categoriaRepository;
     private final MarcaRepository marcaRepository;
     private final UnidadMedidaRepository unidadMedidaRepository;
     private final TaxConfigurationValidator taxConfigurationValidator;
+    private final InventoryOperationalValidator inventoryValidator;
 
     @Transactional
     public ProductoResponse execute(Long productoId, UpdateProductoRequest request) {
@@ -37,6 +43,9 @@ public class UpdateProductoUseCase {
         if (precio.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("PRECIO_INVALIDO", "El precio no puede ser negativo");
         }
+        validateMoney(request.precioCompraBase(), "PRECIO_COMPRA_INVALIDO", "El precio de compra no puede ser negativo");
+        validateMoney(request.precioVentaBase(), "PRECIO_VENTA_INVALIDO", "El precio de venta no puede ser negativo");
+        validateMoney(request.costoPromedio(), "COSTO_PROMEDIO_INVALIDO", "El costo promedio no puede ser negativo");
 
         String codigo = defaultIfBlank(request.codigo(), producto.getCodigo()).toUpperCase();
         if (productoRepository.existsByCodigoIgnoreCaseAndIdNot(codigo, productoId)) {
@@ -68,9 +77,40 @@ public class UpdateProductoUseCase {
             producto.setUnidadMedida(unidadMedidaRepository.findById(request.unidadMedidaId())
                     .orElseThrow(() -> new BusinessException("UNIDAD_MEDIDA_NO_ENCONTRADA", "Unidad de medida no encontrada")));
         }
-        producto.setTipoProducto(defaultIfBlank(request.tipoProducto(), producto.getTipoProducto()).toUpperCase());
-        producto.setImagenUrl(trim(defaultIfBlank(request.imagenUrl(), defaultIfBlank(request.foto(), producto.getImagenUrl()))));
-        producto.setFoto(trim(defaultIfBlank(request.foto(), defaultIfBlank(request.imagenUrl(), producto.getFoto()))));
+        String tipoProducto = normalizeTipoProducto(request.tipoProducto(), producto.getTipoProducto());
+        if ("SERVICIO".equals(tipoProducto)
+                && stockRepository.sumCantidadByProductoId(producto.getId()).compareTo(BigDecimal.ZERO) != 0) {
+            throw new BusinessException(
+                    "PRODUCTO_CON_STOCK",
+                    "No se puede convertir en servicio un producto que todavia tiene existencias"
+            );
+        }
+        producto.setTipoProducto(tipoProducto);
+        if ("SERVICIO".equals(tipoProducto)) {
+            producto.setAlmacen(null);
+        } else if (request.almacenId() != null) {
+            Almacen almacen = almacenRepository.findById(request.almacenId())
+                    .orElseThrow(() -> new BusinessException(
+                            "ALMACEN_NO_ENCONTRADO",
+                            "Almacen no encontrado"
+                    ));
+            boolean cambioAlmacen = producto.getAlmacen() == null
+                    || !producto.getAlmacen().getId().equals(almacen.getId());
+            if (cambioAlmacen || Boolean.TRUE.equals(request.activo())) {
+                inventoryValidator.requireOperationalWarehouse(almacen);
+            }
+            producto.setAlmacen(almacen);
+        } else if (producto.getAlmacen() == null) {
+            throw new BusinessException(
+                    "ALMACEN_REQUERIDO",
+                    "Selecciona el almacen inicial del producto"
+            );
+        }
+        String currentPhoto = defaultIfBlank(producto.getFoto(), producto.getImagenUrl());
+        String requestedPhoto = defaultIfBlank(request.foto(), request.imagenUrl());
+        String photo = ProductoPhotoValidator.preserveOrValidate(requestedPhoto, currentPhoto);
+        producto.setImagenUrl(photo);
+        producto.setFoto(photo);
         producto.setPrecioCompraBase(request.precioCompraBase() == null ? producto.getPrecioCompraBase() : request.precioCompraBase());
         producto.setPrecioVentaBase(request.precioVentaBase() == null ? producto.getPrecioVentaBase() : request.precioVentaBase());
         producto.setCostoPromedio(resolveCostoPromedio(producto, request));
@@ -94,12 +134,26 @@ public class UpdateProductoUseCase {
             producto.setManejaLotes(false);
             producto.setManejaVencimiento(false);
         }
+        if (!"SERVICIO".equalsIgnoreCase(producto.getTipoProducto())
+                && producto.getCategoria() == null) {
+            throw new BusinessException(
+                    "CATEGORIA_REQUERIDA",
+                    "Selecciona una categoria para el producto"
+            );
+        }
         BigDecimal stockMinimo = request.stockMinimo() == null ? request.stockMinimoGlobal() : request.stockMinimo();
         validateStockMinimo(stockMinimo);
         producto.setStockMinimoGlobal(stockMinimo == null ? producto.getStockMinimoGlobal() : stockMinimo);
         producto.setStockMinimo(stockMinimo == null ? producto.getStockMinimo() : stockMinimo);
         boolean activo = request.activo() == null ? producto.isActivo() : request.activo();
-        producto.setEstado(defaultIfBlank(request.estado(), activo ? "ACTIVO" : "INACTIVO").toUpperCase());
+        BigDecimal stockActual = stockRepository.sumCantidadByProductoId(producto.getId());
+        if (!activo && stockActual.compareTo(BigDecimal.ZERO) != 0) {
+            throw new BusinessException(
+                    "PRODUCTO_CON_STOCK",
+                    "Deja el producto sin existencias antes de desactivarlo"
+            );
+        }
+        producto.setEstado(activo ? "ACTIVO" : "INACTIVO");
         producto.setActivo(activo);
         Producto saved = productoRepository.save(producto);
         ensureInitialStock(saved);
@@ -115,12 +169,22 @@ public class UpdateProductoUseCase {
         if (!producto.isManejaStock() || !stockRepository.findByProductoId(producto.getId()).isEmpty()) {
             return;
         }
+        if (producto.getAlmacen() == null) {
+            throw new BusinessException(
+                    "ALMACEN_REQUERIDO",
+                    "Asigna un almacen al producto antes de activar el control de stock"
+            );
+        }
         Stock stock = new Stock();
         stock.setProducto(producto);
         stock.setAlmacen(producto.getAlmacen());
         stock.setCantidad(BigDecimal.ZERO);
         stock.setStockReservado(BigDecimal.ZERO);
-        stock.setStockMinimo(BigDecimal.ZERO);
+        stock.setStockMinimo(
+                producto.getStockMinimoGlobal() == null
+                        ? BigDecimal.ZERO
+                        : producto.getStockMinimoGlobal()
+        );
         stock.setEstado("ACTIVO");
         stockRepository.save(stock);
     }
@@ -129,6 +193,23 @@ public class UpdateProductoUseCase {
         if (stockMinimo != null && stockMinimo.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("STOCK_MINIMO_INVALIDO", "El stock minimo no puede ser negativo");
         }
+    }
+
+    private void validateMoney(BigDecimal value, String code, String message) {
+        if (value != null && value.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(code, message);
+        }
+    }
+
+    private String normalizeTipoProducto(String value, String fallback) {
+        String tipo = defaultIfBlank(value, fallback).toUpperCase();
+        if (!"PRODUCTO".equals(tipo) && !"SERVICIO".equals(tipo)) {
+            throw new BusinessException(
+                    "TIPO_PRODUCTO_INVALIDO",
+                    "El tipo de registro debe ser PRODUCTO o SERVICIO"
+            );
+        }
+        return tipo;
     }
 
     private BigDecimal resolveCostoPromedio(Producto producto, UpdateProductoRequest request) {

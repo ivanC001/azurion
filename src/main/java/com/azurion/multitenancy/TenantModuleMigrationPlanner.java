@@ -108,7 +108,16 @@ public class TenantModuleMigrationPlanner {
             "V72__crm_public_lead_submissions.sql",
             "V73__harden_public_lead_ingress.sql",
             "V74__audit_public_lead_rejections.sql",
-            "V75__productos_alta_rapida_codigos_unicos.sql"
+            "V75__productos_alta_rapida_codigos_unicos.sql",
+            "V76__inventory_consistency_rules.sql",
+            "V77__caja_turnos_refactoring.sql",
+            "V78__cotizacion_whatsapp_send_guard.sql",
+            "V79__crm_open_opportunity_next_action.sql",
+            "V80__crm_prospect_person_classification.sql",
+            "V81__crm_prospect_country_identification.sql",
+            "V82__warehouse_principal_consistency.sql",
+            "V83__inventory_operation_idempotency.sql",
+            "V84__critical_transaction_idempotency.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -207,15 +216,21 @@ public class TenantModuleMigrationPlanner {
                 "V23__seed_product_categories.sql",
                 "V25__initialize_missing_product_stock.sql",
                 "V48__crm_quote_product_warehouse_repair.sql",
-                "V75__productos_alta_rapida_codigos_unicos.sql"
+                "V75__productos_alta_rapida_codigos_unicos.sql",
+                "V76__inventory_consistency_rules.sql",
+                "V82__warehouse_principal_consistency.sql",
+                "V83__inventory_operation_idempotency.sql",
+                "V84__critical_transaction_idempotency.sql"
         ));
         mapping.put("COMPRAS", List.of(
-                "V17__compras_lotes_origen_inventario.sql"
+                "V17__compras_lotes_origen_inventario.sql",
+                "V84__critical_transaction_idempotency.sql"
         ));
         mapping.put("CLIENTES", List.of(
                 "V2_1__clientes_core.sql",
                 "V18__clientes_datos_fiscales_credito.sql",
-                "V19__cliente_abonos.sql"
+                "V19__cliente_abonos.sql",
+                "V84__critical_transaction_idempotency.sql"
         ));
         mapping.put("VENTAS", List.of(
                 "V2__productos_comerciales_core.sql",
@@ -225,14 +240,17 @@ public class TenantModuleMigrationPlanner {
                 "V15__sucursales_ubigeo_igv.sql",
                 "V21__effective_permissions_and_user_scopes.sql",
                 "V26__arquitectura_tributaria_pos.sql",
-                "V27__preserve_existing_product_tax_behavior.sql"
+                "V27__preserve_existing_product_tax_behavior.sql",
+                "V84__critical_transaction_idempotency.sql"
         ));
         mapping.put("CAJA", List.of(
                 "V5__caja_core.sql",
                 "V9__sucursales_and_cajas_by_branch.sql",
                 "V15__sucursales_ubigeo_igv.sql",
                 "V21__effective_permissions_and_user_scopes.sql",
-                "V26__arquitectura_tributaria_pos.sql"
+                "V26__arquitectura_tributaria_pos.sql",
+                "V77__caja_turnos_refactoring.sql",
+                "V84__critical_transaction_idempotency.sql"
         ));
         mapping.put("FACTURACION", List.of(
                 "V2_3__facturacion_documental_core.sql",
@@ -240,7 +258,8 @@ public class TenantModuleMigrationPlanner {
                 "V11__guias_remision_registro_facturador_status.sql",
                 "V12__notas_fiscales_credito_debito.sql",
                 "V26__arquitectura_tributaria_pos.sql",
-                "V27__preserve_existing_product_tax_behavior.sql"
+                "V27__preserve_existing_product_tax_behavior.sql",
+                "V84__critical_transaction_idempotency.sql"
         ));
         mapping.put("COTIZACIONES", List.of(
                 "V2__productos_comerciales_core.sql",
@@ -295,7 +314,11 @@ public class TenantModuleMigrationPlanner {
                 "V71__crm_whatsapp_internal_notes.sql",
                 "V72__crm_public_lead_submissions.sql",
                 "V73__harden_public_lead_ingress.sql",
-                "V74__audit_public_lead_rejections.sql"
+                "V74__audit_public_lead_rejections.sql",
+                "V78__cotizacion_whatsapp_send_guard.sql",
+                "V79__crm_open_opportunity_next_action.sql",
+                "V80__crm_prospect_person_classification.sql",
+                "V81__crm_prospect_country_identification.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;
