@@ -7,11 +7,10 @@ import com.azurion.saascore.ventas.application.dto.VentaStatusRealtimeEvent;
 import com.azurion.saascore.ventas.domain.entities.Venta;
 import com.azurion.saascore.ventas.domain.repositories.VentaRepository;
 import com.azurion.saascore.ventas.infrastructure.realtime.VentaStatusRealtimeStreamService;
+import com.azurion.shared.util.JsonNodeValues;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.OffsetDateTime;
-import java.util.Iterator;
 import java.util.Locale;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -82,11 +81,17 @@ public class ProcessVentaFacturacionAsyncUseCase {
         venta.setFacturadorHttpStatus(emission.status());
         venta.setFacturadorMensaje(trimToMax(emission.message(), 500));
         venta.setFacturadorSunatEstado(readUpperText(responseBody, "estado", "sunat_estado", "estado_sunat", "status"));
-        venta.setFacturadorDocumentoId(readText(responseBody, "documento_id", "id_documento", "documentId"));
-        venta.setFacturadorTicket(readText(responseBody, "ticket", "ticket_sunat"));
-        venta.setFacturadorPdfUrl(readUrl(responseBody, "pdf_url", "url_pdf", "pdf"));
-        venta.setFacturadorXmlUrl(readUrl(responseBody, "xml_url", "url_xml", "xml"));
-        venta.setFacturadorCdrUrl(readUrl(responseBody, "cdr_url", "url_cdr", "cdr"));
+        venta.setFacturadorDocumentoId(JsonNodeValues.text(responseBody, "documento_id", "id_documento", "documentId"));
+        venta.setFacturadorTicket(JsonNodeValues.text(
+                responseBody,
+                "numero_documento",
+                "comprobante",
+                "ticket",
+                "ticket_sunat"
+        ));
+        venta.setFacturadorPdfUrl(JsonNodeValues.url(responseBody, "pdf_url", "url_pdf", "pdf"));
+        venta.setFacturadorXmlUrl(JsonNodeValues.url(responseBody, "xml_url", "url_xml", "xml"));
+        venta.setFacturadorCdrUrl(JsonNodeValues.url(responseBody, "cdr_url", "url_cdr", "cdr"));
         venta.setFacturadorRespuestaJson(responseBody == null ? null : responseBody.toString());
         venta.setFacturacionEstado(resolveFacturacionEstado(task.tipoComprobante(), venta.getFacturadorSunatEstado(), emission.success()));
         venta.setFacturacionActualizadoEn(OffsetDateTime.now());
@@ -140,67 +145,11 @@ public class ProcessVentaFacturacionAsyncUseCase {
     }
 
     private String readUpperText(JsonNode source, String... keys) {
-        String value = readText(source, keys);
+        String value = JsonNodeValues.text(source, keys);
         if (value == null || value.isBlank()) {
             return null;
         }
         return value.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private String readUrl(JsonNode source, String... keys) {
-        String value = readText(source, keys);
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.regionMatches(true, 0, "http://", 0, 7)
-                || trimmed.regionMatches(true, 0, "https://", 0, 8)) {
-            return trimToMax(trimmed, 500);
-        }
-        return null;
-    }
-
-    private String readText(JsonNode source, String... keys) {
-        JsonNode node = deepFindNode(source, keys);
-        if (node == null || node.isMissingNode() || node.isNull()) {
-            return null;
-        }
-        return trimToMax(node.asText(null), 500);
-    }
-
-    private JsonNode deepFindNode(JsonNode source, String... keys) {
-        if (source == null || source.isNull() || source.isMissingNode()) {
-            return null;
-        }
-
-        for (String key : keys) {
-            if (source.has(key)) {
-                JsonNode value = source.get(key);
-                if (value != null && !value.isNull() && !value.isMissingNode() && !value.asText("").isBlank()) {
-                    return value;
-                }
-            }
-        }
-
-        if (source.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> iterator = source.fields();
-            while (iterator.hasNext()) {
-                JsonNode nested = deepFindNode(iterator.next().getValue(), keys);
-                if (nested != null && !nested.isNull() && !nested.isMissingNode() && !nested.asText("").isBlank()) {
-                    return nested;
-                }
-            }
-        }
-
-        if (source.isArray()) {
-            for (JsonNode item : source) {
-                JsonNode nested = deepFindNode(item, keys);
-                if (nested != null && !nested.isNull() && !nested.isMissingNode() && !nested.asText("").isBlank()) {
-                    return nested;
-                }
-            }
-        }
-        return null;
     }
 
     private String trimToMax(String value, int maxLength) {

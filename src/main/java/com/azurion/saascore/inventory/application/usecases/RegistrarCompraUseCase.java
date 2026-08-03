@@ -21,6 +21,9 @@ import com.azurion.saascore.inventory.domain.repositories.LoteRepository;
 import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.inventory.domain.repositories.StockLoteRepository;
 import com.azurion.saascore.inventory.domain.repositories.StockRepository;
+import com.azurion.saascore.tributacion.application.dto.TaxResolution;
+import com.azurion.saascore.tributacion.application.services.TaxResolverService;
+import com.azurion.saascore.tributacion.domain.entities.ConfiguracionTributariaEmpresa;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
 import com.azurion.shared.util.RequestFingerprint;
@@ -32,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +43,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RegistrarCompraUseCase {
+
+    private static final Set<String> AFECTACIONES_GRAVADAS = Set.of(
+            "10", "11", "12", "13", "14", "15", "16", "17"
+    );
 
     private final CompraRepository compraRepository;
     private final CompraDetalleRepository compraDetalleRepository;
@@ -50,6 +58,7 @@ public class RegistrarCompraUseCase {
     private final KardexMovimientoRepository kardexRepository;
     private final InventoryOperationalValidator inventoryValidator;
     private final BusinessOperationLockService operationLockService;
+    private final TaxResolverService taxResolverService;
 
     @Transactional
     public CompraResponse execute(CreateCompraRequest request) {
@@ -59,6 +68,12 @@ public class RegistrarCompraUseCase {
         validateProveedor(request);
 
         String tipoComprobante = normalizeTipoComprobante(request.tipoComprobante());
+        if (Boolean.TRUE.equals(request.creditoFiscalAplicable()) && !"FACTURA".equals(tipoComprobante)) {
+            throw new BusinessException(
+                    "COMPRA_CREDITO_FISCAL_INVALIDO",
+                    "Solo una factura de compra puede marcarse con derecho a credito fiscal"
+            );
+        }
         String numeroComprobante = defaultIfBlank(request.numeroComprobante(), buildNumeroComprobante(request.serie(), request.correlativo()));
         if (numeroComprobante == null) {
             throw new BusinessException(
@@ -77,6 +92,7 @@ public class RegistrarCompraUseCase {
         Almacen almacen = almacenRepository.findById(request.almacenId())
                 .orElseThrow(() -> new BusinessException("ALMACEN_NO_ENCONTRADO", "Almacen destino no encontrado"));
         inventoryValidator.requireOperationalWarehouse(almacen);
+        ConfiguracionTributariaEmpresa taxEmpresa = taxResolverService.configuracionEmpresa();
 
         Map<Long, Producto> productosBloqueados = lockProductos(request.detalles());
         String requestHash = operationKey == null ? null : RequestFingerprint.sha256(request);
@@ -109,6 +125,11 @@ public class RegistrarCompraUseCase {
         compra.setAlmacen(almacen);
         compra.setEstado("REGISTRADA");
         compra.setTotal(BigDecimal.ZERO);
+        compra.setSubtotalNeto(BigDecimal.ZERO);
+        compra.setMontoIgv(BigDecimal.ZERO);
+        compra.setCreditoFiscalAplicable(Boolean.TRUE.equals(request.creditoFiscalAplicable()));
+        compra.setTotalCostoInventariable(BigDecimal.ZERO);
+        compra.setTratamientoIgv("DESGLOSADO");
         compra.setClientOperationId(operationKey);
         compra.setRequestHash(requestHash);
         Compra savedCompra = operationKey == null
@@ -117,13 +138,28 @@ public class RegistrarCompraUseCase {
 
         List<CompraDetalle> detalles = new ArrayList<>();
         BigDecimal totalCompra = BigDecimal.ZERO;
+        BigDecimal subtotalNeto = BigDecimal.ZERO;
+        BigDecimal montoIgv = BigDecimal.ZERO;
+        BigDecimal totalCostoInventariable = BigDecimal.ZERO;
         for (CompraDetalleRequest detalleRequest : request.detalles()) {
-            CompraDetalle detalle = registrarDetalle(savedCompra, almacen, detalleRequest, productosBloqueados);
+            CompraDetalle detalle = registrarDetalle(
+                    savedCompra,
+                    almacen,
+                    detalleRequest,
+                    productosBloqueados,
+                    taxEmpresa
+            );
             detalles.add(detalle);
             totalCompra = totalCompra.add(detalle.getTotal());
+            subtotalNeto = subtotalNeto.add(detalle.getSubtotalNeto());
+            montoIgv = montoIgv.add(detalle.getMontoIgv());
+            totalCostoInventariable = totalCostoInventariable.add(detalle.getTotalCostoInventariable());
         }
 
         savedCompra.setTotal(totalCompra.setScale(2, RoundingMode.HALF_UP));
+        savedCompra.setSubtotalNeto(subtotalNeto.setScale(2, RoundingMode.HALF_UP));
+        savedCompra.setMontoIgv(montoIgv.setScale(2, RoundingMode.HALF_UP));
+        savedCompra.setTotalCostoInventariable(totalCostoInventariable.setScale(2, RoundingMode.HALF_UP));
         Compra compraConTotal = compraRepository.save(savedCompra);
         return CompraInventoryMapper.toResponse(compraConTotal, detalles);
     }
@@ -132,24 +168,40 @@ public class RegistrarCompraUseCase {
             Compra compra,
             Almacen almacen,
             CompraDetalleRequest request,
-            Map<Long, Producto> productosBloqueados
+            Map<Long, Producto> productosBloqueados,
+            ConfiguracionTributariaEmpresa taxEmpresa
     ) {
         Producto producto = productosBloqueados.get(request.productoId());
         inventoryValidator.requireStockProduct(producto);
         inventoryValidator.validateLotDates(request.fechaFabricacion(), request.fechaVencimiento());
 
         BigDecimal cantidad = positive(request.cantidad(), "DETALLE_CANTIDAD_INVALIDA", "La cantidad debe ser mayor a cero");
-        BigDecimal costoUnitario = positive(request.costoUnitario(), "DETALLE_COSTO_INVALIDO", "El costo unitario debe ser mayor a cero");
+        PurchaseLineAmounts amounts = resolvePurchaseLineAmounts(compra, request, cantidad);
+        BigDecimal costoUnitario = amounts.costoInventariableUnitario();
         BigDecimal precioVenta = resolvePrecioVenta(producto, request.precioVenta());
-        BigDecimal total = cantidad.multiply(costoUnitario).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal precioVentaNeto = resolvePrecioVentaNeto(
+                producto,
+                almacen,
+                taxEmpresa,
+                precioVenta
+        );
 
         CompraDetalle detalle = new CompraDetalle();
         detalle.setCompra(compra);
         detalle.setProducto(producto);
         detalle.setCantidad(cantidad);
         detalle.setCostoUnitario(costoUnitario);
+        detalle.setCostoNetoUnitario(amounts.costoNetoUnitario());
+        detalle.setPorcentajeIgv(amounts.porcentajeIgv());
+        detalle.setMontoIgvUnitario(amounts.montoIgvUnitario());
+        detalle.setCostoTotalUnitario(amounts.costoTotalUnitario());
+        detalle.setCostoInventariableUnitario(costoUnitario);
         detalle.setPrecioVenta(precioVenta);
-        detalle.setTotal(total);
+        detalle.setPrecioVentaNeto(precioVentaNeto);
+        detalle.setSubtotalNeto(amounts.subtotalNeto());
+        detalle.setMontoIgv(amounts.montoIgv());
+        detalle.setTotal(amounts.total());
+        detalle.setTotalCostoInventariable(amounts.totalCostoInventariable());
         detalle.setCodigoLote(trim(request.codigoLote()));
         detalle.setFechaFabricacion(request.fechaFabricacion());
         detalle.setFechaVencimiento(request.fechaVencimiento());
@@ -208,6 +260,102 @@ public class RegistrarCompraUseCase {
             throw new BusinessException("DETALLE_PRECIO_VENTA_INVALIDO", "Indica un precio de venta mayor a cero para calcular la rentabilidad");
         }
         return resolved;
+    }
+
+    private PurchaseLineAmounts resolvePurchaseLineAmounts(
+            Compra compra,
+            CompraDetalleRequest request,
+            BigDecimal cantidad
+    ) {
+        // Backwards compatibility: older clients only sent costoUnitario and
+        // that value was already used as the inventory cost. New clients send
+        // costoNetoUnitario explicitly so IGV can be separated safely.
+        if (request.costoNetoUnitario() == null) {
+            BigDecimal legacyCost = positive(
+                    request.costoUnitario(),
+                    "DETALLE_COSTO_INVALIDO",
+                    "El costo unitario debe ser mayor a cero"
+            ).setScale(6, RoundingMode.HALF_UP);
+            BigDecimal lineTotal = legacyCost.multiply(cantidad).setScale(2, RoundingMode.HALF_UP);
+            return new PurchaseLineAmounts(
+                    legacyCost,
+                    BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                    BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
+                    legacyCost,
+                    legacyCost,
+                    lineTotal,
+                    BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                    lineTotal,
+                    lineTotal
+            );
+        }
+
+        BigDecimal netUnit = positive(
+                request.costoNetoUnitario(),
+                "DETALLE_COSTO_NETO_INVALIDO",
+                "El costo neto unitario debe ser mayor a cero"
+        ).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal rate = request.porcentajeIgv() == null
+                ? BigDecimal.ZERO
+                : request.porcentajeIgv().setScale(2, RoundingMode.HALF_UP);
+        if (rate.compareTo(BigDecimal.ZERO) < 0 || rate.compareTo(new BigDecimal("100")) > 0) {
+            throw new BusinessException(
+                    "DETALLE_IGV_INVALIDO",
+                    "El porcentaje de IGV de compra debe estar entre 0 y 100"
+            );
+        }
+
+        BigDecimal taxUnit = netUnit.multiply(rate)
+                .divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP);
+        BigDecimal totalUnit = netUnit.add(taxUnit).setScale(6, RoundingMode.HALF_UP);
+        if (request.costoTotalUnitario() != null
+                && request.costoTotalUnitario().subtract(totalUnit).abs().compareTo(new BigDecimal("0.01")) > 0) {
+            throw new BusinessException(
+                    "DETALLE_TOTAL_COMPRA_INVALIDO",
+                    "El costo total unitario no coincide con el costo neto mas IGV"
+            );
+        }
+
+        BigDecimal netLine = netUnit.multiply(cantidad).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxLine = netLine.multiply(rate)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        BigDecimal totalLine = netLine.add(taxLine).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal inventoryUnit = compra.isCreditoFiscalAplicable() && rate.compareTo(BigDecimal.ZERO) > 0
+                ? netUnit
+                : totalUnit;
+        BigDecimal inventoryLine = inventoryUnit.multiply(cantidad).setScale(2, RoundingMode.HALF_UP);
+        return new PurchaseLineAmounts(
+                netUnit,
+                rate,
+                taxUnit,
+                totalUnit,
+                inventoryUnit,
+                netLine,
+                taxLine,
+                totalLine,
+                inventoryLine
+        );
+    }
+
+    private BigDecimal resolvePrecioVentaNeto(
+            Producto producto,
+            Almacen almacen,
+            ConfiguracionTributariaEmpresa taxEmpresa,
+            BigDecimal precioVentaFinal
+    ) {
+        TaxResolution tax = taxResolverService.resolverImpuesto(
+                producto,
+                almacen.getSucursal(),
+                taxEmpresa
+        );
+        if (!AFECTACIONES_GRAVADAS.contains(tax.tipoAfectacionCodigo())
+                || tax.porcentajeIgv().compareTo(BigDecimal.ZERO) <= 0) {
+            return precioVentaFinal.setScale(6, RoundingMode.HALF_UP);
+        }
+        BigDecimal factor = BigDecimal.ONE.add(
+                tax.porcentajeIgv().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP)
+        );
+        return precioVentaFinal.divide(factor, 6, RoundingMode.HALF_UP);
     }
 
     private Lote resolveLote(
@@ -460,5 +608,18 @@ public class RegistrarCompraUseCase {
             return null;
         }
         return value.trim();
+    }
+
+    private record PurchaseLineAmounts(
+            BigDecimal costoNetoUnitario,
+            BigDecimal porcentajeIgv,
+            BigDecimal montoIgvUnitario,
+            BigDecimal costoTotalUnitario,
+            BigDecimal costoInventariableUnitario,
+            BigDecimal subtotalNeto,
+            BigDecimal montoIgv,
+            BigDecimal total,
+            BigDecimal totalCostoInventariable
+    ) {
     }
 }

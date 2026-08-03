@@ -6,10 +6,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.LockModeType;
 
 public interface VentaFacturacionOutboxRepository extends JpaRepository<VentaFacturacionOutbox, Long> {
 
@@ -19,6 +21,9 @@ public interface VentaFacturacionOutboxRepository extends JpaRepository<VentaFac
     );
 
     Optional<VentaFacturacionOutbox> findByIdAndStatusAndLeaseOwner(Long id, String status, String leaseOwner);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<VentaFacturacionOutbox> findFirstByTenantIdAndVentaIdOrderByIdDesc(String tenantId, Long ventaId);
 
     @Modifying
     @Transactional

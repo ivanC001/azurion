@@ -58,6 +58,9 @@ public class VentaDetalle extends BaseEntity {
     @Column(name = "monto_igv", nullable = false, precision = 18, scale = 2)
     private BigDecimal montoIgv;
 
+    @Column(name = "costo_unitario_inventariable", precision = 18, scale = 6)
+    private BigDecimal costoUnitarioInventariable;
+
     @Column(name = "total", nullable = false, precision = 18, scale = 2)
     private BigDecimal total;
 }

@@ -2,6 +2,7 @@ package com.azurion.saascore.crm.application.services;
 
 import com.azurion.saascore.crm.domain.entities.CrmPublicLeadSubmission;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
+import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
@@ -21,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PublicLeadSubmissionAuditService {
 
     private final CrmPublicLeadSubmissionRepository submissionRepository;
-    private final CrmIngressLockService ingressLockService;
+    private final BusinessOperationLockService ingressLockService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordRejected(String sourceKey,

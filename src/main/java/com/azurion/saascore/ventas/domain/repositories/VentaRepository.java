@@ -35,14 +35,28 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
                 count(venta),
                 coalesce(sum(venta.total), 0),
                 coalesce(sum(case when venta.fechaVenta >= :dayStart and venta.fechaVenta < :dayEnd then 1 else 0 end), 0),
-                coalesce(sum(case when coalesce(venta.facturadorSunatEstado, venta.facturacionEstado) = 'ACEPTADO' then 1 else 0 end), 0),
-                coalesce(sum(case when venta.facturacionEstado <> 'NO_REQUIERE'
+                coalesce(sum(case when upper(coalesce(venta.facturadorTipoComprobante, '')) not in ('TICKET_VENTA', 'TICKET', 'TK')
+                                  and coalesce(venta.facturadorSunatEstado, venta.facturacionEstado) = 'ACEPTADO'
+                                  then 1 else 0 end), 0),
+                coalesce(sum(case when upper(coalesce(venta.facturadorTipoComprobante, '')) not in ('TICKET_VENTA', 'TICKET', 'TK')
+                                  and venta.facturacionEstado <> 'NO_REQUIERE'
                                   and coalesce(venta.facturadorSunatEstado, venta.facturacionEstado) <> 'ACEPTADO'
                                   then 1 else 0 end), 0),
-                coalesce(sum(case when venta.facturacionEstado = 'NO_REQUIERE' then 1 else 0 end), 0)
+                coalesce(sum(case when upper(coalesce(venta.facturadorTipoComprobante, '')) in ('TICKET_VENTA', 'TICKET', 'TK')
+                                  or venta.facturacionEstado = 'NO_REQUIERE'
+                                  then 1 else 0 end), 0)
             )
             from Venta venta
             """)
     VentaSummaryResponse summarize(@Param("dayStart") OffsetDateTime dayStart,
                                     @Param("dayEnd") OffsetDateTime dayEnd);
+
+    @Query("""
+            select coalesce(sum(venta.total), 0)
+              from Venta venta
+             where venta.fechaVenta >= :from
+               and venta.fechaVenta < :to
+            """)
+    java.math.BigDecimal sumGrossBetween(@Param("from") OffsetDateTime from,
+                                         @Param("to") OffsetDateTime to);
 }

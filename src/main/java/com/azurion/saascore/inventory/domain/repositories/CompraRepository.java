@@ -42,4 +42,34 @@ public interface CompraRepository extends JpaRepository<Compra, Long> {
 
     @Query("select coalesce(sum(compra.total), 0) from Compra compra where compra.estado = 'REGISTRADA'")
     BigDecimal sumRegisteredTotal();
+
+    @Query("""
+            select coalesce(sum(compra.subtotalNeto), 0)
+              from Compra compra
+             where compra.estado = 'REGISTRADA'
+               and compra.fechaEmision >= :from
+               and compra.fechaEmision <= :to
+            """)
+    BigDecimal sumNetBetween(@Param("from") java.time.LocalDate from,
+                             @Param("to") java.time.LocalDate to);
+
+    @Query("""
+            select coalesce(sum(compra.montoIgv), 0)
+              from Compra compra
+             where compra.estado = 'REGISTRADA'
+               and compra.fechaEmision >= :from
+               and compra.fechaEmision <= :to
+            """)
+    BigDecimal sumPurchaseTaxBetween(@Param("from") java.time.LocalDate from,
+                                     @Param("to") java.time.LocalDate to);
+
+    @Query("""
+            select coalesce(sum(case when compra.creditoFiscalAplicable = true then compra.montoIgv else 0 end), 0)
+              from Compra compra
+             where compra.estado = 'REGISTRADA'
+               and compra.fechaEmision >= :from
+               and compra.fechaEmision <= :to
+            """)
+    BigDecimal sumTaxCreditBetween(@Param("from") java.time.LocalDate from,
+                                   @Param("to") java.time.LocalDate to);
 }

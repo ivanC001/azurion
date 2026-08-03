@@ -16,6 +16,7 @@ import com.azurion.saascore.ventas.domain.repositories.VentaDetalleRepository;
 import com.azurion.saascore.ventas.domain.repositories.VentaRepository;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
+import com.azurion.shared.util.JsonNodeValues;
 import com.azurion.shared.util.RequestFingerprint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -239,12 +240,12 @@ public class RegistrarNotaFiscalUseCase {
         nota.setFacturadorEndpoint(emission.endpoint());
         nota.setFacturadorTipoComprobante(nota.getTipoDocumento());
         nota.setFacturadorMensaje(trimToMax(emission.message(), 500));
-        nota.setFacturadorSunatEstado(normalizeEstado(readText(responseBody, "estado", "sunat_estado", "estado_sunat", "status")));
-        nota.setFacturadorDocumentoId(readText(responseBody, "documento_id", "id_documento", "documentId"));
-        nota.setFacturadorTicket(readText(responseBody, "ticket", "ticket_sunat"));
-        nota.setFacturadorPdfUrl(readUrl(responseBody, "pdf_url", "url_pdf", "pdf"));
-        nota.setFacturadorXmlUrl(readUrl(responseBody, "xml_url", "url_xml", "xml"));
-        nota.setFacturadorCdrUrl(readUrl(responseBody, "cdr_url", "url_cdr", "cdr"));
+        nota.setFacturadorSunatEstado(normalizeEstado(JsonNodeValues.text(responseBody, "estado", "sunat_estado", "estado_sunat", "status")));
+        nota.setFacturadorDocumentoId(JsonNodeValues.text(responseBody, "documento_id", "id_documento", "documentId"));
+        nota.setFacturadorTicket(JsonNodeValues.text(responseBody, "ticket", "ticket_sunat"));
+        nota.setFacturadorPdfUrl(JsonNodeValues.url(responseBody, "pdf_url", "url_pdf", "pdf"));
+        nota.setFacturadorXmlUrl(JsonNodeValues.url(responseBody, "xml_url", "url_xml", "xml"));
+        nota.setFacturadorCdrUrl(JsonNodeValues.url(responseBody, "cdr_url", "url_cdr", "cdr"));
         nota.setFacturadorRespuestaJson(responseBody == null ? null : responseBody.toString());
         nota.setFacturacionEstado(resolveFacturacionEstado(nota.getFacturadorSunatEstado(), emission.success()));
         nota.setFacturacionActualizadoEn(OffsetDateTime.now());
@@ -277,6 +278,8 @@ public class RegistrarNotaFiscalUseCase {
         BigDecimal ratio = total.divide(venta.getTotal(), 8, RoundingMode.HALF_UP);
         BigDecimal base = scaleMoney(originalBase.multiply(ratio));
         BigDecimal igv = scaleMoney(total.subtract(base));
+        nota.setBaseImponible(base);
+        nota.setMontoIgv(igv);
         BigDecimal porcentajeIgv = base.compareTo(BigDecimal.ZERO) == 0
                 ? BigDecimal.ZERO
                 : igv.multiply(new BigDecimal("100")).divide(base, 2, RoundingMode.HALF_UP);
@@ -372,16 +375,16 @@ public class RegistrarNotaFiscalUseCase {
         String tipoDocumento = normalizeVentaTipoDocumento(firstNonBlank(
                 remote == null ? null : remote.tipoDocumento(),
                 venta.getFacturadorTipoComprobante(),
-                readText(parseJson(venta.getFacturadorRespuestaJson()), "tipoDocumento", "tipo_documento")
+                JsonNodeValues.text(parseJson(venta.getFacturadorRespuestaJson()), "tipoDocumento", "tipo_documento")
         ));
 
         String serie = firstNonBlank(
                 remote == null ? null : remote.serie(),
-                readText(parseJson(venta.getFacturadorRespuestaJson()), "serie")
+                JsonNodeValues.text(parseJson(venta.getFacturadorRespuestaJson()), "serie")
         );
         String correlativo = firstNonBlank(
                 remote == null ? null : remote.correlativo(),
-                readText(parseJson(venta.getFacturadorRespuestaJson()), "correlativo")
+                JsonNodeValues.text(parseJson(venta.getFacturadorRespuestaJson()), "correlativo")
         );
 
         if (tipoDocumento == null && serie != null) {
@@ -473,51 +476,6 @@ public class RegistrarNotaFiscalUseCase {
     private String resolveMoneda(String moneda) {
         String normalized = defaultIfBlank(moneda, "PEN");
         return trimToMax(normalized.toUpperCase(Locale.ROOT), 3);
-    }
-
-    private String readUrl(JsonNode source, String... keys) {
-        String value = readText(source, keys);
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.regionMatches(true, 0, "http://", 0, 7)
-                || trimmed.regionMatches(true, 0, "https://", 0, 8)) {
-            return trimToMax(trimmed, 500);
-        }
-        return null;
-    }
-
-    private String readText(JsonNode source, String... keys) {
-        if (source == null || source.isNull() || source.isMissingNode()) {
-            return null;
-        }
-        for (String key : keys) {
-            JsonNode direct = source.path(key);
-            if (!direct.isMissingNode() && !direct.isNull()) {
-                String value = firstNonBlank(direct.asText(null));
-                if (value != null) {
-                    return trimToMax(value, 500);
-                }
-            }
-        }
-        if (source.isObject()) {
-            for (JsonNode nested : source) {
-                String value = readText(nested, keys);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        if (source.isArray()) {
-            for (JsonNode nested : source) {
-                String value = readText(nested, keys);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        return null;
     }
 
     private BigDecimal scaleMoney(BigDecimal value) {

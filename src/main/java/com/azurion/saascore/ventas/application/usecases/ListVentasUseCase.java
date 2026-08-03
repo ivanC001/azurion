@@ -39,6 +39,16 @@ public class ListVentasUseCase {
     }
 
     @Transactional(readOnly = true)
+    public VentaResponse get(Long ventaId) {
+        Venta venta = ventaRepository.findById(ventaId)
+                .orElseThrow(() -> com.azurion.shared.exception.BusinessException.notFound(
+                        "VENTA_NOT_FOUND",
+                        "La venta no existe"
+                ));
+        return toResponse(venta);
+    }
+
+    @Transactional(readOnly = true)
     public VentaSummaryResponse summary() {
         ZoneId zone = ZoneId.of("America/Lima");
         LocalDate today = LocalDate.now(zone);

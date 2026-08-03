@@ -117,7 +117,9 @@ public class TenantModuleMigrationPlanner {
             "V81__crm_prospect_country_identification.sql",
             "V82__warehouse_principal_consistency.sql",
             "V83__inventory_operation_idempotency.sql",
-            "V84__critical_transaction_idempotency.sql"
+            "V84__critical_transaction_idempotency.sql",
+            "V85__professional_tax_and_margin_model.sql",
+            "V86__reconcile_erp_tax_permissions.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -220,11 +222,13 @@ public class TenantModuleMigrationPlanner {
                 "V76__inventory_consistency_rules.sql",
                 "V82__warehouse_principal_consistency.sql",
                 "V83__inventory_operation_idempotency.sql",
-                "V84__critical_transaction_idempotency.sql"
+                "V84__critical_transaction_idempotency.sql",
+                "V85__professional_tax_and_margin_model.sql"
         ));
         mapping.put("COMPRAS", List.of(
                 "V17__compras_lotes_origen_inventario.sql",
-                "V84__critical_transaction_idempotency.sql"
+                "V84__critical_transaction_idempotency.sql",
+                "V85__professional_tax_and_margin_model.sql"
         ));
         mapping.put("CLIENTES", List.of(
                 "V2_1__clientes_core.sql",
@@ -241,7 +245,9 @@ public class TenantModuleMigrationPlanner {
                 "V21__effective_permissions_and_user_scopes.sql",
                 "V26__arquitectura_tributaria_pos.sql",
                 "V27__preserve_existing_product_tax_behavior.sql",
-                "V84__critical_transaction_idempotency.sql"
+                "V84__critical_transaction_idempotency.sql",
+                "V85__professional_tax_and_margin_model.sql",
+                "V86__reconcile_erp_tax_permissions.sql"
         ));
         mapping.put("CAJA", List.of(
                 "V5__caja_core.sql",
@@ -250,7 +256,8 @@ public class TenantModuleMigrationPlanner {
                 "V21__effective_permissions_and_user_scopes.sql",
                 "V26__arquitectura_tributaria_pos.sql",
                 "V77__caja_turnos_refactoring.sql",
-                "V84__critical_transaction_idempotency.sql"
+                "V84__critical_transaction_idempotency.sql",
+                "V86__reconcile_erp_tax_permissions.sql"
         ));
         mapping.put("FACTURACION", List.of(
                 "V2_3__facturacion_documental_core.sql",
@@ -259,7 +266,9 @@ public class TenantModuleMigrationPlanner {
                 "V12__notas_fiscales_credito_debito.sql",
                 "V26__arquitectura_tributaria_pos.sql",
                 "V27__preserve_existing_product_tax_behavior.sql",
-                "V84__critical_transaction_idempotency.sql"
+                "V84__critical_transaction_idempotency.sql",
+                "V85__professional_tax_and_margin_model.sql",
+                "V86__reconcile_erp_tax_permissions.sql"
         ));
         mapping.put("COTIZACIONES", List.of(
                 "V2__productos_comerciales_core.sql",

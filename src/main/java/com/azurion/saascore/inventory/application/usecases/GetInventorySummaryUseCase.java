@@ -32,7 +32,7 @@ public class GetInventorySummaryUseCase {
                 stockLoteRepository.countExpired(today),
                 kardexMovimientoRepository.count(),
                 compraRepository.count(),
-                compraRepository.sumRegisteredTotal(),
+                compraDetalleRepository.sumRegisteredInventoryCost(),
                 compraDetalleRepository.sumProjectedProfit()
         );
     }

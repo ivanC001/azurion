@@ -51,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RegistrarVentaCajaUseCase {
+    private static final BigDecimal BOLETA_IDENTIFICATION_THRESHOLD = new BigDecimal("500.00");
     private static final Set<String> AFECTACION_GRAVADA = Set.of(
             "10", "11", "12", "13", "14", "15", "16", "17"
     );
@@ -103,6 +104,7 @@ public class RegistrarVentaCajaUseCase {
         LocalDate fechaEmision = resolveFechaEmisionDate(request);
         ResolvedVentaCliente clienteVenta = resolveVentaCliente(request);
         validateFacturaCliente(request, clienteVenta);
+        validateBoletaCliente(request, clienteVenta);
 
         List<ResolvedVentaItem> resolvedItems = resolveVentaItems(request, caja);
         ventaSucursalStockPolicy.validar(caja, resolvedItems.stream().map(ResolvedVentaItem::almacenId).toList());
@@ -209,10 +211,7 @@ public class RegistrarVentaCajaUseCase {
                                              LocalDate fechaEmision) {
         Map<String, Object> payload = new LinkedHashMap<>();
 
-        payload.put("empresa", Map.of(
-                "ruc", empresa.getRuc(),
-                "razon_social", empresa.getRazonSocial()
-        ));
+        payload.put("empresa", buildEmpresaData(empresa));
 
         payload.put("cliente", buildCliente(request, clienteVenta));
 
@@ -402,11 +401,29 @@ public class RegistrarVentaCajaUseCase {
         return payload;
     }
 
-    private Map<String, Object> buildCliente(RegistrarVentaCajaRequest request, ResolvedVentaCliente clienteVenta) {
-        if (request.tipoComprobante() == TipoComprobanteVenta.TICKET_VENTA) {
-            return Map.of();
+    private Map<String, Object> buildEmpresaData(Empresa empresa) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("ruc", empresa.getRuc());
+        data.put("razon_social", empresa.getRazonSocial());
+        putIfPresent(data, "nombre_comercial", empresa.getNombreComercial());
+        putIfPresent(data, "correo", empresa.getCorreoPrincipal());
+        putIfPresent(data, "telefono", empresa.getTelefono());
+        putIfPresent(data, "celular", empresa.getCelular());
+        putIfPresent(data, "website", empresa.getSitioWeb());
+
+        Map<String, Object> address = new LinkedHashMap<>();
+        putIfPresent(address, "direccion", empresa.getDireccionFiscal());
+        putIfPresent(address, "distrito", empresa.getDistrito());
+        putIfPresent(address, "provincia", empresa.getProvincia());
+        putIfPresent(address, "departamento", empresa.getDepartamento());
+        if (!address.isEmpty()) {
+            data.put("direccion", address);
         }
 
+        return data;
+    }
+
+    private Map<String, Object> buildCliente(RegistrarVentaCajaRequest request, ResolvedVentaCliente clienteVenta) {
         if (request.tipoComprobante() == TipoComprobanteVenta.BOLETA_SIN_NOMBRE) {
             return Map.of(
                     "tipo_doc", "0",
@@ -536,8 +553,7 @@ public class RegistrarVentaCajaUseCase {
     }
 
     private ResolvedVentaCliente resolveVentaCliente(RegistrarVentaCajaRequest request) {
-        if (request.tipoComprobante() == TipoComprobanteVenta.TICKET_VENTA
-                || request.tipoComprobante() == TipoComprobanteVenta.BOLETA_SIN_NOMBRE) {
+        if (request.tipoComprobante() == TipoComprobanteVenta.BOLETA_SIN_NOMBRE) {
             return null;
         }
 
@@ -608,6 +624,35 @@ public class RegistrarVentaCajaUseCase {
                     "La factura solo puede emitirse a un cliente con RUC de 11 digitos y razon social"
             );
         }
+    }
+
+    private void validateBoletaCliente(RegistrarVentaCajaRequest request, ResolvedVentaCliente clienteVenta) {
+        if ((request.tipoComprobante() != TipoComprobanteVenta.BOLETA
+                && request.tipoComprobante() != TipoComprobanteVenta.BOLETA_SIN_NOMBRE)
+                || request.total().compareTo(BOLETA_IDENTIFICATION_THRESHOLD) <= 0) {
+            return;
+        }
+        if (clienteVenta == null || !isIdentifiedCustomer(
+                clienteVenta.tipoDocumento(),
+                clienteVenta.numeroDocumento(),
+                clienteVenta.nombre()
+        )) {
+            throw new BusinessException(
+                    "CLIENTE_BOLETA_INVALIDO",
+                    "La boleta mayor a S/ 500 requiere un cliente identificado con DNI o RUC"
+            );
+        }
+    }
+
+    static boolean isIdentifiedCustomer(String documentType, String documentNumber, String customerName) {
+        String type = documentType == null ? "" : documentType.trim();
+        String number = documentNumber == null ? "" : documentNumber.trim();
+        String name = customerName == null ? "" : customerName.trim();
+        if (name.isBlank()) {
+            return false;
+        }
+        return ("1".equals(type) && number.matches("^[0-9]{8}$"))
+                || ("6".equals(type) && number.matches("^[0-9]{11}$"));
     }
 
     private String inferCustomerDocumentType(String providedType, String documentNumber) {

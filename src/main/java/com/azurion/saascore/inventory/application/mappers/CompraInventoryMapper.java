@@ -17,7 +17,10 @@ public final class CompraInventoryMapper {
         BigDecimal ventaProyectada = detalles.stream()
                 .map(CompraInventoryMapper::ventaProyectada)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal gananciaProyectada = ventaProyectada.subtract(compra.getTotal());
+        BigDecimal costoInventariable = compra.getTotalCostoInventariable() == null
+                ? compra.getTotal()
+                : compra.getTotalCostoInventariable();
+        BigDecimal gananciaProyectada = ventaProyectada.subtract(costoInventariable);
         return new CompraResponse(
                 compra.getId(),
                 compra.getProveedorId(),
@@ -32,10 +35,16 @@ public final class CompraInventoryMapper {
                 compra.getAlmacen().getId(),
                 compra.getAlmacen().getCodigo(),
                 compra.getAlmacen().getNombre(),
+                compra.getSubtotalNeto(),
+                compra.getMontoIgv(),
                 compra.getTotal(),
+                compra.isCreditoFiscalAplicable(),
+                compra.isCreditoFiscalAplicable() ? compra.getMontoIgv() : BigDecimal.ZERO,
+                costoInventariable,
+                compra.getTratamientoIgv(),
                 ventaProyectada,
                 gananciaProyectada,
-                porcentaje(gananciaProyectada, compra.getTotal()),
+                porcentaje(gananciaProyectada, costoInventariable),
                 compra.getEstado(),
                 detalles.stream().map(CompraInventoryMapper::toDetalleResponse).toList()
         );
@@ -49,11 +58,23 @@ public final class CompraInventoryMapper {
                 detalle.getProducto().getNombre(),
                 detalle.getCantidad(),
                 detalle.getCostoUnitario(),
+                detalle.getCostoNetoUnitario(),
+                detalle.getPorcentajeIgv(),
+                detalle.getMontoIgvUnitario(),
+                detalle.getCostoTotalUnitario(),
+                detalle.getCostoInventariableUnitario(),
                 detalle.getPrecioVenta(),
+                detalle.getPrecioVentaNeto(),
+                detalle.getSubtotalNeto(),
+                detalle.getMontoIgv(),
                 detalle.getTotal(),
+                detalle.getTotalCostoInventariable(),
                 ventaProyectada(detalle),
-                ventaProyectada(detalle).subtract(detalle.getTotal()),
-                porcentaje(ventaProyectada(detalle).subtract(detalle.getTotal()), detalle.getTotal()),
+                ventaProyectada(detalle).subtract(detalle.getTotalCostoInventariable()),
+                porcentaje(
+                        ventaProyectada(detalle).subtract(detalle.getTotalCostoInventariable()),
+                        detalle.getTotalCostoInventariable()
+                ),
                 detalle.getCodigoLote(),
                 detalle.getFechaFabricacion(),
                 detalle.getFechaVencimiento()
@@ -61,7 +82,9 @@ public final class CompraInventoryMapper {
     }
 
     private static BigDecimal ventaProyectada(CompraDetalle detalle) {
-        BigDecimal precioVenta = detalle.getPrecioVenta() == null ? BigDecimal.ZERO : detalle.getPrecioVenta();
+        BigDecimal precioVenta = detalle.getPrecioVentaNeto() == null
+                ? (detalle.getPrecioVenta() == null ? BigDecimal.ZERO : detalle.getPrecioVenta())
+                : detalle.getPrecioVentaNeto();
         return precioVenta.multiply(detalle.getCantidad()).setScale(2, RoundingMode.HALF_UP);
     }
 

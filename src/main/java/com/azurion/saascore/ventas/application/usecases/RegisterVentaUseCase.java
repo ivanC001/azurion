@@ -12,6 +12,8 @@ import com.azurion.shared.contracts.ventas.SaleRegisteredEvent;
 import com.azurion.shared.event.InternalEventBus;
 import com.azurion.shared.exception.BusinessException;
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -71,7 +73,21 @@ public class RegisterVentaUseCase {
             VentaDetalle detalle = new VentaDetalle();
             detalle.setVenta(saved);
             if (item.productoId() != null) {
-                detalle.setProducto(productoRepository.getReferenceById(item.productoId()));
+                var producto = productoRepository.findById(item.productoId())
+                        .orElseThrow(() -> new BusinessException(
+                                "PRODUCTO_NO_ENCONTRADO",
+                                "Producto no encontrado: " + item.productoId()
+                        ));
+                detalle.setProducto(producto);
+                BigDecimal costo = producto.getCostoPromedio();
+                if (costo == null || costo.compareTo(BigDecimal.ZERO) <= 0) {
+                    costo = producto.getPrecioCompraBase();
+                }
+                detalle.setCostoUnitarioInventariable(
+                        (costo == null ? BigDecimal.ZERO : costo).setScale(6, RoundingMode.HALF_UP)
+                );
+            } else {
+                detalle.setCostoUnitarioInventariable(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
             }
             detalle.setSku(item.sku());
             detalle.setDescripcion(item.description());

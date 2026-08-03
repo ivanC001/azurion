@@ -47,7 +47,8 @@ public final class ProductoInventoryMapper {
                 producto.isManejaStock(),
                 producto.isManejaLotes(),
                 producto.isManejaVencimiento(),
-                producto.getStockMinimoGlobal()
+                producto.getStockMinimoGlobal(),
+                producto.getPrecioVentaModo()
         );
     }
 }

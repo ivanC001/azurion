@@ -57,6 +57,21 @@ public class Compra extends BaseEntity {
     @Column(name = "total", nullable = false, precision = 18, scale = 2)
     private BigDecimal total = BigDecimal.ZERO;
 
+    @Column(name = "subtotal_neto", nullable = false, precision = 18, scale = 2)
+    private BigDecimal subtotalNeto = BigDecimal.ZERO;
+
+    @Column(name = "monto_igv", nullable = false, precision = 18, scale = 2)
+    private BigDecimal montoIgv = BigDecimal.ZERO;
+
+    @Column(name = "credito_fiscal_aplicable", nullable = false)
+    private boolean creditoFiscalAplicable;
+
+    @Column(name = "total_costo_inventariable", nullable = false, precision = 18, scale = 2)
+    private BigDecimal totalCostoInventariable = BigDecimal.ZERO;
+
+    @Column(name = "tratamiento_igv", nullable = false, length = 32)
+    private String tratamientoIgv = "DESGLOSADO";
+
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "REGISTRADA";
 

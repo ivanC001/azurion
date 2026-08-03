@@ -82,6 +82,7 @@ public class CreateProductoUseCase {
         producto.setFoto(photo);
         producto.setPrecioCompraBase(request.precioCompraBase() == null ? BigDecimal.ZERO : request.precioCompraBase());
         producto.setPrecioVentaBase(request.precioVentaBase() == null ? precio : request.precioVentaBase());
+        producto.setPrecioVentaModo(Producto.PRECIO_VENTA_MODO_INCLUYE_IGV);
         producto.setCostoPromedio(resolveCostoPromedio(request));
         producto.setAfectoIgv(request.afectoIgv() == null || request.afectoIgv());
         boolean usaConfiguracionEmpresa = request.usaConfiguracionEmpresa() == null || request.usaConfiguracionEmpresa();

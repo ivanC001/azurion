@@ -3,6 +3,7 @@ package com.azurion.saascore.facturacion.infrastructure.http;
 import com.azurion.saascore.facturacion.infrastructure.config.FacturadorProperties;
 import com.azurion.saascore.facturacion.infrastructure.config.FacturadorProperties.FacturadorCredential;
 import com.azurion.saascore.facturacion.infrastructure.security.FacturadorHmacSigner;
+import com.azurion.saascore.ventas.application.dto.FormatoImpresionComprobante;
 import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +32,7 @@ public class FacturadorClient {
     private static final long MIN_WAIT_PROCESSED_POLL_INTERVAL_MS = 250;
     private static final long MAX_WAIT_PROCESSED_POLL_INTERVAL_MS = 5_000;
     private static final long MAX_LIST_STATUS_TIMEOUT_MS = 4500;
-    private static final int MAX_PDF_BYTES = 20 * 1024 * 1024;
+    private static final int MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;
 
     private static final String HEADER_API_KEY = "X-API-Key";
     private static final String HEADER_TIMESTAMP = "X-Timestamp";
@@ -333,7 +334,8 @@ public class FacturadorClient {
     public FacturadorArtifactDownload descargarPdfComprobante(
             String tenantId,
             String tenantRuc,
-            String externalId
+            String externalId,
+            FormatoImpresionComprobante formato
     ) {
         String safeExternalId = externalId == null ? "" : externalId.trim();
         if (safeExternalId.isBlank()) {
@@ -352,14 +354,18 @@ public class FacturadorClient {
                     "El comprobante no existe en el facturador"
             );
         }
-        if (documento.pdfUrl() == null || documento.pdfUrl().isBlank()) {
+        String selectedPdfUrl = switch (formato) {
+            case A4 -> firstNonBlank(documento.pdfA4Url(), documento.pdfUrl());
+            case TICKET -> firstNonBlank(documento.pdfTicketUrl(), documento.pdfUrl());
+        };
+        if (selectedPdfUrl == null || selectedPdfUrl.isBlank()) {
             throw BusinessException.conflict(
                     "FACTURADOR_PDF_NOT_READY",
                     "El PDF aun no esta disponible. Espera a que termine el procesamiento del comprobante"
             );
         }
 
-        URI artifactUri = validateArtifactUri(documento.pdfUrl(), documento.documentoId(), "pdf");
+        URI artifactUri = validateArtifactUri(selectedPdfUrl, documento.documentoId(), "pdf");
         try {
             HttpRequest request = HttpRequest.newBuilder(artifactUri)
                     .timeout(Duration.ofMillis(Math.max(500, properties.getReadTimeoutMillis())))
@@ -378,7 +384,7 @@ public class FacturadorClient {
                         org.springframework.http.HttpStatus.BAD_GATEWAY
                 );
             }
-            if (content.length == 0 || content.length > MAX_PDF_BYTES || !hasPdfSignature(content)) {
+            if (content.length == 0 || content.length > MAX_ARTIFACT_BYTES || !hasPdfSignature(content)) {
                 throw new BusinessException(
                         "FACTURADOR_PDF_INVALID",
                         "El facturador respondio con un archivo PDF invalido",
@@ -386,7 +392,7 @@ public class FacturadorClient {
                 );
             }
 
-            String filename = safePdfFilename(tenantRuc, documento);
+            String filename = safePdfFilename(tenantRuc, documento, formato);
             return new FacturadorArtifactDownload(content, filename, "application/pdf");
         } catch (BusinessException exception) {
             throw exception;
@@ -401,6 +407,130 @@ public class FacturadorClient {
             throw new BusinessException(
                     "FACTURADOR_PDF_DOWNLOAD_ERROR",
                     "No se pudo descargar el PDF desde el facturador: " + exception.getMessage(),
+                    org.springframework.http.HttpStatus.BAD_GATEWAY
+            );
+        }
+    }
+
+    public FacturadorArtifactDownload descargarXmlComprobante(
+            String tenantId,
+            String tenantRuc,
+            String externalId
+    ) {
+        FacturadorDocumentoStatusResult documento = requireDocumentoFacturador(tenantId, tenantRuc, externalId);
+        if (isTicket(documento)) {
+            throw BusinessException.conflict(
+                    "FACTURADOR_XML_NOT_APPLICABLE",
+                    "Los tickets de venta no generan XML tributario"
+            );
+        }
+        return descargarArchivoComprobante(
+                documento.xmlUrl(),
+                documento,
+                "xml",
+                "application/xml",
+                safeArtifactFilename(tenantRuc, documento, ".xml")
+        );
+    }
+
+    public FacturadorArtifactDownload descargarCdrComprobante(
+            String tenantId,
+            String tenantRuc,
+            String externalId
+    ) {
+        FacturadorDocumentoStatusResult documento = requireDocumentoFacturador(tenantId, tenantRuc, externalId);
+        if (isTicket(documento)) {
+            throw BusinessException.conflict(
+                    "FACTURADOR_CDR_NOT_APPLICABLE",
+                    "Los tickets de venta no generan CDR de SUNAT"
+            );
+        }
+        return descargarArchivoComprobante(
+                documento.cdrUrl(),
+                documento,
+                "cdr",
+                "application/zip",
+                "R-" + safeArtifactFilename(tenantRuc, documento, ".zip")
+        );
+    }
+
+    private FacturadorDocumentoStatusResult requireDocumentoFacturador(
+            String tenantId,
+            String tenantRuc,
+            String externalId
+    ) {
+        String safeExternalId = externalId == null ? "" : externalId.trim();
+        if (safeExternalId.isBlank()) {
+            throw new BusinessException("VENTA_EXTERNAL_ID_REQUIRED", "La venta no tiene identificador para facturacion");
+        }
+        FacturadorDocumentoStatusResult documento = consultarDocumentosPorExternalIds(
+                tenantId,
+                tenantRuc,
+                List.of(safeExternalId)
+        ).get(safeExternalId);
+        if (documento == null) {
+            throw BusinessException.notFound(
+                    "FACTURADOR_DOCUMENT_NOT_FOUND",
+                    "El comprobante no existe en el facturador"
+            );
+        }
+        return documento;
+    }
+
+    private FacturadorArtifactDownload descargarArchivoComprobante(
+            String rawUrl,
+            FacturadorDocumentoStatusResult documento,
+            String artifact,
+            String contentType,
+            String filename
+    ) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            throw BusinessException.conflict(
+                    "FACTURADOR_ARTIFACT_NOT_READY",
+                    "El archivo " + artifact.toUpperCase(Locale.ROOT) + " aun no esta disponible"
+            );
+        }
+
+        URI artifactUri = validateArtifactUri(rawUrl, documento.documentoId(), artifact);
+        try {
+            HttpRequest request = HttpRequest.newBuilder(artifactUri)
+                    .timeout(Duration.ofMillis(Math.max(500, properties.getReadTimeoutMillis())))
+                    .header("Accept", contentType)
+                    .GET()
+                    .build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            byte[] content = response.body() == null ? new byte[0] : response.body();
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new BusinessException(
+                        "FACTURADOR_ARTIFACT_DOWNLOAD_ERROR",
+                        response.statusCode() == 403
+                                ? "La firma temporal del archivo fue rechazada por el facturador"
+                                : "El facturador no pudo entregar el archivo (HTTP " + response.statusCode() + ")",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY
+                );
+            }
+            if (content.length == 0 || content.length > MAX_ARTIFACT_BYTES || !hasExpectedSignature(content, artifact)) {
+                throw new BusinessException(
+                        "FACTURADOR_ARTIFACT_INVALID",
+                        "El facturador respondio con un archivo " + artifact.toUpperCase(Locale.ROOT) + " invalido",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY
+                );
+            }
+            return new FacturadorArtifactDownload(content, filename, contentType);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "FACTURADOR_ARTIFACT_DOWNLOAD_INTERRUPTED",
+                    "La descarga del archivo fue interrumpida",
+                    org.springframework.http.HttpStatus.BAD_GATEWAY
+            );
+        } catch (Exception exception) {
+            throw new BusinessException(
+                    "FACTURADOR_ARTIFACT_DOWNLOAD_ERROR",
+                    "No se pudo descargar el archivo desde el facturador: " + exception.getMessage(),
                     org.springframework.http.HttpStatus.BAD_GATEWAY
             );
         }
@@ -433,7 +563,7 @@ public class FacturadorClient {
         } catch (Exception exception) {
             throw BusinessException.internal(
                     "FACTURADOR_ARTIFACT_URL_INVALID",
-                    "El facturador devolvio una URL de PDF no valida"
+                    "El facturador devolvio una URL de artefacto no valida"
             );
         }
     }
@@ -454,7 +584,36 @@ public class FacturadorClient {
                 && content[4] == '-';
     }
 
-    private String safePdfFilename(String tenantRuc, FacturadorDocumentoStatusResult documento) {
+    private boolean hasExpectedSignature(byte[] content, String artifact) {
+        if ("cdr".equals(artifact)) {
+            return content.length >= 4 && content[0] == 'P' && content[1] == 'K';
+        }
+        if ("xml".equals(artifact)) {
+            int index = 0;
+            if (content.length >= 3
+                    && (content[0] & 0xff) == 0xef
+                    && (content[1] & 0xff) == 0xbb
+                    && (content[2] & 0xff) == 0xbf) {
+                index = 3;
+            }
+            while (index < content.length && Character.isWhitespace((char) content[index])) {
+                index++;
+            }
+            return index < content.length && content[index] == '<';
+        }
+        return false;
+    }
+
+    private boolean isTicket(FacturadorDocumentoStatusResult documento) {
+        String tipo = documento.tipoDocumento() == null ? "" : documento.tipoDocumento().trim();
+        return "TK".equalsIgnoreCase(tipo) || "TICKET".equalsIgnoreCase(tipo);
+    }
+
+    private String safeArtifactFilename(
+            String tenantRuc,
+            FacturadorDocumentoStatusResult documento,
+            String extension
+    ) {
         String raw = String.join(
                 "-",
                 tenantRuc == null ? "comprobante" : tenantRuc,
@@ -462,7 +621,26 @@ public class FacturadorClient {
                 documento.serie() == null ? "sin-serie" : documento.serie(),
                 documento.correlativo() == null ? String.valueOf(documento.documentoId()) : documento.correlativo()
         );
-        return raw.replaceAll("[^A-Za-z0-9._-]", "_") + ".pdf";
+        return raw.replaceAll("[^A-Za-z0-9._-]", "_") + extension;
+    }
+
+    private String safePdfFilename(
+            String tenantRuc,
+            FacturadorDocumentoStatusResult documento,
+            FormatoImpresionComprobante formato
+    ) {
+        String raw = String.join(
+                "-",
+                tenantRuc == null ? "comprobante" : tenantRuc,
+                documento.tipoDocumento() == null ? "documento" : documento.tipoDocumento(),
+                documento.serie() == null ? "sin-serie" : documento.serie(),
+                documento.correlativo() == null ? String.valueOf(documento.documentoId()) : documento.correlativo()
+        );
+        return raw.replaceAll("[^A-Za-z0-9._-]", "_") + "-" + formato.filenameSuffix() + ".pdf";
+    }
+
+    private String firstNonBlank(String preferred, String fallback) {
+        return preferred != null && !preferred.isBlank() ? preferred : fallback;
     }
 
     private SignedCallResult waitForProcessed(
@@ -600,6 +778,8 @@ public class FacturadorClient {
                     text(item, "ticket"),
                     text(item, "hash"),
                     text(item, "pdf_url"),
+                    text(item, "pdf_a4_url"),
+                    text(item, "pdf_ticket_url"),
                     text(item, "xml_url"),
                     text(item, "cdr_url"),
                     response.status(),
@@ -881,6 +1061,8 @@ public class FacturadorClient {
             String ticket,
             String hash,
             String pdfUrl,
+            String pdfA4Url,
+            String pdfTicketUrl,
             String xmlUrl,
             String cdrUrl,
             int httpStatus,

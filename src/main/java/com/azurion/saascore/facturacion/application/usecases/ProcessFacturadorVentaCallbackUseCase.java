@@ -12,11 +12,10 @@ import com.azurion.saascore.ventas.domain.entities.Venta;
 import com.azurion.saascore.ventas.domain.repositories.VentaRepository;
 import com.azurion.saascore.ventas.infrastructure.realtime.VentaStatusRealtimeStreamService;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.util.JsonNodeValues;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.OffsetDateTime;
-import java.util.Iterator;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -395,7 +394,7 @@ public class ProcessFacturadorVentaCallbackUseCase {
     }
 
     private Integer readInt(JsonNode source, String... keys) {
-        JsonNode node = deepFindNode(source, keys);
+        JsonNode node = JsonNodeValues.find(source, keys);
         if (node == null || node.isNull() || node.isMissingNode()) {
             return null;
         }
@@ -456,47 +455,7 @@ public class ProcessFacturadorVentaCallbackUseCase {
     }
 
     private String readText(JsonNode source, String... keys) {
-        JsonNode node = deepFindNode(source, keys);
-        if (node == null || node.isNull() || node.isMissingNode()) {
-            return null;
-        }
-        return firstNonBlank(node.asText(null));
-    }
-
-    private JsonNode deepFindNode(JsonNode source, String... keys) {
-        if (source == null || source.isNull() || source.isMissingNode()) {
-            return null;
-        }
-
-        for (String key : keys) {
-            if (source.has(key)) {
-                JsonNode value = source.get(key);
-                if (value != null && !value.isNull() && !value.isMissingNode() && !value.asText("").isBlank()) {
-                    return value;
-                }
-            }
-        }
-
-        if (source.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> iterator = source.fields();
-            while (iterator.hasNext()) {
-                JsonNode nested = deepFindNode(iterator.next().getValue(), keys);
-                if (nested != null && !nested.isNull() && !nested.isMissingNode() && !nested.asText("").isBlank()) {
-                    return nested;
-                }
-            }
-        }
-
-        if (source.isArray()) {
-            for (JsonNode item : source) {
-                JsonNode nested = deepFindNode(item, keys);
-                if (nested != null && !nested.isNull() && !nested.isMissingNode() && !nested.asText("").isBlank()) {
-                    return nested;
-                }
-            }
-        }
-
-        return null;
+        return JsonNodeValues.text(source, keys);
     }
 
     private String trimToMax(String value, int maxLength) {

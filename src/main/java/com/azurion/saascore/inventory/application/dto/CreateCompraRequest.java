@@ -20,6 +20,7 @@ public record CreateCompraRequest(
         @NotNull LocalDate fechaEmision,
         OffsetDateTime fechaIngreso,
         @NotNull Long almacenId,
+        Boolean creditoFiscalAplicable,
         @NotEmpty List<@Valid CompraDetalleRequest> detalles,
         @NotBlank @Size(max = 100) String clientOperationId
 ) {

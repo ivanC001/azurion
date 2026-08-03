@@ -40,6 +40,7 @@ public record ProductoResponse(
         boolean manejaStock,
         boolean manejaLotes,
         boolean manejaVencimiento,
-        BigDecimal stockMinimoGlobal
+        BigDecimal stockMinimoGlobal,
+        String precioVentaModo
 ) {
 }

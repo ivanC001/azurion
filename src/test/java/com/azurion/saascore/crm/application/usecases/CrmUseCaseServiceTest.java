@@ -26,7 +26,6 @@ import com.azurion.saascore.crm.application.services.LandingLeadValidationServic
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
-import com.azurion.saascore.crm.application.services.CrmIngressLockService;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
@@ -49,6 +48,7 @@ import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.util.List;
 import java.util.Optional;
 import java.math.BigDecimal;
@@ -129,7 +129,7 @@ class CrmUseCaseServiceTest {
     CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
 
     @Mock
-    CrmIngressLockService ingressLockService;
+    BusinessOperationLockService ingressLockService;
 
     @Mock
     CrmPhoneNormalizationService phoneNormalizationService;

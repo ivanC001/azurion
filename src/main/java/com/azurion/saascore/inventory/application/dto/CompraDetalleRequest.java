@@ -7,10 +7,13 @@ import java.time.LocalDate;
 public record CompraDetalleRequest(
         @NotNull Long productoId,
         @NotNull BigDecimal cantidad,
-        @NotNull BigDecimal costoUnitario,
+        BigDecimal costoUnitario,
         BigDecimal precioVenta,
         String codigoLote,
         LocalDate fechaFabricacion,
-        LocalDate fechaVencimiento
+        LocalDate fechaVencimiento,
+        BigDecimal costoNetoUnitario,
+        BigDecimal porcentajeIgv,
+        BigDecimal costoTotalUnitario
 ) {
 }

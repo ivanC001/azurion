@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.azurion.saascore.facturacion.infrastructure.config.FacturadorProperties;
 import com.azurion.saascore.facturacion.infrastructure.http.FacturadorClient;
+import com.azurion.saascore.ventas.application.dto.FormatoImpresionComprobante;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -111,9 +112,10 @@ class FacturadorClientAuthenticationTest {
                       "serie":"B001",
                       "correlativo":"1",
                       "estado":"ACEPTADO",
-                      "pdf_url":"http://127.0.0.1:%d/api/documentos/3/pdf?expires=9999999999&tenant_ruc=20000000001&signature=%s"
+                      "pdf_url":"http://127.0.0.1:%d/api/documentos/3/pdf?expires=9999999999&tenant_ruc=20000000001&signature=%s",
+                      "pdf_a4_url":"http://127.0.0.1:%d/api/documentos/3/pdf?formato=a4&expires=9999999999&tenant_ruc=20000000001&signature=%s"
                     }]}}
-                    """).formatted(port, "a".repeat(64)).getBytes(StandardCharsets.UTF_8);
+                    """).formatted(port, "a".repeat(64), port, "c".repeat(64)).getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, response.length);
             exchange.getResponseBody().write(response);
@@ -135,10 +137,11 @@ class FacturadorClientAuthenticationTest {
         FacturadorClient.FacturadorArtifactDownload result = client.descargarPdfComprobante(
                 "tenant-a",
                 "20000000001",
-                "VENTA-3"
+                "VENTA-3",
+                FormatoImpresionComprobante.A4
         );
 
-        assertEquals("20000000001-03-B001-1.pdf", result.filename());
+        assertEquals("20000000001-03-B001-1-A4.pdf", result.filename());
         assertEquals("application/pdf", result.contentType());
         assertTrue(java.util.Arrays.equals(pdf, result.content()));
     }
@@ -167,9 +170,10 @@ class FacturadorClientAuthenticationTest {
                           "serie":"F001",
                           "correlativo":"4",
                           "estado":"ACEPTADO",
-                          "pdf_url":"http://127.0.0.1:%d/api/documentos/9/pdf?expires=9999999999&tenant_ruc=20111111111&signature=%s"
+                          "pdf_url":"http://127.0.0.1:%d/api/documentos/9/pdf?expires=9999999999&tenant_ruc=20111111111&signature=%s",
+                          "pdf_ticket_url":"http://127.0.0.1:%d/api/documentos/9/pdf?formato=ticket&expires=9999999999&tenant_ruc=20111111111&signature=%s"
                         }]}}
-                        """).formatted(artifactPort, "b".repeat(64)).getBytes(StandardCharsets.UTF_8);
+                        """).formatted(artifactPort, "b".repeat(64), artifactPort, "d".repeat(64)).getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, response.length);
                 exchange.getResponseBody().write(response);
@@ -190,14 +194,79 @@ class FacturadorClientAuthenticationTest {
             FacturadorClient.FacturadorArtifactDownload result = client.descargarPdfComprobante(
                     "tenant-a",
                     "20111111111",
-                    "VENTA-9"
+                    "VENTA-9",
+                    FormatoImpresionComprobante.TICKET
             );
 
-            assertEquals("20111111111-01-F001-4.pdf", result.filename());
+            assertEquals("20111111111-01-F001-4-80mm.pdf", result.filename());
             assertTrue(java.util.Arrays.equals(pdf, result.content()));
         } finally {
             artifactServer.stop(0);
         }
+    }
+
+    @Test
+    void downloadsXmlAndCdrThroughValidatedFacturadorUrls() throws Exception {
+        byte[] xml = "<?xml version=\"1.0\"?><Invoice/>".getBytes(StandardCharsets.UTF_8);
+        byte[] cdr = new byte[]{'P', 'K', 3, 4, 1, 2, 3};
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/api/documentos", exchange -> {
+            String path = exchange.getRequestURI().getPath();
+            if ("/api/documentos/12/xml".equals(path)) {
+                exchange.getResponseHeaders().set("Content-Type", "application/xml");
+                exchange.sendResponseHeaders(200, xml.length);
+                exchange.getResponseBody().write(xml);
+                exchange.close();
+                return;
+            }
+            if ("/api/documentos/12/cdr".equals(path)) {
+                exchange.getResponseHeaders().set("Content-Type", "application/zip");
+                exchange.sendResponseHeaders(200, cdr.length);
+                exchange.getResponseBody().write(cdr);
+                exchange.close();
+                return;
+            }
+
+            int port = server.getAddress().getPort();
+            byte[] response = ("""
+                    {"success":true,"data":{"items":[{
+                      "id":12,
+                      "external_id":"VENTA-12",
+                      "tipo_documento":"01",
+                      "serie":"F001",
+                      "correlativo":"21",
+                      "estado":"ACEPTADO",
+                      "xml_url":"http://127.0.0.1:%d/api/documentos/12/xml?expires=9999999999&tenant_ruc=20111111111&signature=%s",
+                      "cdr_url":"http://127.0.0.1:%d/api/documentos/12/cdr?expires=9999999999&tenant_ruc=20111111111&signature=%s"
+                    }]}}
+                    """).formatted(port, "e".repeat(64), port, "f".repeat(64)).getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        FacturadorProperties properties = new FacturadorProperties();
+        properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+        properties.setClientSecret("server-only-secret");
+        FacturadorClient client = new FacturadorClient(
+                properties,
+                new ObjectMapper(),
+                new FacturadorHmacSigner()
+        );
+
+        FacturadorClient.FacturadorArtifactDownload xmlResult = client.descargarXmlComprobante(
+                "tenant-a", "20111111111", "VENTA-12"
+        );
+        FacturadorClient.FacturadorArtifactDownload cdrResult = client.descargarCdrComprobante(
+                "tenant-a", "20111111111", "VENTA-12"
+        );
+
+        assertEquals("20111111111-01-F001-21.xml", xmlResult.filename());
+        assertEquals("R-20111111111-01-F001-21.zip", cdrResult.filename());
+        assertTrue(java.util.Arrays.equals(xml, xmlResult.content()));
+        assertTrue(java.util.Arrays.equals(cdr, cdrResult.content()));
     }
 
     private void respond(

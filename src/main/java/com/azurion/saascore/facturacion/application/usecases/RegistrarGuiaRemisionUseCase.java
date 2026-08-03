@@ -17,13 +17,13 @@ import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
 import com.azurion.shared.util.RequestFingerprint;
+import com.azurion.shared.util.JsonNodeValues;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -228,12 +228,12 @@ public class RegistrarGuiaRemisionUseCase {
         guia.setFacturadorEndpoint(emission.endpoint());
         guia.setFacturadorTipoComprobante("09");
         guia.setFacturadorMensaje(trimToMax(emission.message(), 500));
-        guia.setFacturadorSunatEstado(normalizeEstado(readText(responseBody, "estado", "sunat_estado", "estado_sunat", "status")));
-        guia.setFacturadorDocumentoId(readText(responseBody, "documento_id", "id_documento", "documentId"));
-        guia.setFacturadorTicket(readText(responseBody, "ticket", "ticket_sunat"));
-        guia.setFacturadorPdfUrl(readUrl(responseBody, "pdf_url", "url_pdf", "pdf"));
-        guia.setFacturadorXmlUrl(readUrl(responseBody, "xml_url", "url_xml", "xml"));
-        guia.setFacturadorCdrUrl(readUrl(responseBody, "cdr_url", "url_cdr", "cdr"));
+        guia.setFacturadorSunatEstado(normalizeEstado(JsonNodeValues.text(responseBody, "estado", "sunat_estado", "estado_sunat", "status")));
+        guia.setFacturadorDocumentoId(JsonNodeValues.text(responseBody, "documento_id", "id_documento", "documentId"));
+        guia.setFacturadorTicket(JsonNodeValues.text(responseBody, "ticket", "ticket_sunat"));
+        guia.setFacturadorPdfUrl(JsonNodeValues.url(responseBody, "pdf_url", "url_pdf", "pdf"));
+        guia.setFacturadorXmlUrl(JsonNodeValues.url(responseBody, "xml_url", "url_xml", "xml"));
+        guia.setFacturadorCdrUrl(JsonNodeValues.url(responseBody, "cdr_url", "url_cdr", "cdr"));
         guia.setFacturadorRespuestaJson(responseBody == null ? null : responseBody.toString());
         guia.setFacturacionEstado(resolveFacturacionEstado(guia.getFacturadorSunatEstado(), emission.success()));
         guia.setFacturacionActualizadoEn(OffsetDateTime.now());
@@ -412,62 +412,6 @@ public class RegistrarGuiaRemisionUseCase {
                     -> GuiaRemision.ESTADO_PENDIENTE;
             default -> value.toUpperCase(Locale.ROOT);
         };
-    }
-
-    private String readUrl(JsonNode source, String... keys) {
-        String value = readText(source, keys);
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.regionMatches(true, 0, "http://", 0, 7)
-                || trimmed.regionMatches(true, 0, "https://", 0, 8)) {
-            return trimToMax(trimmed, 500);
-        }
-        return null;
-    }
-
-    private String readText(JsonNode source, String... keys) {
-        JsonNode node = deepFindNode(source, keys);
-        if (node == null || node.isMissingNode() || node.isNull()) {
-            return null;
-        }
-        return trimToMax(node.asText(null), 500);
-    }
-
-    private JsonNode deepFindNode(JsonNode source, String... keys) {
-        if (source == null || source.isNull() || source.isMissingNode()) {
-            return null;
-        }
-
-        for (String key : keys) {
-            if (source.has(key)) {
-                JsonNode value = source.get(key);
-                if (value != null && !value.isNull() && !value.isMissingNode() && !value.asText("").isBlank()) {
-                    return value;
-                }
-            }
-        }
-
-        if (source.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> iterator = source.fields();
-            while (iterator.hasNext()) {
-                JsonNode nested = deepFindNode(iterator.next().getValue(), keys);
-                if (nested != null && !nested.isNull() && !nested.isMissingNode() && !nested.asText("").isBlank()) {
-                    return nested;
-                }
-            }
-        }
-
-        if (source.isArray()) {
-            for (JsonNode item : source) {
-                JsonNode nested = deepFindNode(item, keys);
-                if (nested != null && !nested.isNull() && !nested.isMissingNode() && !nested.asText("").isBlank()) {
-                    return nested;
-                }
-            }
-        }
-        return null;
     }
 
     private GuiaRemisionResponse toResponse(GuiaRemision guia) {

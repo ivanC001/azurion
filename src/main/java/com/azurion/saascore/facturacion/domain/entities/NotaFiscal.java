@@ -66,6 +66,12 @@ public class NotaFiscal extends BaseEntity {
     @Column(name = "monto", nullable = false, precision = 18, scale = 2)
     private BigDecimal monto;
 
+    @Column(name = "base_imponible", precision = 18, scale = 2)
+    private BigDecimal baseImponible;
+
+    @Column(name = "monto_igv", precision = 18, scale = 2)
+    private BigDecimal montoIgv;
+
     @Column(name = "fecha_emision", nullable = false)
     private LocalDate fechaEmision;
 

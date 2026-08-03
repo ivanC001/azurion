@@ -17,10 +17,21 @@ public interface CompraDetalleRepository extends JpaRepository<CompraDetalle, Lo
 
     @Query("""
             select coalesce(sum(
-                detalle.cantidad * (coalesce(detalle.precioVenta, 0) - detalle.costoUnitario)
+                detalle.cantidad * (
+                    coalesce(detalle.precioVentaNeto, detalle.precioVenta, 0)
+                    - coalesce(detalle.costoInventariableUnitario, detalle.costoUnitario)
+                )
             ), 0)
               from CompraDetalle detalle
              where detalle.compra.estado = 'REGISTRADA'
+               and detalle.compra.tratamientoIgv = 'DESGLOSADO'
             """)
     BigDecimal sumProjectedProfit();
+
+    @Query("""
+            select coalesce(sum(detalle.totalCostoInventariable), 0)
+              from CompraDetalle detalle
+             where detalle.compra.estado = 'REGISTRADA'
+            """)
+    BigDecimal sumRegisteredInventoryCost();
 }

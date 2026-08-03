@@ -18,6 +18,8 @@ import lombok.Setter;
 @Table(name = "productos")
 public class Producto extends BaseEntity {
 
+    public static final String PRECIO_VENTA_MODO_INCLUYE_IGV = "INCLUYE_IGV";
+
     @Column(name = "sku", nullable = false, unique = true, length = 80)
     private String sku;
 
@@ -63,6 +65,9 @@ public class Producto extends BaseEntity {
 
     @Column(name = "precio_venta_base", precision = 18, scale = 2)
     private BigDecimal precioVentaBase;
+
+    @Column(name = "precio_venta_modo", nullable = false, length = 24)
+    private String precioVentaModo = PRECIO_VENTA_MODO_INCLUYE_IGV;
 
     @Column(name = "costo_promedio", nullable = false, precision = 18, scale = 6)
     private BigDecimal costoPromedio = BigDecimal.ZERO;

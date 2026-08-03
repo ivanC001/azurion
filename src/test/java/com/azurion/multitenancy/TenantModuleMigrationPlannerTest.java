@@ -34,6 +34,7 @@ class TenantModuleMigrationPlannerTest {
         assertTrue(plan.scriptNames().contains("V79__crm_open_opportunity_next_action.sql"));
         assertTrue(plan.scriptNames().contains("V80__crm_prospect_person_classification.sql"));
         assertTrue(plan.scriptNames().contains("V81__crm_prospect_country_identification.sql"));
+        assertFalse(plan.scriptNames().contains("V86__reconcile_erp_tax_permissions.sql"));
         assertFalse(plan.scriptNames().contains("V75__productos_alta_rapida_codigos_unicos.sql"));
     }
 
@@ -46,6 +47,7 @@ class TenantModuleMigrationPlannerTest {
         assertFalse(plan.scriptNames().contains("V2__productos_comerciales_core.sql"));
         assertFalse(plan.scriptNames().contains("V3__inventory_core.sql"));
         assertFalse(plan.scriptNames().contains("V28__crm_module.sql"));
+        assertFalse(plan.scriptNames().contains("V86__reconcile_erp_tax_permissions.sql"));
     }
 
     @Test
@@ -80,6 +82,7 @@ class TenantModuleMigrationPlannerTest {
         assertTrue(plan.scriptNames().contains("V79__crm_open_opportunity_next_action.sql"));
         assertTrue(plan.scriptNames().contains("V80__crm_prospect_person_classification.sql"));
         assertTrue(plan.scriptNames().contains("V81__crm_prospect_country_identification.sql"));
+        assertTrue(plan.scriptNames().contains("V86__reconcile_erp_tax_permissions.sql"));
         assertEquals(
                 plan.scriptNames().size(),
                 new HashSet<>(plan.scriptNames().stream().map(this::versionOf).toList()).size()

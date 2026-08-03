@@ -113,6 +113,7 @@ public class UpdateProductoUseCase {
         producto.setFoto(photo);
         producto.setPrecioCompraBase(request.precioCompraBase() == null ? producto.getPrecioCompraBase() : request.precioCompraBase());
         producto.setPrecioVentaBase(request.precioVentaBase() == null ? producto.getPrecioVentaBase() : request.precioVentaBase());
+        producto.setPrecioVentaModo(Producto.PRECIO_VENTA_MODO_INCLUYE_IGV);
         producto.setCostoPromedio(resolveCostoPromedio(producto, request));
         producto.setAfectoIgv(request.afectoIgv() == null ? producto.isAfectoIgv() : request.afectoIgv());
         boolean usaConfiguracionEmpresa = request.usaConfiguracionEmpresa() == null

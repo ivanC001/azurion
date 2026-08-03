@@ -54,7 +54,6 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
-import com.azurion.saascore.crm.application.services.CrmIngressLockService;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
@@ -86,6 +85,7 @@ import com.azurion.saascore.settings.email.application.services.EmailSenderServi
 import com.azurion.multitenancy.TenantContext;
 import com.azurion.shared.api.PageResponse;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.persistence.BusinessOperationLockService;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.JoinType;
@@ -177,7 +177,7 @@ public class CrmUseCaseService {
     private final CrmSecretEncryptionService crmSecretEncryptionService;
     private final CrmLeadAssignmentService leadAssignmentService;
     private final CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
-    private final CrmIngressLockService ingressLockService;
+    private final BusinessOperationLockService ingressLockService;
     private final CrmPhoneNormalizationService phoneNormalizationService;
     private final EmailSenderService emailSenderService;
 
