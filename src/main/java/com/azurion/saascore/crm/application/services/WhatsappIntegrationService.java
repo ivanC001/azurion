@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -150,7 +151,7 @@ public class WhatsappIntegrationService {
                                                                    String estado,
                                                                    boolean soloNoLeidas,
                                                                    boolean soloMias) {
-        String normalizedQuery = normalizeSearch(query);
+        String normalizedQuery = Optional.ofNullable(normalizeSearch(query)).orElse("");
         String normalizedStatus = hasText(estado) ? estado.trim().toUpperCase(Locale.ROOT) : null;
         String username = soloMias ? currentUser() : null;
         List<CrmWhatsappConversation> conversations = conversationRepository.searchRecent(

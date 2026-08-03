@@ -29,7 +29,7 @@ public interface CrmWhatsappConversationRepository extends JpaRepository<CrmWhat
             where (:estado is null or conversation.estado = :estado)
               and (:soloNoLeidas = false or conversation.noLeidos > 0)
               and (:responsableId is null or conversation.responsableId = :responsableId)
-              and (:query is null
+              and (:query = ''
                    or lower(coalesce(prospecto.nombre, '')) like concat('%', :query, '%')
                    or lower(coalesce(prospecto.telefono, '')) like concat('%', :query, '%')
                    or lower(coalesce(prospecto.correo, '')) like concat('%', :query, '%')
