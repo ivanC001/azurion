@@ -90,6 +90,28 @@ class FacturadorClientAuthenticationTest {
     }
 
     @Test
+    void exposesTheFirstFieldWhenFacturadorRejectsValidation() throws Exception {
+        FacturadorClient client = new FacturadorClient(
+                new FacturadorProperties(),
+                new ObjectMapper(),
+                new FacturadorHmacSigner()
+        );
+        Method resolver = FacturadorClient.class
+                .getDeclaredMethod("resolveMessage", com.fasterxml.jackson.databind.JsonNode.class, int.class);
+        resolver.setAccessible(true);
+
+        String message = (String) resolver.invoke(
+                client,
+                new ObjectMapper().readTree("""
+                        {"message":"The given data was invalid.","errors":{"cliente.documento":["El documento es obligatorio."]}}
+                        """),
+                422
+        );
+
+        assertEquals("El dato cliente.documento no es valido: El documento es obligatorio.", message);
+    }
+
+    @Test
     void downloadsPdfUsingFreshArtifactUrlReturnedByFacturador() throws Exception {
         byte[] pdf = "%PDF-1.4\ntest-pdf".getBytes(StandardCharsets.US_ASCII);
         server = HttpServer.create(new InetSocketAddress(0), 0);

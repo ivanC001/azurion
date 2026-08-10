@@ -73,7 +73,7 @@ public class CreateEmpresaUseCase {
             throw new BusinessException("EMPRESA_TENANT_EXISTS", "Ya existe una empresa con tenant: " + request.tenantId());
         });
         empresaRepository.findBySchemaName(request.schemaName()).ifPresent(existing -> {
-            throw new BusinessException("EMPRESA_SCHEMA_EXISTS", "Ya existe una empresa con schema: " + request.schemaName());
+            throw new BusinessException("EMPRESA_SCHEMA_EXISTS", "Ya existe una empresa con ese esquema: " + request.schemaName());
         });
     }
 
@@ -91,14 +91,14 @@ public class CreateEmpresaUseCase {
         try {
             ZoneId.of(zoneId);
         } catch (DateTimeException exception) {
-            throw new BusinessException("EMPRESA_ZONA_HORARIA_INVALIDA", "Selecciona una zona horaria valida");
+            throw new BusinessException("EMPRESA_ZONA_HORARIA_INVALIDA", "Selecciona una zona horaria válida");
         }
     }
 
     private List<String> validateAndNormalizeModules(List<String> moduloCodigos) {
         LinkedHashSet<String> normalizedCodes = normalizeModuleCodes(moduloCodigos);
         if (normalizedCodes.isEmpty()) {
-            throw new BusinessException("MODULOS_REQUIRED", "Selecciona al menos un modulo para registrar la empresa.");
+            throw new BusinessException("MODULOS_REQUIRED", "Selecciona al menos un módulo para registrar la empresa.");
         }
 
         Map<String, Modulo> modulosByCodigo = loadModulesByCodigo();
@@ -107,7 +107,7 @@ public class CreateEmpresaUseCase {
                 .toList();
 
         if (!missingCodes.isEmpty()) {
-            throw new BusinessException("MODULO_NOT_FOUND", "Modulos no registrados en plataforma: " + String.join(", ", missingCodes));
+            throw new BusinessException("MODULO_NOT_FOUND", "Módulos no registrados en la plataforma: " + String.join(", ", missingCodes));
         }
 
         return List.copyOf(normalizedCodes);
@@ -132,7 +132,7 @@ public class CreateEmpresaUseCase {
     private EmpresaModulo buildModuleAssignment(Empresa empresa, String moduloCodigo, Map<String, Modulo> modulosByCodigo) {
         Modulo modulo = modulosByCodigo.get(moduloCodigo);
         if (modulo == null) {
-            throw new BusinessException("MODULO_NOT_FOUND", "Modulo not found: " + moduloCodigo);
+            throw new BusinessException("MODULO_NOT_FOUND", "Módulo no registrado: " + moduloCodigo);
         }
 
         EmpresaModulo empresaModulo = new EmpresaModulo();

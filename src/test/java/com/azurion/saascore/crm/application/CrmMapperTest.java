@@ -19,6 +19,7 @@ class CrmMapperTest {
         item.setNombre("Python intermedio");
         item.setDescripcion("Curso comercial");
         item.setPrecioReferencial(new BigDecimal("450.00"));
+        item.setMoneda("USD");
         item.setEstado("ACTIVO");
         item.setMetadataJson("{\"attributes\":{\"nivel\":\"Intermedio\"}}");
         item.setPublicToken("public-token");
@@ -32,6 +33,7 @@ class CrmMapperTest {
         assertThat(response.id()).isEqualTo(12L);
         assertThat(response.nombre()).isEqualTo("Python intermedio");
         assertThat(response.precioReferencial()).isEqualByComparingTo("450.00");
+        assertThat(response.moneda()).isEqualTo("USD");
         assertThat(response.prospectosCount()).isEqualTo(8);
         assertThat(response.oportunidadesCount()).isEqualTo(3);
         assertThat(response.landingsCount()).isEqualTo(2);

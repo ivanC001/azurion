@@ -119,7 +119,9 @@ public class TenantModuleMigrationPlanner {
             "V83__inventory_operation_idempotency.sql",
             "V84__critical_transaction_idempotency.sql",
             "V85__professional_tax_and_margin_model.sql",
-            "V86__reconcile_erp_tax_permissions.sql"
+            "V86__reconcile_erp_tax_permissions.sql",
+            "V87__crm_catalog_item_currency.sql",
+            "V88__cotizacion_detalle_catalog_snapshot.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -280,7 +282,8 @@ public class TenantModuleMigrationPlanner {
                 "V42__cotizaciones_flujo_promociones.sql",
                 "V43__crm_default_branch_support.sql",
                 "V44__crm_quote_permissions.sql",
-                "V63__cotizacion_email_send_guard.sql"
+                "V63__cotizacion_email_send_guard.sql",
+                "V88__cotizacion_detalle_catalog_snapshot.sql"
         ));
         mapping.put("CRM", List.of(
                 "V18__clientes_datos_fiscales_credito.sql",
@@ -327,7 +330,8 @@ public class TenantModuleMigrationPlanner {
                 "V78__cotizacion_whatsapp_send_guard.sql",
                 "V79__crm_open_opportunity_next_action.sql",
                 "V80__crm_prospect_person_classification.sql",
-                "V81__crm_prospect_country_identification.sql"
+                "V81__crm_prospect_country_identification.sql",
+                "V87__crm_catalog_item_currency.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

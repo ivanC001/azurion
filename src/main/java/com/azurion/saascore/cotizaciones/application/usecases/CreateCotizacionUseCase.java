@@ -12,6 +12,8 @@ import com.azurion.saascore.cotizaciones.domain.entities.CotizacionDetalle;
 import com.azurion.saascore.cotizaciones.domain.entities.PromocionCotizacion;
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.cotizaciones.domain.repositories.PromocionCotizacionRepository;
+import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
+import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.inventory.domain.entities.Producto;
 import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
@@ -34,6 +36,7 @@ public class CreateCotizacionUseCase {
     private final SucursalRepository sucursalRepository;
     private final ProductoRepository productoRepository;
     private final PromocionCotizacionRepository promocionRepository;
+    private final CrmCatalogoItemRepository catalogoItemRepository;
     private final AuthorizationService authorizationService;
 
     @Transactional
@@ -72,10 +75,16 @@ public class CreateCotizacionUseCase {
     private CotizacionDetalle buildDetalle(Cotizacion cotizacion, CotizacionDetalleRequest request) {
         Producto producto = request.productoId() == null ? null : productoRepository.findById(request.productoId())
                 .orElseThrow(() -> new BusinessException("PRODUCTO_NO_ENCONTRADO", "Producto no encontrado"));
+        CrmCatalogoItem catalogoItem = request.catalogoItemId() == null ? null
+                : catalogoItemRepository.findById(request.catalogoItemId())
+                .orElseThrow(() -> new BusinessException("CRM_CATALOGO_ITEM_NO_ENCONTRADO", "Producto u oferta CRM no encontrado"));
+        if (catalogoItem != null && !"ACTIVO".equalsIgnoreCase(catalogoItem.getEstado())) {
+            throw new BusinessException("CRM_CATALOGO_ITEM_INACTIVO", "El producto u oferta CRM seleccionado no esta activo");
+        }
         PromocionCotizacion promocion = request.promocionId() == null ? null : promocionRepository.findById(request.promocionId())
                 .orElseThrow(() -> new BusinessException("PROMOCION_COTIZACION_NO_ENCONTRADA", "Promocion de cotizacion no encontrada"));
-        String descripcion = trim(request.descripcion());
-        if (producto == null && descripcion == null) {
+        String descripcion = firstNonBlank(trim(request.descripcion()), catalogoItem == null ? null : catalogoItem.getNombre());
+        if (producto == null && catalogoItem == null && descripcion == null) {
             throw new BusinessException("COTIZACION_DETALLE_DESCRIPCION_REQUERIDA",
                     "La cotizacion CRM debe incluir una descripcion del producto u oferta.");
         }
@@ -97,6 +106,7 @@ public class CreateCotizacionUseCase {
         detalle.setCotizacion(cotizacion);
         detalle.setProducto(producto);
         detalle.setPromocion(promocion);
+        applyCatalogSnapshot(detalle, catalogoItem);
         detalle.setDescripcion(descripcion);
         detalle.setCantidad(cantidad);
         detalle.setPrecioUnitario(money(precio));
@@ -104,6 +114,19 @@ public class CreateCotizacionUseCase {
         detalle.setPromocionDescuento(promocionDescuento);
         detalle.setTotal(total);
         return detalle;
+    }
+
+    private void applyCatalogSnapshot(CotizacionDetalle detalle, CrmCatalogoItem catalogoItem) {
+        if (catalogoItem == null) {
+            return;
+        }
+        detalle.setCatalogoItemId(catalogoItem.getId());
+        detalle.setCatalogoTipoItem(catalogoItem.getTipoItem());
+        detalle.setCatalogoNombre(catalogoItem.getNombre());
+        detalle.setCatalogoDescripcion(catalogoItem.getDescripcion());
+        detalle.setCatalogoMetadataJson(catalogoItem.getMetadataJson());
+        detalle.setCatalogoMoneda(catalogoItem.getMoneda());
+        detalle.setCatalogoPrecioReferencial(catalogoItem.getPrecioReferencial());
     }
 
     private BigDecimal calculatePromotionDiscount(PromocionCotizacion promocion, BigDecimal base) {
@@ -162,5 +185,9 @@ public class CreateCotizacionUseCase {
 
     private String trim(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return first != null ? first : trim(second);
     }
 }

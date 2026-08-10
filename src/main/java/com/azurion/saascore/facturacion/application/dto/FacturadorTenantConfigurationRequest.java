@@ -27,6 +27,7 @@ public class FacturadorTenantConfigurationRequest {
     private String serie_guia;
     private BigDecimal igv;
     private String moneda;
+    private String cuentas_bancarias_json;
     private MultipartFile logo_file;
     private MultipartFile certificado_file;
 }

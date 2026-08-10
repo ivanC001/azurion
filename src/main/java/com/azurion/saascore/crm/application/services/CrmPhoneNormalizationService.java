@@ -18,17 +18,22 @@ public class CrmPhoneNormalizationService {
     private final EmpresaRepository empresaRepository;
 
     public NormalizedPhone normalize(String rawValue) {
+        return normalize(rawValue, null);
+    }
+
+    /**
+     * Normalizes a phone using the prospect's country whenever it is available.
+     * Stored values are E.164 digits without the leading plus so they can be sent
+     * directly to the WhatsApp Cloud API.
+     */
+    public NormalizedPhone normalize(String rawValue, String countryCode) {
         String rawDigits = digits(rawValue);
         if (rawDigits == null) {
             return new NormalizedPhone(null, List.of());
         }
-        String region = empresaRepository.findByTenantId(TenantContext.getTenantId())
-                .map(empresa -> empresa.getPaisCodigo())
-                .filter(value -> value != null && !value.isBlank())
-                .map(String::toUpperCase)
-                .orElse("ZZ");
+        String region = resolveCountryCode(countryCode);
         try {
-            var parsed = PHONE_UTIL.parse(rawValue.trim(), region);
+            var parsed = PHONE_UTIL.parse(parseInput(rawValue, rawDigits, region), region);
             if (!PHONE_UTIL.isPossibleNumber(parsed)) {
                 return fallback(rawDigits);
             }
@@ -45,8 +50,55 @@ public class CrmPhoneNormalizationService {
         }
     }
 
+    public String resolveCountryCode(String requestedCountryCode) {
+        String requested = normalizeRegion(requestedCountryCode);
+        if (requested != null) {
+            return requested;
+        }
+        return empresaRepository.findByTenantId(TenantContext.getTenantId())
+                .map(empresa -> normalizeRegion(empresa.getPaisCodigo()))
+                .filter(value -> value != null)
+                .orElse("ZZ");
+    }
+
+    public String countryCodeForPhone(String value) {
+        String digits = digits(value);
+        if (digits == null) {
+            return null;
+        }
+        try {
+            var parsed = PHONE_UTIL.parse("+" + digits, "ZZ");
+            String region = PHONE_UTIL.getRegionCodeForNumber(parsed);
+            return normalizeRegion(region);
+        } catch (NumberParseException ignored) {
+            return null;
+        }
+    }
+
     private NormalizedPhone fallback(String rawDigits) {
         return new NormalizedPhone(rawDigits, List.of(rawDigits));
+    }
+
+    private String parseInput(String rawValue, String rawDigits, String region) {
+        String raw = rawValue.trim();
+        if (raw.startsWith("+") || raw.startsWith("00") || "ZZ".equals(region)) {
+            return raw;
+        }
+        int countryCallingCode = PHONE_UTIL.getCountryCodeForRegion(region);
+        String callingCode = countryCallingCode <= 0 ? null : Integer.toString(countryCallingCode);
+        if (callingCode != null && rawDigits.startsWith(callingCode)
+                && rawDigits.length() > callingCode.length() + 5) {
+            return "+" + rawDigits;
+        }
+        return raw;
+    }
+
+    private String normalizeRegion(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String region = value.trim().toUpperCase();
+        return PHONE_UTIL.getSupportedRegions().contains(region) ? region : null;
     }
 
     private String digits(String value) {

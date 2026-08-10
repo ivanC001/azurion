@@ -9,6 +9,7 @@ public record CrmCatalogoItemResponse(
         String nombre,
         String descripcion,
         BigDecimal precioReferencial,
+        String moneda,
         String estado,
         String metadataJson,
         String publicToken,

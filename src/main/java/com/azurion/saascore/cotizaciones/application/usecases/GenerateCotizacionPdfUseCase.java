@@ -1,5 +1,7 @@
 package com.azurion.saascore.cotizaciones.application.usecases;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
 import com.azurion.saascore.cotizaciones.application.services.CotizacionClienteData;
 import com.azurion.saascore.cotizaciones.application.services.CotizacionClienteDataResolver;
@@ -20,6 +22,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -44,6 +48,7 @@ public class GenerateCotizacionPdfUseCase {
     private final GetCotizacionUseCase getCotizacionUseCase;
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
     private final CotizacionClienteDataResolver clienteDataResolver;
+    private final ObjectMapper objectMapper;
 
     @Value("${azurion.storage.public-files.root-dir:${user.dir}/storage/public-files}")
     private String publicFilesRootDir;
@@ -52,6 +57,10 @@ public class GenerateCotizacionPdfUseCase {
         Cotizacion cotizacion = getCotizacionUseCase.find(id);
         Empresa empresa = getCurrentEmpresaUseCase.resolveCurrentEmpresa();
         CotizacionClienteData cliente = clienteDataResolver.resolveForEmission(cotizacion);
+        List<CotizacionDetalle> catalogDetails = cotizacion.getDetalles().stream()
+                .filter(this::hasCatalogSnapshot)
+                .toList();
+        int totalPages = 1 + catalogDetails.size();
 
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PDPage page = new PDPage(PDRectangle.A4);
@@ -65,7 +74,23 @@ public class GenerateCotizacionPdfUseCase {
                 float afterTable = drawDetailsTable(content, fonts, cotizacion);
                 float totalsY = drawTotals(content, fonts, cotizacion, afterTable);
                 drawCommercialConditions(content, fonts, cotizacion, Math.max(70, totalsY - 112));
-                drawFooter(content, fonts, empresa, cotizacion);
+                drawFooter(content, fonts, empresa, cotizacion, 1, totalPages);
+            }
+
+            for (int index = 0; index < catalogDetails.size(); index++) {
+                PDPage detailPage = new PDPage(PDRectangle.A4);
+                document.addPage(detailPage);
+                try (PDPageContentStream content = new PDPageContentStream(document, detailPage)) {
+                    drawCatalogDetailPage(
+                            content,
+                            fonts,
+                            empresa,
+                            cotizacion,
+                            catalogDetails.get(index),
+                            index + 2,
+                            totalPages
+                    );
+                }
             }
 
             document.save(output);
@@ -189,8 +214,8 @@ public class GenerateCotizacionPdfUseCase {
                 write(content, fonts.regular, 7, 94, y + 10, detailSecondary(detalle), 220, 71, 85, 105);
             }
             write(content, fonts.regular, 8, 343, y + (rowHeight / 2) - 3, number(detalle.getCantidad()), 40);
-            write(content, fonts.regular, 8, 401, y + (rowHeight / 2) - 3, money(detalle.getPrecioUnitario()), 62);
-            write(content, fonts.bold, 8, 480, y + (rowHeight / 2) - 3, money(detalle.getTotal()), 58);
+            write(content, fonts.regular, 8, 401, y + (rowHeight / 2) - 3, money(cotizacion, detalle.getPrecioUnitario()), 62);
+            write(content, fonts.bold, 8, 480, y + (rowHeight / 2) - 3, money(cotizacion, detalle.getTotal()), 58);
             drawRowLines(content, columns, y, rowHeight);
             y -= rowHeight;
             index++;
@@ -207,13 +232,13 @@ public class GenerateCotizacionPdfUseCase {
         BigDecimal discount = gross.subtract(cotizacion.getTotal() == null ? BigDecimal.ZERO : cotizacion.getTotal());
 
         write(content, fonts.bold, 8, 360, boxY + 50, "SUBTOTAL", 90);
-        writeRight(content, fonts.regular, 9, 470, boxY + 50, money(gross), 72);
+        writeRight(content, fonts.regular, 9, 470, boxY + 50, money(cotizacion, gross), 72);
         drawLine(content, 352, boxY + 43, PAGE_RIGHT, boxY + 43, 218, 226, 236, 0.6f);
         write(content, fonts.bold, 8, 360, boxY + 31, "DESCUENTO", 90);
-        writeRight(content, fonts.regular, 9, 470, boxY + 31, money(discount.max(BigDecimal.ZERO)), 72);
+        writeRight(content, fonts.regular, 9, 470, boxY + 31, money(cotizacion, discount.max(BigDecimal.ZERO)), 72);
         fillRect(content, 350, boxY - 1, 197, 24, 234, 245, 255);
         write(content, fonts.bold, 11, 360, boxY + 7, "TOTAL", 80, 0, 75, 155);
-        writeRight(content, fonts.bold, 12, 462, boxY + 7, money(cotizacion.getTotal()), 78, 0, 75, 155);
+        writeRight(content, fonts.bold, 12, 462, boxY + 7, money(cotizacion, cotizacion.getTotal()), 78, 0, 75, 155);
         return boxY;
     }
 
@@ -242,14 +267,64 @@ public class GenerateCotizacionPdfUseCase {
                 defaultText(cotizacion.getObservacion(), "Servicios y condiciones segun el detalle de esta propuesta."), 390);
     }
 
-    private void drawFooter(PDPageContentStream content, Fonts fonts, Empresa empresa, Cotizacion cotizacion) throws IOException {
+    private void drawFooter(PDPageContentStream content, Fonts fonts, Empresa empresa, Cotizacion cotizacion,
+                            int pageNumber, int totalPages) throws IOException {
         fillRect(content, 0, 0, PDRectangle.A4.getWidth(), 52, 5, 48, 91);
         fillRect(content, 0, 0, 72, 52, 24, 137, 255);
         write(content, fonts.bold, 8, 90, 32, empresa.getRazonSocial(), 205, 255, 255, 255);
         write(content, fonts.regular, 7, 90, 18,
                 "Propuesta comercial preparada para atender su solicitud.", 260, 218, 235, 255);
         write(content, fonts.bold, 7, 395, 31, "CODIGO " + validationCode(cotizacion), 135, 255, 255, 255);
-        write(content, fonts.regular, 7, 455, 17, "Pagina 1 de 1", 75, 218, 235, 255);
+        write(content, fonts.regular, 7, 455, 17,
+                "Pagina " + pageNumber + " de " + totalPages, 75, 218, 235, 255);
+    }
+
+    private void drawCatalogDetailPage(PDPageContentStream content, Fonts fonts, Empresa empresa,
+                                       Cotizacion cotizacion, CotizacionDetalle detalle,
+                                       int pageNumber, int totalPages) throws IOException {
+        fillRect(content, 0, 0, PDRectangle.A4.getWidth(), PDRectangle.A4.getHeight(), 255, 255, 255);
+        write(content, fonts.bold, 10, PAGE_LEFT, 796, empresa.getRazonSocial(), 280, 5, 48, 91);
+        writeRight(content, fonts.bold, 9, 387, 796, quoteCode(cotizacion), 160, 0, 96, 190);
+        drawLine(content, PAGE_LEFT, 780, PAGE_RIGHT, 780, 0, 96, 190, 1.1f);
+
+        write(content, fonts.bold, 15, PAGE_LEFT, 745, "FICHA COMERCIAL DEL PRODUCTO", PAGE_WIDTH, 5, 48, 91);
+        write(content, fonts.bold, 8, PAGE_LEFT, 720,
+                defaultText(detalle.getCatalogoTipoItem(), "OFERTA CRM"), 160, 0, 96, 190);
+        writeScaled(content, fonts.bold, 16, 11, PAGE_LEFT, 690,
+                detailTitle(detalle), PAGE_WIDTH, 15, 23, 42);
+
+        float y = 658;
+        y = writeWrapped(content, fonts.regular, 9, PAGE_LEFT, y,
+                defaultText(detalle.getCatalogoDescripcion(), detailSecondary(detalle)),
+                PAGE_WIDTH, 14, 8, 71, 85, 105) - 10;
+
+        fillRect(content, PAGE_LEFT, y - 56, PAGE_WIDTH, 56, 247, 250, 252);
+        write(content, fonts.bold, 7, 62, y - 18, "CANTIDAD", 90, 71, 85, 105);
+        write(content, fonts.bold, 10, 62, y - 37, number(detalle.getCantidad()), 90);
+        write(content, fonts.bold, 7, 214, y - 18, "PRECIO COTIZADO", 120, 71, 85, 105);
+        write(content, fonts.bold, 10, 214, y - 37,
+                money(cotizacion, detalle.getPrecioUnitario()), 120);
+        write(content, fonts.bold, 7, 386, y - 18, "TOTAL", 90, 71, 85, 105);
+        write(content, fonts.bold, 10, 386, y - 37,
+                money(cotizacion, detalle.getTotal()), 135, 0, 96, 190);
+        y -= 86;
+
+        List<CommercialAttribute> attributes = catalogAttributes(detalle);
+        if (!attributes.isEmpty()) {
+            write(content, fonts.bold, 11, PAGE_LEFT, y, "CONTENIDO Y CARACTERISTICAS", PAGE_WIDTH, 5, 48, 91);
+            y -= 20;
+            for (CommercialAttribute attribute : attributes) {
+                if (y < 90) {
+                    break;
+                }
+                fillRect(content, PAGE_LEFT, y - 26, PAGE_WIDTH, 26, 250, 252, 255);
+                write(content, fonts.bold, 8, 62, y - 17, attribute.label(), 150, 71, 85, 105);
+                write(content, fonts.regular, 8, 220, y - 17, attribute.value(), 312);
+                y -= 31;
+            }
+        }
+
+        drawFooter(content, fonts, empresa, cotizacion, pageNumber, totalPages);
     }
 
     private void drawRowLines(PDPageContentStream content, float[] columns, float y, float rowHeight) throws IOException {
@@ -366,10 +441,16 @@ public class GenerateCotizacionPdfUseCase {
     }
 
     private String detailDescription(CotizacionDetalle detalle) {
-        return defaultText(detalle.getDescripcion(), detalle.getProducto() == null ? "Oferta CRM" : detalle.getProducto().getNombre());
+        return defaultText(
+                detalle.getCatalogoDescripcion(),
+                defaultText(detalle.getDescripcion(), detalle.getProducto() == null ? "Oferta CRM" : detalle.getProducto().getNombre())
+        );
     }
 
     private String detailTitle(CotizacionDetalle detalle) {
+        if (detalle.getCatalogoNombre() != null && !detalle.getCatalogoNombre().isBlank()) {
+            return detalle.getCatalogoNombre();
+        }
         if (detalle.getProducto() != null && detalle.getProducto().getNombre() != null) {
             return detalle.getProducto().getNombre();
         }
@@ -383,6 +464,73 @@ public class GenerateCotizacionPdfUseCase {
         }
         String description = detailDescription(detalle);
         return description.equals(detailTitle(detalle)) ? "Incluido en la propuesta comercial." : description;
+    }
+
+    private boolean hasCatalogSnapshot(CotizacionDetalle detalle) {
+        return detalle.getCatalogoItemId() != null
+                || (detalle.getCatalogoNombre() != null && !detalle.getCatalogoNombre().isBlank());
+    }
+
+    private List<CommercialAttribute> catalogAttributes(CotizacionDetalle detalle) {
+        String metadata = detalle.getCatalogoMetadataJson();
+        if (metadata == null || metadata.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(metadata);
+            JsonNode attributes = root.path("atributos");
+            if (!attributes.isObject()) {
+                return List.of();
+            }
+            List<CommercialAttribute> result = new ArrayList<>();
+            attributes.fields().forEachRemaining(entry -> {
+                JsonNode value = entry.getValue();
+                if (value != null && !value.isNull() && !value.asText().isBlank()) {
+                    result.add(new CommercialAttribute(humanizeMetadataKey(entry.getKey()), value.asText()));
+                }
+            });
+            return result;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private String humanizeMetadataKey(String value) {
+        if (value == null || value.isBlank()) {
+            return "DETALLE";
+        }
+        return value
+                .replaceAll("([a-z0-9])([A-Z])", "$1 $2")
+                .replace('_', ' ')
+                .trim()
+                .toUpperCase(Locale.ROOT);
+    }
+
+    private float writeWrapped(PDPageContentStream content, PDType1Font font, int size,
+                               float x, float y, String text, float maxWidth,
+                               float lineHeight, int maxLines, int r, int g, int b) throws IOException {
+        String[] words = safe(text).split("\\s+");
+        StringBuilder line = new StringBuilder();
+        int lines = 0;
+        for (String word : words) {
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (!line.isEmpty() && (font.getStringWidth(candidate) / 1000f * size) > maxWidth) {
+                write(content, font, size, x, y, line.toString(), maxWidth, r, g, b);
+                y -= lineHeight;
+                lines++;
+                if (lines >= maxLines) {
+                    return y;
+                }
+                line = new StringBuilder(word);
+            } else {
+                line = new StringBuilder(candidate);
+            }
+        }
+        if (!line.isEmpty() && lines < maxLines) {
+            write(content, font, size, x, y, line.toString(), maxWidth, r, g, b);
+            y -= lineHeight;
+        }
+        return y;
     }
 
     private BigDecimal grossTotal(Cotizacion cotizacion) {
@@ -439,8 +587,14 @@ public class GenerateCotizacionPdfUseCase {
         return value == null ? "-" : DATE_FORMAT.format(value);
     }
 
-    private String money(BigDecimal value) {
-        return "S/ " + (value == null ? BigDecimal.ZERO : value).setScale(2).toPlainString();
+    private String money(Cotizacion cotizacion, BigDecimal value) {
+        String currency = defaultText(cotizacion.getMoneda(), "PEN").toUpperCase(Locale.ROOT);
+        String prefix = switch (currency) {
+            case "USD" -> "$";
+            case "EUR" -> "EUR";
+            default -> "S/";
+        };
+        return prefix + " " + (value == null ? BigDecimal.ZERO : value).setScale(2).toPlainString();
     }
 
     private String number(BigDecimal value) {
@@ -462,5 +616,8 @@ public class GenerateCotizacionPdfUseCase {
                     new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD)
             );
         }
+    }
+
+    private record CommercialAttribute(String label, String value) {
     }
 }

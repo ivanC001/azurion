@@ -989,6 +989,12 @@ public class FacturadorClient {
         if (json == null) {
             return "Facturador respondio sin contenido (" + status + ")";
         }
+
+        String validationMessage = firstValidationMessage(json.path("errors"));
+        if (!validationMessage.isBlank()) {
+            return validationMessage;
+        }
+
         String backendMessage = json.path("message").asText("");
         if (!backendMessage.isBlank()) {
             return backendMessage;
@@ -997,6 +1003,27 @@ public class FacturadorClient {
             return "Documento enviado al facturador";
         }
         return "Facturador rechazo la solicitud (" + status + ")";
+    }
+
+    private String firstValidationMessage(JsonNode errors) {
+        if (errors == null || !errors.isObject()) {
+            return "";
+        }
+
+        var fields = errors.fields();
+        if (!fields.hasNext()) {
+            return "";
+        }
+
+        var field = fields.next();
+        JsonNode messages = field.getValue();
+        String message = messages.isArray() && !messages.isEmpty()
+                ? messages.get(0).asText("")
+                : messages.asText("");
+        if (message.isBlank()) {
+            return "";
+        }
+        return "El dato " + field.getKey() + " no es valido: " + message;
     }
 
     private String resolveProcessedMessage(JsonNode json, int status) {

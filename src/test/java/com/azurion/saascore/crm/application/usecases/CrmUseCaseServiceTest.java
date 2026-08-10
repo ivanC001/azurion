@@ -18,6 +18,8 @@ import com.azurion.saascore.cotizaciones.application.usecases.CreateCotizacionUs
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
+import com.azurion.saascore.crm.application.dto.CreateCrmCatalogoItemRequest;
+import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosRequest;
 import com.azurion.saascore.crm.application.dto.RepartirCrmProspectosResponse;
 import com.azurion.saascore.crm.application.dto.PublicCrmLeadRequest;
@@ -30,6 +32,7 @@ import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationServic
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
+import com.azurion.saascore.crm.domain.entities.CrmCurrencyConfig;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
@@ -46,6 +49,8 @@ import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
+import com.azurion.saascore.empresas.domain.entities.Empresa;
+import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
@@ -137,6 +142,9 @@ class CrmUseCaseServiceTest {
     @Mock
     EmailSenderService emailSenderService;
 
+    @Mock
+    EmpresaRepository empresaRepository;
+
     CrmUseCaseService service;
 
     @BeforeEach
@@ -163,13 +171,120 @@ class CrmUseCaseServiceTest {
                 publicLeadSubmissionRepository,
                 ingressLockService,
                 phoneNormalizationService,
-                emailSenderService
+                emailSenderService,
+                empresaRepository
         );
+        org.mockito.Mockito.lenient().when(phoneNormalizationService.resolveCountryCode(any()))
+                .thenReturn("PE");
+        org.mockito.Mockito.lenient().when(phoneNormalizationService.normalize(any(), any()))
+                .thenAnswer(invocation -> {
+                    String raw = invocation.getArgument(0);
+                    String digits = raw == null ? null : raw.replaceAll("[^0-9]", "");
+                    return new CrmPhoneNormalizationService.NormalizedPhone(
+                            digits == null || digits.isBlank() ? null : digits,
+                            digits == null || digits.isBlank() ? List.of() : List.of(digits)
+                    );
+                });
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void catalogoSinMonedaUsaMonedaBaseDelTenant() {
+        Empresa empresa = new Empresa();
+        empresa.setMonedaCodigo("USD");
+        when(empresaRepository.findByTenantId("public")).thenReturn(Optional.of(empresa));
+        when(catalogoItemRepository.saveAndFlush(any(CrmCatalogoItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CrmCatalogoItemResponse response = service.createCatalogoItem(new CreateCrmCatalogoItemRequest(
+                "PRODUCTO",
+                "Kit comercial",
+                "Producto de prueba",
+                BigDecimal.valueOf(125),
+                null,
+                "ACTIVO",
+                null,
+                true,
+                null
+        ));
+
+        assertEquals("USD", response.moneda());
+    }
+
+    @Test
+    void monedasPredeterminadasNoSePublicanHastaSerConfiguradas() {
+        when(currencyConfigRepository.findAllByOrderByMonedaAsc()).thenReturn(List.of());
+
+        var currencies = service.listCurrencyConfig();
+
+        assertEquals(2, currencies.size());
+        assertEquals(false, currencies.get(0).activo());
+        assertEquals(false, currencies.get(1).activo());
+    }
+
+    @Test
+    void catalogoAceptaMonedaExtranjeraConfiguradaYActiva() {
+        Empresa empresa = new Empresa();
+        empresa.setMonedaCodigo("PEN");
+        CrmCurrencyConfig usd = new CrmCurrencyConfig();
+        usd.setMoneda("USD");
+        usd.setNombre("Dólar americano");
+        usd.setSimbolo("$");
+        usd.setTipoCambioBase(new BigDecimal("3.800000"));
+        usd.setMargenConversionPorcentaje(BigDecimal.ZERO);
+        usd.setActivo(true);
+
+        when(empresaRepository.findByTenantId("public")).thenReturn(Optional.of(empresa));
+        when(currencyConfigRepository.findByMoneda("USD")).thenReturn(Optional.of(usd));
+        when(catalogoItemRepository.saveAndFlush(any(CrmCatalogoItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CrmCatalogoItemResponse response = service.createCatalogoItem(new CreateCrmCatalogoItemRequest(
+                "PRODUCTO",
+                "Licencia internacional",
+                "Producto cotizado en dólares",
+                BigDecimal.valueOf(125),
+                "USD",
+                "ACTIVO",
+                null,
+                true,
+                null
+        ));
+
+        assertEquals("USD", response.moneda());
+    }
+
+    @Test
+    void catalogoRechazaMonedaExtranjeraInactiva() {
+        Empresa empresa = new Empresa();
+        empresa.setMonedaCodigo("PEN");
+        CrmCurrencyConfig usd = new CrmCurrencyConfig();
+        usd.setMoneda("USD");
+        usd.setTipoCambioBase(new BigDecimal("3.800000"));
+        usd.setActivo(false);
+
+        when(empresaRepository.findByTenantId("public")).thenReturn(Optional.of(empresa));
+        when(currencyConfigRepository.findByMoneda("USD")).thenReturn(Optional.of(usd));
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                service.createCatalogoItem(new CreateCrmCatalogoItemRequest(
+                        "PRODUCTO",
+                        "Licencia internacional",
+                        "Producto cotizado en dólares",
+                        BigDecimal.valueOf(125),
+                        "USD",
+                        "ACTIVO",
+                        null,
+                        true,
+                        null
+                )));
+
+        assertEquals("CRM_MONEDA_INACTIVA", exception.getCode());
+        verify(catalogoItemRepository, never()).saveAndFlush(any(CrmCatalogoItem.class));
     }
 
     @Test
@@ -225,7 +340,8 @@ class CrmUseCaseServiceTest {
         when(landingLeadValidationService.validate(any())).thenReturn(
                 new LandingLeadContext(landing, null, true, true, "LANDING", "municipios", null)
         );
-        when(phoneNormalizationService.normalize(any())).thenReturn(
+        when(phoneNormalizationService.resolveCountryCode(any())).thenReturn("PE");
+        when(phoneNormalizationService.normalize(any(), any())).thenReturn(
                 new CrmPhoneNormalizationService.NormalizedPhone(
                         "51999999999",
                         List.of("51999999999", "999999999")
@@ -713,6 +829,7 @@ class CrmUseCaseServiceTest {
                 "juan@perez.com",
                 "+51 999 999 999",
                 null,
+                null,
                 "WEB",
                 "LANDING",
                 "municipios",
@@ -736,7 +853,8 @@ class CrmUseCaseServiceTest {
         when(landingLeadValidationService.validate(any())).thenReturn(
                 new LandingLeadContext(landing, null, false, true, "LANDING", "municipios", null)
         );
-        when(phoneNormalizationService.normalize(any())).thenReturn(
+        when(phoneNormalizationService.resolveCountryCode(any())).thenReturn("PE");
+        when(phoneNormalizationService.normalize(any(), any())).thenReturn(
                 new CrmPhoneNormalizationService.NormalizedPhone(null, List.of())
         );
         when(prospectoRepository.save(any(CrmProspecto.class))).thenAnswer(invocation -> {

@@ -14,6 +14,7 @@ import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
+import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
@@ -79,6 +80,8 @@ class WhatsappIntegrationServiceTest {
     @Mock
     private CrmSecretEncryptionService secretEncryptionService;
     @Mock
+    private CrmPhoneNormalizationService phoneNormalizationService;
+    @Mock
     private WhatsappCloudApiClient cloudApiClient;
     @Mock
     private CrmLeadAssignmentService leadAssignmentService;
@@ -101,6 +104,7 @@ class WhatsappIntegrationServiceTest {
                 generateCotizacionPdfUseCase,
                 updateCotizacionEstadoUseCase,
                 secretEncryptionService,
+                phoneNormalizationService,
                 cloudApiClient,
                 new ObjectMapper(),
                 leadAssignmentService,
@@ -116,6 +120,14 @@ class WhatsappIntegrationServiceTest {
         config.setPhoneNumberId("1234567890");
         config.setAppSecret("encrypted-app-secret");
         config.setVerifyToken("encrypted-verify-token");
+        org.mockito.Mockito.lenient().when(phoneNormalizationService.normalize(any(), any())).thenAnswer(invocation -> {
+            String raw = invocation.getArgument(0);
+            String digits = raw == null ? null : raw.replaceAll("[^0-9]", "");
+            return new CrmPhoneNormalizationService.NormalizedPhone(
+                    digits == null || digits.isBlank() ? null : digits,
+                    digits == null || digits.isBlank() ? List.of() : List.of(digits)
+            );
+        });
     }
 
     @Test

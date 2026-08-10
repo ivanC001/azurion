@@ -79,7 +79,7 @@ public class CrmController {
     private final TenantEmailConfigService tenantEmailConfigService;
 
     @GetMapping("/configuracion/monedas")
-    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    @PreAuthorize("hasAnyAuthority('CRM_CONFIG_MANAGE','CRM_CATALOG_MANAGE','CRM_QUOTES_CREATE','CRM_OPPORTUNITIES_READ')")
     public ApiResponse<List<CrmCurrencyConfigResponse>> listCurrencyConfig() {
         return ApiResponse.ok(crmUseCaseService.listCurrencyConfig(), "Monedas CRM");
     }

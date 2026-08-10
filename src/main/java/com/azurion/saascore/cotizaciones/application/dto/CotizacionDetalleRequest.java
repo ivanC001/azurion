@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 
 public record CotizacionDetalleRequest(
         Long productoId,
+        Long catalogoItemId,
         Long promocionId,
         String descripcion,
         @Positive BigDecimal cantidad,

@@ -37,7 +37,7 @@ public class EmpresaController {
     ) {
         return ApiResponse.ok(
                 createEmpresaRegistrationUseCase.execute(request),
-                "Empresa, suscripcion y modulos creados"
+                "Empresa, suscripción y módulos creados"
         );
     }
 

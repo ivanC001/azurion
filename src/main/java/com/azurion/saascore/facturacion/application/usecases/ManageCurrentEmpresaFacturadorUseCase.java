@@ -12,6 +12,7 @@ import com.azurion.saascore.facturacion.infrastructure.http.FacturadorClient;
 import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -50,11 +51,60 @@ public class ManageCurrentEmpresaFacturadorUseCase {
                 empresa.getTenantId(),
                 payload
         );
+        assertRequestedBankAccountsPersisted(payload, tenant);
 
         Empresa refreshed = currentEmpresa();
         applyFacturadorCapabilities(refreshed, tenant);
         EmpresaResponse empresaResponse = EmpresaMapper.toResponse(empresaRepository.save(refreshed));
         return new CurrentFacturadorConfigurationResponse(tenant, empresaResponse);
+    }
+
+    private void assertRequestedBankAccountsPersisted(Map<String, Object> payload, JsonNode tenant) {
+        if (!payload.containsKey("cuentas_bancarias")) {
+            return;
+        }
+
+        Object requestedValue = payload.get("cuentas_bancarias");
+        if (!(requestedValue instanceof List<?> requestedAccounts)) {
+            throw bankAccountsNotPersisted();
+        }
+
+        JsonNode persistedAccounts = tenant == null
+                ? null
+                : tenant.path("configuracion").path("cuentas_bancarias");
+        if (persistedAccounts == null
+                || !persistedAccounts.isArray()
+                || persistedAccounts.size() != requestedAccounts.size()) {
+            throw bankAccountsNotPersisted();
+        }
+
+        for (int index = 0; index < requestedAccounts.size(); index++) {
+            if (!(requestedAccounts.get(index) instanceof Map<?, ?> requestedAccount)) {
+                throw bankAccountsNotPersisted();
+            }
+
+            JsonNode persistedAccount = persistedAccounts.get(index);
+            if (persistedAccount == null
+                    || !sameText(requestedAccount.get("banco"), persistedAccount, "banco")
+                    || !sameText(requestedAccount.get("moneda"), persistedAccount, "moneda")
+                    || !sameText(requestedAccount.get("cuenta"), persistedAccount, "cuenta")
+                    || !sameText(requestedAccount.get("cci"), persistedAccount, "cci")) {
+                throw bankAccountsNotPersisted();
+            }
+        }
+    }
+
+    private boolean sameText(Object requested, JsonNode persistedAccount, String field) {
+        String expected = requested == null ? "" : requested.toString().trim();
+        String actual = persistedAccount.path(field).asText("").trim();
+        return expected.equals(actual);
+    }
+
+    private BusinessException bankAccountsNotPersisted() {
+        return new BusinessException(
+                "FACTURADOR_BANK_ACCOUNTS_NOT_PERSISTED",
+                "El facturador no confirmo el guardado de las cuentas bancarias"
+        );
     }
 
     private Empresa currentEmpresa() {

@@ -81,6 +81,7 @@ public class WhatsappIntegrationService {
     private final GenerateCotizacionPdfUseCase generateCotizacionPdfUseCase;
     private final UpdateCotizacionEstadoUseCase updateCotizacionEstadoUseCase;
     private final CrmSecretEncryptionService secretEncryptionService;
+    private final CrmPhoneNormalizationService phoneNormalizationService;
     private final WhatsappCloudApiClient cloudApiClient;
     private final ObjectMapper objectMapper;
     private final CrmLeadAssignmentService leadAssignmentService;
@@ -329,7 +330,7 @@ public class WhatsappIntegrationService {
     public CrmWhatsappMessageResponse sendMessage(Long prospectoId, SendWhatsappMessageRequest request) {
         CrmProspecto prospecto = requireProspecto(prospectoId);
         CrmCanalTokenConfig config = requireActiveConfig();
-        String recipient = normalizePhone(prospecto.getTelefono());
+        String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
         String body = request.mensaje().trim();
         SendResult sendResult = cloudApiClient.sendText(config, recipient, body, Boolean.TRUE.equals(request.previewUrl()));
 
@@ -374,7 +375,7 @@ public class WhatsappIntegrationService {
         boolean deliveryConfirmed = false;
         try {
             CrmCanalTokenConfig config = requireActiveConfig();
-            String recipient = normalizePhone(prospecto.getTelefono());
+            String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
             String caption = trimToNull(request.mensaje());
             if (caption == null) {
                 caption = "Hola " + firstNonBlank(prospecto.getNombre(), "")
@@ -510,7 +511,7 @@ public class WhatsappIntegrationService {
             return;
         }
 
-        String sender = normalizePhone(text(messageNode, "from"));
+        String sender = normalizePhone(text(messageNode, "from"), null);
         String type = firstNonBlank(text(messageNode, "type"), "unknown");
         String body = extractMessageBody(messageNode, type);
         OffsetDateTime messageTime = parseTimestamp(text(messageNode, "timestamp"));
@@ -559,6 +560,7 @@ public class WhatsappIntegrationService {
             prospecto.setTipoPersona("SIN_DEFINIR");
             prospecto.setNombre(truncate(firstNonBlank(contactName, sender), 180));
             prospecto.setTelefono(sender);
+            prospecto.setPaisCodigo(phoneNormalizationService.countryCodeForPhone(sender));
             prospecto.setOrigen("WHATSAPP");
             prospecto.setCanalIngreso("WHATSAPP");
             prospecto.setCampania("WhatsApp");
@@ -868,9 +870,9 @@ public class WhatsappIntegrationService {
         };
     }
 
-    private String normalizePhone(String value) {
-        String normalized = digits(value);
-        if (!hasText(normalized) || normalized.length() < 8 || normalized.length() > 20) {
+    private String normalizePhone(String value, String paisCodigo) {
+        String normalized = phoneNormalizationService.normalize(value, paisCodigo).identity();
+        if (!hasText(normalized) || normalized.length() < 8 || normalized.length() > 15) {
             throw new BusinessException(
                     "CRM_WHATSAPP_TELEFONO_INVALIDO",
                     "El prospecto debe tener un telefono con codigo de pais para usar WhatsApp"

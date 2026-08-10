@@ -28,14 +28,14 @@ public class CreateEmpresaRegistrationUseCase {
     @Transactional
     public EmpresaRegistrationResponse execute(CreateEmpresaRegistrationRequest request) {
         Plan plan = planRepository.findById(request.planId())
-                .orElseThrow(() -> new BusinessException("PLAN_NOT_FOUND", "No se encontro el plan seleccionado"));
+                .orElseThrow(() -> new BusinessException("PLAN_NOT_FOUND", "No se encontró el plan seleccionado"));
         if (!"ACTIVO".equalsIgnoreCase(plan.getEstado())) {
-            throw new BusinessException("PLAN_NO_DISPONIBLE", "El plan seleccionado no esta activo");
+            throw new BusinessException("PLAN_NO_DISPONIBLE", "El plan seleccionado no está activo");
         }
 
         List<String> moduleCodes = planModuloRepository.findModuloCodigosByPlanId(plan.getId());
         if (moduleCodes.isEmpty()) {
-            throw new BusinessException("PLAN_SIN_MODULOS", "Configura al menos un modulo en el plan antes de asignarlo");
+            throw new BusinessException("PLAN_SIN_MODULOS", "Configura al menos un módulo en el plan antes de asignarlo");
         }
 
         EmpresaResponse empresa = createEmpresaUseCase.execute(new CreateEmpresaRequest(

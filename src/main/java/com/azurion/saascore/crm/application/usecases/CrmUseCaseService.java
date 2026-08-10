@@ -81,6 +81,7 @@ import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoInteresRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
+import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.multitenancy.TenantContext;
 import com.azurion.shared.api.PageResponse;
@@ -102,6 +103,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -180,6 +182,7 @@ public class CrmUseCaseService {
     private final BusinessOperationLockService ingressLockService;
     private final CrmPhoneNormalizationService phoneNormalizationService;
     private final EmailSenderService emailSenderService;
+    private final EmpresaRepository empresaRepository;
 
     @Transactional(readOnly = true)
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
@@ -199,7 +202,7 @@ public class CrmUseCaseService {
                 .orElseGet(() -> defaultCurrencyConfig(moneda));
         config.setMoneda(moneda);
         updateIfPresent(request.nombre(), (value) -> config.setNombre(required(value, "El nombre de la moneda es obligatorio")));
-        updateIfPresent(request.simbolo(), (value) -> config.setSimbolo(required(value, "El simbolo de la moneda es obligatorio")));
+        updateIfPresent(request.simbolo(), (value) -> config.setSimbolo(required(value, "El símbolo de la moneda es obligatorio")));
         if (request.tipoCambioBase() != null) {
             if (request.tipoCambioBase().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new BusinessException("CRM_TIPO_CAMBIO_INVALIDO", "El tipo de cambio debe ser mayor a cero");
@@ -208,7 +211,7 @@ public class CrmUseCaseService {
         }
         if (request.margenConversionPorcentaje() != null) {
             if (request.margenConversionPorcentaje().compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException("CRM_MARGEN_CONVERSION_INVALIDO", "El margen de conversion no puede ser negativo");
+                throw new BusinessException("CRM_MARGEN_CONVERSION_INVALIDO", "El margen de conversión no puede ser negativo");
             }
             config.setMargenConversionPorcentaje(request.margenConversionPorcentaje().setScale(4, RoundingMode.HALF_UP));
         }
@@ -310,15 +313,18 @@ public class CrmUseCaseService {
     public CrmProspectoResponse createProspecto(CreateCrmProspectoRequest request) {
         String responsableId = resolveResponsable(request.responsableId());
         CrmCatalogoItem catalogoItem = request.catalogoItemId() == null ? null : findCatalogoItem(request.catalogoItemId());
+        String paisCodigo = phoneNormalizationService.resolveCountryCode(
+                normalizeCountryCode(request.paisCodigo())
+        );
         CrmProspecto prospecto = new CrmProspecto();
         prospecto.setTipoPersona(requireEnum(request.tipoPersona(), TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO"));
-        prospecto.setPaisCodigo(normalizeCountryCode(request.paisCodigo()));
+        prospecto.setPaisCodigo(paisCodigo);
         prospecto.setTipoDocumento(trim(request.tipoDocumento()));
         prospecto.setNumeroDocumento(trim(request.numeroDocumento()));
         prospecto.setNombre(required(request.nombre(), "El nombre del prospecto es obligatorio"));
         prospecto.setRazonSocial(trim(request.razonSocial()));
         prospecto.setNombreComercial(trim(request.nombreComercial()));
-        prospecto.setTelefono(trim(request.telefono()));
+        prospecto.setTelefono(normalizeProspectPhone(request.telefono(), paisCodigo));
         prospecto.setCorreo(trim(request.correo()));
         prospecto.setDireccion(trim(request.direccion()));
         prospecto.setOrigen(requireEnum(request.origen(), ORIGENES, "ORIGEN_CRM_INVALIDO"));
@@ -379,9 +385,12 @@ public class CrmUseCaseService {
         }
 
         LandingLeadContext leadContext = landingLeadValidationService.validate(request);
-        ingressLockService.lockAll(publicLeadIdentityLocks(request, leadContext));
+        String paisCodigo = phoneNormalizationService.resolveCountryCode(
+                normalizeCountryCode(request.paisCodigo())
+        );
+        ingressLockService.lockAll(publicLeadIdentityLocks(request, leadContext, paisCodigo));
         CrmCatalogoItem catalogoItem = leadContext.catalogoItem();
-        CrmProspecto prospecto = findDuplicatePublicLead(request, leadContext).orElseGet(CrmProspecto::new);
+        CrmProspecto prospecto = findDuplicatePublicLead(request, leadContext, paisCodigo).orElseGet(CrmProspecto::new);
         boolean isNew = prospecto.getId() == null;
         if (isNew) {
             prospecto.setTipoPersona(resolvePublicPersonType(request));
@@ -390,7 +399,8 @@ public class CrmUseCaseService {
             prospecto.setNombre(required(request.nombre(), "El nombre del lead es obligatorio"));
             prospecto.setRazonSocial(trim(request.empresa()));
             prospecto.setNombreComercial(trim(request.empresa()));
-            prospecto.setTelefono(trim(request.telefono()));
+            prospecto.setPaisCodigo(paisCodigo);
+            prospecto.setTelefono(normalizeProspectPhone(request.telefono(), paisCodigo));
             prospecto.setCorreo(trim(request.correo()));
             prospecto.setDireccion(trim(request.direccion()));
             prospecto.setOrigen("WEB");
@@ -421,7 +431,7 @@ public class CrmUseCaseService {
             }
             prospecto.setObservacion(trim(request.mensaje()));
         } else {
-            mergeMissingPublicContactFields(prospecto, request);
+            mergeMissingPublicContactFields(prospecto, request, paisCodigo);
         }
 
         CrmProspecto saved = prospectoRepository.save(prospecto);
@@ -450,6 +460,7 @@ public class CrmUseCaseService {
                 item.getNombre(),
                 item.getDescripcion(),
                 item.getPrecioReferencial(),
+                item.getMoneda(),
                 item.getMetadataJson()
         );
     }
@@ -472,6 +483,7 @@ public class CrmUseCaseService {
         item.setNombre(required(request.nombre(), "El nombre del item comercial es obligatorio"));
         item.setDescripcion(trim(request.descripcion()));
         item.setPrecioReferencial(money(nonNegative(request.precioReferencial())));
+        item.setMoneda(requireEnabledCommercialCurrency(request.moneda(), "producto"));
         item.setEstado(defaultEnum(request.estado(), "ACTIVO", ESTADOS_CATALOGO, "ESTADO_CATALOGO_CRM_INVALIDO"));
         item.setMetadataJson(trim(request.metadataJson()));
         item.setPublicEnabled(request.publicEnabled() == null || request.publicEnabled());
@@ -489,6 +501,12 @@ public class CrmUseCaseService {
         updateIfPresent(request.descripcion(), value -> item.setDescripcion(trim(value)));
         if (request.precioReferencial() != null) {
             item.setPrecioReferencial(money(nonNegative(request.precioReferencial())));
+        }
+        if (request.moneda() != null) {
+            String requestedCurrency = normalizeCurrency(request.moneda());
+            item.setMoneda(requestedCurrency.equals(item.getMoneda())
+                    ? requestedCurrency
+                    : requireEnabledCommercialCurrency(requestedCurrency, "producto"));
         }
         updateIfPresent(request.estado(), value -> item.setEstado(requireEnum(value, ESTADOS_CATALOGO, "ESTADO_CATALOGO_CRM_INVALIDO")));
         updateIfPresent(request.metadataJson(), value -> item.setMetadataJson(trim(value)));
@@ -638,14 +656,19 @@ public class CrmUseCaseService {
     public CrmProspectoResponse updateProspecto(Long id, UpdateCrmProspectoRequest request) {
         CrmProspecto prospecto = findProspecto(id);
         ensureCanWrite(prospecto.getResponsableId());
+        String paisCodigo = request.paisCodigo() == null
+                ? phoneNormalizationService.resolveCountryCode(prospecto.getPaisCodigo())
+                : phoneNormalizationService.resolveCountryCode(normalizeCountryCode(request.paisCodigo()));
         updateIfPresent(request.tipoPersona(), value -> prospecto.setTipoPersona(requireEnum(value, TIPOS_PERSONA, "TIPO_PERSONA_INVALIDO")));
-        updateIfPresent(request.paisCodigo(), value -> prospecto.setPaisCodigo(normalizeCountryCode(value)));
+        if (request.paisCodigo() != null) {
+            prospecto.setPaisCodigo(paisCodigo);
+        }
         updateIfPresent(request.tipoDocumento(), value -> prospecto.setTipoDocumento(trim(value)));
         updateIfPresent(request.numeroDocumento(), value -> prospecto.setNumeroDocumento(trim(value)));
         updateIfPresent(request.nombre(), value -> prospecto.setNombre(required(value, "El nombre del prospecto es obligatorio")));
         updateIfPresent(request.razonSocial(), value -> prospecto.setRazonSocial(trim(value)));
         updateIfPresent(request.nombreComercial(), value -> prospecto.setNombreComercial(trim(value)));
-        updateIfPresent(request.telefono(), value -> prospecto.setTelefono(trim(value)));
+        updateIfPresent(request.telefono(), value -> prospecto.setTelefono(normalizeProspectPhone(value, paisCodigo)));
         updateIfPresent(request.correo(), value -> prospecto.setCorreo(trim(value)));
         updateIfPresent(request.direccion(), value -> prospecto.setDireccion(trim(value)));
         updateIfPresent(request.origen(), value -> prospecto.setOrigen(requireEnum(value, ORIGENES, "ORIGEN_CRM_INVALIDO")));
@@ -1085,6 +1108,7 @@ public class CrmUseCaseService {
         if (clienteId == null && oportunidad.getProspecto() != null) {
             ensureProspectClassified(oportunidad.getProspecto());
         }
+        String monedaCotizacion = requireEnabledQuoteCurrency(request.moneda());
         CotizacionResponse cotizacion = createCotizacionUseCase.execute(new CreateCotizacionRequest(
                 clienteId,
                 request.usuarioId(),
@@ -1092,7 +1116,7 @@ public class CrmUseCaseService {
                 request.sucursalId(),
                 request.fechaEmision(),
                 request.fechaVencimiento(),
-                request.moneda(),
+                monedaCotizacion,
                 request.observacion(),
                 oportunidad.getId(),
                 request.detalles()
@@ -2123,15 +2147,22 @@ public class CrmUseCaseService {
     }
 
     private Optional<CrmProspecto> findDuplicatePublicLead(PublicCrmLeadRequest request,
-                                                           LandingLeadContext leadContext) {
+                                                           LandingLeadContext leadContext,
+                                                           String paisCodigo) {
         String policy = duplicatePolicy(leadContext);
         CrmPhoneNormalizationService.NormalizedPhone normalizedPhone =
-                phoneNormalizationService.normalize(request.telefono());
+                phoneNormalizationService.normalize(request.telefono(), paisCodigo);
         String correo = normalizeEmail(request.correo());
         Optional<CrmProspecto> byPhone = Optional.empty();
-        if (policyUsesPhone(policy)) {
+        if (policyUsesPhone(policy) && normalizedPhone.identity() != null) {
+            byPhone = prospectoRepository.findFirstByTelefonoNormalizado(normalizedPhone.identity());
+        }
+        if (policyUsesPhone(policy) && byPhone.isEmpty()) {
             for (String candidate : normalizedPhone.lookupCandidates()) {
-                byPhone = prospectoRepository.findFirstByTelefonoNormalizado(candidate);
+                if (candidate.equals(normalizedPhone.identity())) {
+                    continue;
+                }
+                byPhone = prospectoRepository.findFirstByTelefonoNormalizadoAndPaisCodigo(candidate, paisCodigo);
                 if (byPhone.isPresent()) {
                     break;
                 }
@@ -2155,10 +2186,11 @@ public class CrmUseCaseService {
     }
 
     private List<String> publicLeadIdentityLocks(PublicCrmLeadRequest request,
-                                                 LandingLeadContext leadContext) {
+                                                 LandingLeadContext leadContext,
+                                                 String paisCodigo) {
         String policy = duplicatePolicy(leadContext);
         List<String> keys = new ArrayList<>();
-        String phone = phoneNormalizationService.normalize(request.telefono()).identity();
+        String phone = phoneNormalizationService.normalize(request.telefono(), paisCodigo).identity();
         String email = normalizeEmail(request.correo());
         if (policyUsesPhone(policy) && phone != null) {
             keys.add("crm-lead:phone:" + phone);
@@ -2185,7 +2217,9 @@ public class CrmUseCaseService {
         return "CORREO".equals(policy) || "TELEFONO_CORREO".equals(policy);
     }
 
-    private void mergeMissingPublicContactFields(CrmProspecto prospecto, PublicCrmLeadRequest request) {
+    private void mergeMissingPublicContactFields(CrmProspecto prospecto,
+                                                 PublicCrmLeadRequest request,
+                                                 String paisCodigo) {
         if (!hasText(prospecto.getTipoPersona()) || "SIN_DEFINIR".equals(prospecto.getTipoPersona())) {
             String incomingType = resolvePublicPersonType(request);
             if (!"SIN_DEFINIR".equals(incomingType)) {
@@ -2193,7 +2227,10 @@ public class CrmUseCaseService {
             }
         }
         if (!hasText(prospecto.getTelefono())) {
-            prospecto.setTelefono(trim(request.telefono()));
+            prospecto.setTelefono(normalizeProspectPhone(request.telefono(), paisCodigo));
+        }
+        if (!hasText(prospecto.getPaisCodigo())) {
+            prospecto.setPaisCodigo(paisCodigo);
         }
         if (!hasText(prospecto.getCorreo())) {
             prospecto.setCorreo(trim(request.correo()));
@@ -2645,6 +2682,50 @@ public class CrmUseCaseService {
         return required(value, "Campo CRM obligatorio").toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeCurrency(String value) {
+        String normalized = firstNonBlank(value, currentTenantBaseCurrency()).toUpperCase(Locale.ROOT);
+        try {
+            Currency.getInstance(normalized);
+            return normalized;
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException("CRM_MONEDA_INVALIDA", "Selecciona una moneda ISO valida");
+        }
+    }
+
+    private String requireEnabledQuoteCurrency(String value) {
+        return requireEnabledCommercialCurrency(value, "cotización");
+    }
+
+    private String requireEnabledCommercialCurrency(String value, String operation) {
+        String currency = normalizeCurrency(value);
+        String baseCurrency = currentTenantBaseCurrency().toUpperCase(Locale.ROOT);
+        if (currency.equals(baseCurrency)) {
+            return currency;
+        }
+        CrmCurrencyConfig config = currencyConfigRepository.findByMoneda(currency)
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_MONEDA_NO_CONFIGURADA",
+                        "Configura el tipo de cambio de " + currency + " antes de continuar con " + operation));
+        if (!config.isActivo()) {
+            throw new BusinessException(
+                    "CRM_MONEDA_INACTIVA",
+                    "La moneda " + currency + " no está disponible para nuevos productos ni cotizaciones");
+        }
+        if (config.getTipoCambioBase() == null || config.getTipoCambioBase().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(
+                    "CRM_TIPO_CAMBIO_INVALIDO",
+                    "Configura un tipo de cambio válido para " + currency);
+        }
+        return currency;
+    }
+
+    private String currentTenantBaseCurrency() {
+        return empresaRepository.findByTenantId(TenantContext.getTenantId())
+                .map(empresa -> trim(empresa.getMonedaCodigo()))
+                .filter(value -> value != null)
+                .orElse("PEN");
+    }
+
     private String normalizeCode(String value) {
         return normalize(value).replaceAll("[^A-Z0-9_]", "_");
     }
@@ -2659,6 +2740,10 @@ public class CrmUseCaseService {
             throw new BusinessException("PAIS_CRM_INVALIDO", "El país del prospecto debe usar un código ISO de dos letras");
         }
         return normalized;
+    }
+
+    private String normalizeProspectPhone(String value, String paisCodigo) {
+        return phoneNormalizationService.normalize(value, paisCodigo).identity();
     }
 
     private String trim(String value) {
@@ -2753,12 +2838,12 @@ public class CrmUseCaseService {
             config.setSimbolo("€");
             config.setTipoCambioBase(new BigDecimal("4.100000"));
         } else {
-            config.setNombre("Dolar americano");
+            config.setNombre("Dólar americano");
             config.setSimbolo("$");
             config.setTipoCambioBase(new BigDecimal("3.800000"));
         }
         config.setMargenConversionPorcentaje(BigDecimal.ZERO);
-        config.setActivo(true);
+        config.setActivo(false);
         return config;
     }
 
@@ -2931,7 +3016,7 @@ public class CrmUseCaseService {
 
     private String publicLeadMetadata(PublicCrmLeadRequest request, CrmCatalogoItem catalogoItem, LandingLeadContext leadContext) {
         return """
-                {"source":"public-crm-lead","landingKey":"%s","modoProducto":"%s","productoPendiente":%s,"catalogoItemId":%s,"catalogoTokenValidado":%s,"tipoItem":"%s","oferta":"%s","precioReferencial":"%s","landingUrl":"%s","campania":"%s","payloadCliente":"%s","catalogoMetadata":"%s"}
+                {"source":"public-crm-lead","landingKey":"%s","modoProducto":"%s","productoPendiente":%s,"catalogoItemId":%s,"catalogoTokenValidado":%s,"tipoItem":"%s","oferta":"%s","precioReferencial":"%s","moneda":"%s","landingUrl":"%s","campania":"%s","payloadCliente":"%s","catalogoMetadata":"%s"}
                 """.formatted(
                 json(request.landingKey()),
                 leadContext.landingConfig() == null || leadContext.landingConfig().getModoProducto() == null ? "CATALOGO_TOKEN" : leadContext.landingConfig().getModoProducto().name(),
@@ -2941,6 +3026,7 @@ public class CrmUseCaseService {
                 catalogoItem == null ? "" : json(catalogoItem.getTipoItem()),
                 catalogoItem == null ? "" : json(catalogoItem.getNombre()),
                 catalogoItem == null || catalogoItem.getPrecioReferencial() == null ? "0.00" : catalogoItem.getPrecioReferencial().toPlainString(),
+                catalogoItem == null ? "" : json(catalogoItem.getMoneda()),
                 json(request.landingUrl()),
                 json(leadContext.campania()),
                 json(request.metadataJson()),

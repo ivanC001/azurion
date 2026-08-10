@@ -35,4 +35,18 @@ class CrmPhoneNormalizationServiceTest {
         assertEquals(local.identity(), international.identity());
         assertTrue(international.lookupCandidates().contains("999999999"));
     }
+
+    @Test
+    void usaElPaisDelProspectoAntesQueElPaisDelTenant() {
+        EmpresaRepository empresaRepository = mock(EmpresaRepository.class);
+        Empresa empresa = new Empresa();
+        empresa.setPaisCodigo("PE");
+        TenantContext.setTenantId("empresa_demo");
+        when(empresaRepository.findByTenantId("empresa_demo")).thenReturn(Optional.of(empresa));
+        CrmPhoneNormalizationService service = new CrmPhoneNormalizationService(empresaRepository);
+
+        var mexicanPhone = service.normalize("55 1234 5678", "MX");
+
+        assertEquals("525512345678", mexicanPhone.identity());
+    }
 }

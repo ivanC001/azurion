@@ -8,6 +8,7 @@ public record PublicCrmCatalogoItemResponse(
         String nombre,
         String descripcion,
         BigDecimal precioReferencial,
+        String moneda,
         String metadataJson
 ) {
 }

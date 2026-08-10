@@ -192,6 +192,7 @@ public final class CrmMapper {
                 item.getNombre(),
                 item.getDescripcion(),
                 item.getPrecioReferencial(),
+                item.getMoneda(),
                 item.getEstado(),
                 item.getMetadataJson(),
                 item.getPublicToken(),

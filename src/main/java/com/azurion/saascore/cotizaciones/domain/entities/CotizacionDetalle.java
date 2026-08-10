@@ -30,6 +30,27 @@ public class CotizacionDetalle extends BaseEntity {
     @JoinColumn(name = "promocion_id")
     private PromocionCotizacion promocion;
 
+    @Column(name = "crm_catalogo_item_id")
+    private Long catalogoItemId;
+
+    @Column(name = "catalogo_tipo_item", length = 30)
+    private String catalogoTipoItem;
+
+    @Column(name = "catalogo_nombre", length = 220)
+    private String catalogoNombre;
+
+    @Column(name = "catalogo_descripcion", length = 1500)
+    private String catalogoDescripcion;
+
+    @Column(name = "catalogo_metadata_json", columnDefinition = "TEXT")
+    private String catalogoMetadataJson;
+
+    @Column(name = "catalogo_moneda", length = 3)
+    private String catalogoMoneda;
+
+    @Column(name = "catalogo_precio_referencial", precision = 18, scale = 2)
+    private BigDecimal catalogoPrecioReferencial;
+
     @Column(name = "descripcion", length = 500)
     private String descripcion;
 

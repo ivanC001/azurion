@@ -26,6 +26,9 @@ public class CrmCatalogoItem extends BaseEntity {
     @Column(name = "precio_referencial", nullable = false, precision = 18, scale = 2)
     private BigDecimal precioReferencial = BigDecimal.ZERO;
 
+    @Column(name = "moneda", nullable = false, length = 3)
+    private String moneda = "PEN";
+
     @Column(name = "estado", nullable = false, length = 30)
     private String estado = "ACTIVO";
 
