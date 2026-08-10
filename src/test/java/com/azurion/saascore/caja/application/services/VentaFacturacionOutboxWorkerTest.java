@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.azurion.saascore.caja.application.usecases.ProcessVentaFacturacionAsyncUseCase;
+import com.azurion.saascore.caja.application.events.VentaFacturacionQueuedEvent;
 import com.azurion.saascore.caja.domain.entities.VentaFacturacionOutbox;
 import com.azurion.saascore.caja.domain.repositories.VentaFacturacionOutboxRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,6 +101,20 @@ class VentaFacturacionOutboxWorkerTest {
                 eq("error definitivo"),
                 any(LocalDateTime.class)
         );
+    }
+
+    @Test
+    void processesANewJobImmediatelyWithoutWaitingForTheScheduledPoll() {
+        VentaFacturacionOutbox job = job(1);
+        when(repository.claim(eq(job.getId()), anyString(), any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(1);
+        when(repository.findByIdAndStatusAndLeaseOwner(eq(job.getId()), eq("PROCESSING"), anyString())).thenReturn(Optional.of(job));
+        when(repository.markCompleted(eq(job.getId()), anyString(), any(LocalDateTime.class))).thenReturn(1);
+
+        worker.onQueued(new VentaFacturacionQueuedEvent(job.getId()));
+
+        verify(processUseCase).execute(any());
+        verify(repository).markCompleted(eq(job.getId()), anyString(), any(LocalDateTime.class));
+        verify(repository, never()).findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByIdAsc(any(), any());
     }
 
     @Test

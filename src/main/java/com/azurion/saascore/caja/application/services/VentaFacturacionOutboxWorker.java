@@ -1,6 +1,7 @@
 package com.azurion.saascore.caja.application.services;
 
 import com.azurion.saascore.caja.application.dto.VentaFacturacionAsyncTask;
+import com.azurion.saascore.caja.application.events.VentaFacturacionQueuedEvent;
 import com.azurion.saascore.caja.application.usecases.ProcessVentaFacturacionAsyncUseCase;
 import com.azurion.saascore.caja.domain.entities.VentaFacturacionOutbox;
 import com.azurion.saascore.caja.domain.repositories.VentaFacturacionOutboxRepository;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -58,12 +60,22 @@ public class VentaFacturacionOutboxWorker {
         outboxRepository.recoverExpiredLeases(now);
         for (VentaFacturacionOutbox candidate : outboxRepository
                 .findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByIdAsc(List.of("PENDING", "RETRY"), now)) {
-            if (outboxRepository.claim(candidate.getId(), workerId, now, now.plus(LEASE_DURATION)) != 1) {
-                continue;
-            }
-            outboxRepository.findByIdAndStatusAndLeaseOwner(candidate.getId(), "PROCESSING", workerId)
-                    .ifPresent(this::submit);
+            claimAndSubmit(candidate.getId());
         }
+    }
+
+    @EventListener
+    public void onQueued(VentaFacturacionQueuedEvent event) {
+        claimAndSubmit(event.outboxId());
+    }
+
+    private void claimAndSubmit(Long outboxId) {
+        LocalDateTime now = LocalDateTime.now();
+        if (outboxRepository.claim(outboxId, workerId, now, now.plus(LEASE_DURATION)) != 1) {
+            return;
+        }
+        outboxRepository.findByIdAndStatusAndLeaseOwner(outboxId, "PROCESSING", workerId)
+                .ifPresent(this::submit);
     }
 
     @Scheduled(cron = "${azurion.facturador.outbox.cleanup-cron:0 30 3 * * *}")
