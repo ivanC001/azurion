@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 
 import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.clientes.application.dto.ClienteResponse;
@@ -16,6 +17,8 @@ import com.azurion.saascore.clientes.domain.entities.Cliente;
 import com.azurion.saascore.clientes.domain.repositories.ClienteRepository;
 import com.azurion.saascore.cotizaciones.application.usecases.CreateCotizacionUseCase;
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
+import com.azurion.saascore.crm.application.support.CrmAccessPolicy;
+import com.azurion.saascore.crm.application.support.CrmCurrencyConverter;
 import com.azurion.saascore.crm.application.dto.CreateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.CreateCrmCatalogoItemRequest;
@@ -52,6 +55,8 @@ import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepos
 import com.azurion.saascore.empresas.domain.entities.Empresa;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.util.List;
@@ -145,10 +150,38 @@ class CrmUseCaseServiceTest {
     @Mock
     EmpresaRepository empresaRepository;
 
+    @Mock
+    UsuarioTenantRepository usuarioTenantRepository;
+
     CrmUseCaseService service;
 
     @BeforeEach
     void setUp() {
+        // Los colaboradores extraidos se construyen de verdad sobre los mismos
+        // mocks: asi estas pruebas siguen ejercitando el comportamiento real a
+        // traves de la fachada, no una version simulada de el.
+        CrmAccessPolicy accessPolicy = new CrmAccessPolicy(authorizationService);
+        CrmCurrencyConverter currencyConverter = new CrmCurrencyConverter(
+                currencyConfigRepository,
+                empresaRepository
+        );
+        CrmConfiguracionUseCase configuracionUseCase = new CrmConfiguracionUseCase(
+                currencyConfigRepository,
+                canalTokenConfigRepository,
+                oportunidadRepository,
+                cotizacionRepository,
+                crmSecretEncryptionService
+        );
+        CrmReporteUseCase reporteUseCase = new CrmReporteUseCase(
+                prospectoRepository,
+                oportunidadRepository,
+                actividadRepository,
+                etapaPipelineRepository,
+                usuarioTenantRepository,
+                accessPolicy,
+                currencyConverter
+        );
+
         service = new CrmUseCaseService(
                 prospectoRepository,
                 catalogoItemRepository,
@@ -161,18 +194,19 @@ class CrmUseCaseServiceTest {
                 createClienteUseCase,
                 createCotizacionUseCase,
                 cotizacionRepository,
-                authorizationService,
-                canalTokenConfigRepository,
-                currencyConfigRepository,
                 landingLeadValidationService,
                 prospectoInteresRepository,
-                crmSecretEncryptionService,
                 leadAssignmentService,
                 publicLeadSubmissionRepository,
                 ingressLockService,
                 phoneNormalizationService,
                 emailSenderService,
-                empresaRepository
+                empresaRepository,
+                usuarioTenantRepository,
+                configuracionUseCase,
+                reporteUseCase,
+                accessPolicy,
+                currencyConverter
         );
         org.mockito.Mockito.lenient().when(phoneNormalizationService.resolveCountryCode(any()))
                 .thenReturn("PE");
@@ -185,6 +219,22 @@ class CrmUseCaseServiceTest {
                             digits == null || digits.isBlank() ? List.of() : List.of(digits)
                     );
                 });
+    }
+
+    @Test
+    void reporteResponsablesExponeNombreCompletoEnLugarDelId() {
+        UsuarioTenant usuario = new UsuarioTenant();
+        usuario.setId(4L);
+        usuario.setUsername("vendedor1");
+        usuario.setNombres("Rosa Maria");
+        usuario.setApellidos("Perez Soto");
+        when(usuarioTenantRepository.findAllByOrderByNombresAsc()).thenReturn(List.of(usuario));
+
+        var responsables = service.reporteResponsables();
+
+        assertEquals(1, responsables.size());
+        assertEquals("4", responsables.getFirst().id());
+        assertEquals("Rosa Maria Perez Soto", responsables.getFirst().nombre());
     }
 
     @AfterEach
@@ -578,18 +628,62 @@ class CrmUseCaseServiceTest {
         CrmEtapaPipeline perdido = etapa(5L, "PERDIDO", 5, false, true);
 
         CrmOportunidad abierta = oportunidad(10L, interesado, "ABIERTA");
-        CrmOportunidad cerrada = oportunidad(11L, ganado, "GANADA");
         when(etapaPipelineRepository.findByActivoTrueOrderByOrdenAscIdAsc())
                 .thenReturn(List.of(interesado, cotizado, negociacion, ganado, perdido));
-        when(oportunidadRepository.findAllByOrderByIdDesc()).thenReturn(List.of(abierta, cerrada));
+        when(oportunidadRepository.summarizeBoardByStage("ABIERTA", null, List.of(1L, 2L, 3L)))
+                .thenReturn(List.of(stageTotals(1L, 1L, new BigDecimal("450.00"))));
+        when(oportunidadRepository.findBoardCardsByStage(
+                org.mockito.ArgumentMatchers.eq("ABIERTA"),
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.isNull(),
+                any()))
+                .thenReturn(List.of(abierta));
 
         var pipeline = service.pipeline();
 
         assertEquals(List.of("INTERESADO", "COTIZADO", "NEGOCIACION"),
                 pipeline.stream().map(column -> column.etapa().codigo()).toList());
         assertEquals(1, pipeline.getFirst().cantidad());
+        assertEquals(new BigDecimal("450.00"), pipeline.getFirst().monto());
         assertEquals(0, pipeline.get(1).cantidad());
         assertEquals(0, pipeline.get(2).cantidad());
+    }
+
+    @Test
+    void pipelineNoCargaTodasLasOportunidadesDelTenant() {
+        authenticate("CRM_VIEW_ALL");
+        CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
+        when(etapaPipelineRepository.findByActivoTrueOrderByOrdenAscIdAsc())
+                .thenReturn(List.of(interesado));
+        when(oportunidadRepository.summarizeBoardByStage("ABIERTA", null, List.of(1L)))
+                .thenReturn(List.of(stageTotals(1L, 0L, BigDecimal.ZERO)));
+
+        service.pipeline();
+
+        // El coste del tablero debe depender de lo que muestra, no del historico.
+        verify(oportunidadRepository, never()).findAllByOrderByIdDesc();
+        // Una columna vacia no necesita pedir tarjetas.
+        verify(oportunidadRepository, never()).findBoardCardsByStage(
+                anyString(), org.mockito.ArgumentMatchers.anyLong(), any(), any());
+    }
+
+    private CrmOportunidadRepository.StageBoardTotalsProjection stageTotals(Long etapaId, long cantidad, BigDecimal monto) {
+        return new CrmOportunidadRepository.StageBoardTotalsProjection() {
+            @Override
+            public Long getEtapaId() {
+                return etapaId;
+            }
+
+            @Override
+            public long getCantidad() {
+                return cantidad;
+            }
+
+            @Override
+            public BigDecimal getMonto() {
+                return monto;
+            }
+        };
     }
 
     @Test
@@ -645,6 +739,7 @@ class CrmUseCaseServiceTest {
         catalogo.setTipoItem("SERVICIO");
         catalogo.setNombre("Implementacion CRM");
         catalogo.setPrecioReferencial(BigDecimal.valueOf(450));
+        catalogo.setMoneda("USD");
         catalogo.setEstado("ACTIVO");
         CrmEtapaPipeline interesado = etapa(1L, "INTERESADO", 1, false, false);
         interesado.setProbabilidadDefault(30);
@@ -657,7 +752,7 @@ class CrmUseCaseServiceTest {
             return saved;
         });
 
-        service.createOportunidad(new CreateCrmOportunidadRequest(
+        var response = service.createOportunidad(new CreateCrmOportunidadRequest(
                 null,
                 8L,
                 "SERVICIO",
@@ -678,6 +773,8 @@ class CrmUseCaseServiceTest {
         assertEquals("Llamada inicial", activityCaptor.getValue().getAsunto());
         assertEquals("PENDIENTE", activityCaptor.getValue().getEstado());
         assertEquals(71L, activityCaptor.getValue().getOportunidad().getId());
+        verify(oportunidadRepository).save(argThat(saved -> "USD".equals(saved.getMoneda())));
+        assertEquals("USD", response.moneda());
     }
 
     @Test

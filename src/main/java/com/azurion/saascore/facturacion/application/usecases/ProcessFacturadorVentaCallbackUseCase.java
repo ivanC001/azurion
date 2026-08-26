@@ -26,8 +26,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ProcessFacturadorVentaCallbackUseCase {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProcessFacturadorVentaCallbackUseCase.class);
 
     private final EmpresaRepository empresaRepository;
     private final VentaRepository ventaRepository;

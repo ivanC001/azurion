@@ -25,4 +25,28 @@ public class CrmWhatsappConversationNote extends BaseEntity {
 
     @Column(name = "contenido", nullable = false, columnDefinition = "TEXT")
     private String contenido;
+
+    public CrmWhatsappConversation getConversation() {
+        return conversation;
+    }
+
+    public void setConversation(CrmWhatsappConversation conversation) {
+        this.conversation = conversation;
+    }
+
+    public Integer getSlot() {
+        return slot;
+    }
+
+    public void setSlot(Integer slot) {
+        this.slot = slot;
+    }
+
+    public String getContenido() {
+        return contenido;
+    }
+
+    public void setContenido(String contenido) {
+        this.contenido = contenido;
+    }
 }

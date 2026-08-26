@@ -38,4 +38,44 @@ public class InventoryOperationRequest extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "kardex_movimiento_id", nullable = false)
     private KardexMovimiento kardexMovimiento;
+
+    public String getOperationKey() {
+        return operationKey;
+    }
+
+    public void setOperationKey(String operationKey) {
+        this.operationKey = operationKey;
+    }
+
+    public String getOperationType() {
+        return operationType;
+    }
+
+    public void setOperationType(String operationType) {
+        this.operationType = operationType;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public KardexMovimiento getKardexMovimiento() {
+        return kardexMovimiento;
+    }
+
+    public void setKardexMovimiento(KardexMovimiento kardexMovimiento) {
+        this.kardexMovimiento = kardexMovimiento;
+    }
 }

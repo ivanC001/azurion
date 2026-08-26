@@ -110,4 +110,236 @@ public class Producto extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getSku() {
+        return sku;
+    }
+
+    public void setSku(String sku) {
+        this.sku = sku;
+    }
+
+    public String getCodigo() {
+        return codigo;
+    }
+
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
+    }
+
+    public String getCodigoBarras() {
+        return codigoBarras;
+    }
+
+    public void setCodigoBarras(String codigoBarras) {
+        this.codigoBarras = codigoBarras;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public BigDecimal getPrecio() {
+        return precio;
+    }
+
+    public void setPrecio(BigDecimal precio) {
+        this.precio = precio;
+    }
+
+    public Categoria getCategoria() {
+        return categoria;
+    }
+
+    public void setCategoria(Categoria categoria) {
+        this.categoria = categoria;
+    }
+
+    public Marca getMarca() {
+        return marca;
+    }
+
+    public void setMarca(Marca marca) {
+        this.marca = marca;
+    }
+
+    public UnidadMedida getUnidadMedida() {
+        return unidadMedida;
+    }
+
+    public void setUnidadMedida(UnidadMedida unidadMedida) {
+        this.unidadMedida = unidadMedida;
+    }
+
+    public Almacen getAlmacen() {
+        return almacen;
+    }
+
+    public void setAlmacen(Almacen almacen) {
+        this.almacen = almacen;
+    }
+
+    public String getTipoProducto() {
+        return tipoProducto;
+    }
+
+    public void setTipoProducto(String tipoProducto) {
+        this.tipoProducto = tipoProducto;
+    }
+
+    public String getImagenUrl() {
+        return imagenUrl;
+    }
+
+    public void setImagenUrl(String imagenUrl) {
+        this.imagenUrl = imagenUrl;
+    }
+
+    public BigDecimal getPrecioCompraBase() {
+        return precioCompraBase;
+    }
+
+    public void setPrecioCompraBase(BigDecimal precioCompraBase) {
+        this.precioCompraBase = precioCompraBase;
+    }
+
+    public BigDecimal getPrecioVentaBase() {
+        return precioVentaBase;
+    }
+
+    public void setPrecioVentaBase(BigDecimal precioVentaBase) {
+        this.precioVentaBase = precioVentaBase;
+    }
+
+    public String getPrecioVentaModo() {
+        return precioVentaModo;
+    }
+
+    public void setPrecioVentaModo(String precioVentaModo) {
+        this.precioVentaModo = precioVentaModo;
+    }
+
+    public BigDecimal getCostoPromedio() {
+        return costoPromedio;
+    }
+
+    public void setCostoPromedio(BigDecimal costoPromedio) {
+        this.costoPromedio = costoPromedio;
+    }
+
+    public boolean isAfectoIgv() {
+        return afectoIgv;
+    }
+
+    public void setAfectoIgv(boolean afectoIgv) {
+        this.afectoIgv = afectoIgv;
+    }
+
+    public String getTipoAfectacionIgvId() {
+        return tipoAfectacionIgvId;
+    }
+
+    public void setTipoAfectacionIgvId(String tipoAfectacionIgvId) {
+        this.tipoAfectacionIgvId = tipoAfectacionIgvId;
+    }
+
+    public String getTributoId() {
+        return tributoId;
+    }
+
+    public void setTributoId(String tributoId) {
+        this.tributoId = tributoId;
+    }
+
+    public BigDecimal getPorcentajeImpuesto() {
+        return porcentajeImpuesto;
+    }
+
+    public void setPorcentajeImpuesto(BigDecimal porcentajeImpuesto) {
+        this.porcentajeImpuesto = porcentajeImpuesto;
+    }
+
+    public boolean isUsaConfiguracionEmpresa() {
+        return usaConfiguracionEmpresa;
+    }
+
+    public void setUsaConfiguracionEmpresa(boolean usaConfiguracionEmpresa) {
+        this.usaConfiguracionEmpresa = usaConfiguracionEmpresa;
+    }
+
+    public boolean isManejaStock() {
+        return manejaStock;
+    }
+
+    public void setManejaStock(boolean manejaStock) {
+        this.manejaStock = manejaStock;
+    }
+
+    public boolean isManejaLotes() {
+        return manejaLotes;
+    }
+
+    public void setManejaLotes(boolean manejaLotes) {
+        this.manejaLotes = manejaLotes;
+    }
+
+    public boolean isManejaVencimiento() {
+        return manejaVencimiento;
+    }
+
+    public void setManejaVencimiento(boolean manejaVencimiento) {
+        this.manejaVencimiento = manejaVencimiento;
+    }
+
+    public BigDecimal getStockMinimoGlobal() {
+        return stockMinimoGlobal;
+    }
+
+    public void setStockMinimoGlobal(BigDecimal stockMinimoGlobal) {
+        this.stockMinimoGlobal = stockMinimoGlobal;
+    }
+
+    public BigDecimal getStockMinimo() {
+        return stockMinimo;
+    }
+
+    public void setStockMinimo(BigDecimal stockMinimo) {
+        this.stockMinimo = stockMinimo;
+    }
+
+    public String getFoto() {
+        return foto;
+    }
+
+    public void setFoto(String foto) {
+        this.foto = foto;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

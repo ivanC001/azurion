@@ -59,4 +59,116 @@ public class TenantEmailConfig extends BaseEntity {
 
     @Column(name = "ultimo_error", length = 1000)
     private String ultimoError;
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getNombreRemitente() {
+        return nombreRemitente;
+    }
+
+    public void setNombreRemitente(String nombreRemitente) {
+        this.nombreRemitente = nombreRemitente;
+    }
+
+    public String getCorreoRemitente() {
+        return correoRemitente;
+    }
+
+    public void setCorreoRemitente(String correoRemitente) {
+        this.correoRemitente = correoRemitente;
+    }
+
+    public String getReplyTo() {
+        return replyTo;
+    }
+
+    public void setReplyTo(String replyTo) {
+        this.replyTo = replyTo;
+    }
+
+    public String getSmtpHost() {
+        return smtpHost;
+    }
+
+    public void setSmtpHost(String smtpHost) {
+        this.smtpHost = smtpHost;
+    }
+
+    public Integer getSmtpPort() {
+        return smtpPort;
+    }
+
+    public void setSmtpPort(Integer smtpPort) {
+        this.smtpPort = smtpPort;
+    }
+
+    public SmtpSecurity getSmtpSecurity() {
+        return smtpSecurity;
+    }
+
+    public void setSmtpSecurity(SmtpSecurity smtpSecurity) {
+        this.smtpSecurity = smtpSecurity;
+    }
+
+    public String getSmtpUsername() {
+        return smtpUsername;
+    }
+
+    public void setSmtpUsername(String smtpUsername) {
+        this.smtpUsername = smtpUsername;
+    }
+
+    public String getSmtpPasswordEncrypted() {
+        return smtpPasswordEncrypted;
+    }
+
+    public void setSmtpPasswordEncrypted(String smtpPasswordEncrypted) {
+        this.smtpPasswordEncrypted = smtpPasswordEncrypted;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    public boolean isVerificado() {
+        return verificado;
+    }
+
+    public void setVerificado(boolean verificado) {
+        this.verificado = verificado;
+    }
+
+    public TenantEmailConfigStatus getEstado() {
+        return estado;
+    }
+
+    public void setEstado(TenantEmailConfigStatus estado) {
+        this.estado = estado;
+    }
+
+    public LocalDateTime getFechaVerificacion() {
+        return fechaVerificacion;
+    }
+
+    public void setFechaVerificacion(LocalDateTime fechaVerificacion) {
+        this.fechaVerificacion = fechaVerificacion;
+    }
+
+    public String getUltimoError() {
+        return ultimoError;
+    }
+
+    public void setUltimoError(String ultimoError) {
+        this.ultimoError = ultimoError;
+    }
 }

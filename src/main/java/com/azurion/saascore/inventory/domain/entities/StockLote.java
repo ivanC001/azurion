@@ -38,4 +38,44 @@ public class StockLote extends BaseEntity {
 
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "ACTIVO";
+
+    public Lote getLote() {
+        return lote;
+    }
+
+    public void setLote(Lote lote) {
+        this.lote = lote;
+    }
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public Almacen getAlmacen() {
+        return almacen;
+    }
+
+    public void setAlmacen(Almacen almacen) {
+        this.almacen = almacen;
+    }
+
+    public BigDecimal getStockActual() {
+        return stockActual;
+    }
+
+    public void setStockActual(BigDecimal stockActual) {
+        this.stockActual = stockActual;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
 }

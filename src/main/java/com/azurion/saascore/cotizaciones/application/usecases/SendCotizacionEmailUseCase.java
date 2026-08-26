@@ -12,6 +12,7 @@ import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepositor
 import com.azurion.saascore.settings.email.application.services.EmailAttachment;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.money.CurrencyCatalog;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -128,7 +129,8 @@ public class SendCotizacionEmailUseCase {
         String nombre = hasText(cliente.nombre()) ? cliente.nombre().trim() : "cliente";
         return "Hola " + nombre + ",\n\n"
                 + "Adjuntamos la cotizacion COT-" + String.format("%03d", cotizacion.getId())
-                + " por un total de S/ " + money(cotizacion.getTotal()) + ".\n\n"
+                + " por un total de " + CurrencyCatalog.symbol(cotizacion.getMoneda()) + " "
+                + money(cotizacion.getTotal()) + " " + cotizacion.getMoneda() + ".\n\n"
                 + "Quedamos atentos a tus comentarios.\n";
     }
 

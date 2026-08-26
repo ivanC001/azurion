@@ -62,4 +62,116 @@ public class CrmActividad extends BaseEntity {
 
     @Column(name = "estado_prospecto_resultado", length = 30)
     private String estadoProspectoResultado;
+
+    public CrmProspecto getProspecto() {
+        return prospecto;
+    }
+
+    public void setProspecto(CrmProspecto prospecto) {
+        this.prospecto = prospecto;
+    }
+
+    public CrmOportunidad getOportunidad() {
+        return oportunidad;
+    }
+
+    public void setOportunidad(CrmOportunidad oportunidad) {
+        this.oportunidad = oportunidad;
+    }
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public String getTipoActividad() {
+        return tipoActividad;
+    }
+
+    public void setTipoActividad(String tipoActividad) {
+        this.tipoActividad = tipoActividad;
+    }
+
+    public String getAsunto() {
+        return asunto;
+    }
+
+    public void setAsunto(String asunto) {
+        this.asunto = asunto;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public OffsetDateTime getFechaProgramada() {
+        return fechaProgramada;
+    }
+
+    public void setFechaProgramada(OffsetDateTime fechaProgramada) {
+        this.fechaProgramada = fechaProgramada;
+    }
+
+    public OffsetDateTime getFechaRealizada() {
+        return fechaRealizada;
+    }
+
+    public void setFechaRealizada(OffsetDateTime fechaRealizada) {
+        this.fechaRealizada = fechaRealizada;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public String getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(String usuarioId) {
+        this.usuarioId = usuarioId;
+    }
+
+    public String getResultado() {
+        return resultado;
+    }
+
+    public void setResultado(String resultado) {
+        this.resultado = resultado;
+    }
+
+    public String getResultadoContacto() {
+        return resultadoContacto;
+    }
+
+    public void setResultadoContacto(String resultadoContacto) {
+        this.resultadoContacto = resultadoContacto;
+    }
+
+    public String getNivelInteres() {
+        return nivelInteres;
+    }
+
+    public void setNivelInteres(String nivelInteres) {
+        this.nivelInteres = nivelInteres;
+    }
+
+    public String getEstadoProspectoResultado() {
+        return estadoProspectoResultado;
+    }
+
+    public void setEstadoProspectoResultado(String estadoProspectoResultado) {
+        this.estadoProspectoResultado = estadoProspectoResultado;
+    }
 }

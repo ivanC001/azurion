@@ -17,11 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DispatchVentaFacturacionAsyncUseCase {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DispatchVentaFacturacionAsyncUseCase.class);
     private final VentaFacturacionOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;

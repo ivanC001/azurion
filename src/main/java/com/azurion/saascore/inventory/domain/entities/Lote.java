@@ -52,4 +52,84 @@ public class Lote extends BaseEntity {
 
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "ACTIVO";
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public CompraDetalle getCompraDetalle() {
+        return compraDetalle;
+    }
+
+    public void setCompraDetalle(CompraDetalle compraDetalle) {
+        this.compraDetalle = compraDetalle;
+    }
+
+    public String getCodigoLote() {
+        return codigoLote;
+    }
+
+    public void setCodigoLote(String codigoLote) {
+        this.codigoLote = codigoLote;
+    }
+
+    public LocalDate getFechaFabricacion() {
+        return fechaFabricacion;
+    }
+
+    public void setFechaFabricacion(LocalDate fechaFabricacion) {
+        this.fechaFabricacion = fechaFabricacion;
+    }
+
+    public LocalDate getFechaIngreso() {
+        return fechaIngreso;
+    }
+
+    public void setFechaIngreso(LocalDate fechaIngreso) {
+        this.fechaIngreso = fechaIngreso;
+    }
+
+    public LocalDate getFechaVencimiento() {
+        return fechaVencimiento;
+    }
+
+    public void setFechaVencimiento(LocalDate fechaVencimiento) {
+        this.fechaVencimiento = fechaVencimiento;
+    }
+
+    public Long getProveedorId() {
+        return proveedorId;
+    }
+
+    public void setProveedorId(Long proveedorId) {
+        this.proveedorId = proveedorId;
+    }
+
+    public BigDecimal getCantidadInicial() {
+        return cantidadInicial;
+    }
+
+    public void setCantidadInicial(BigDecimal cantidadInicial) {
+        this.cantidadInicial = cantidadInicial;
+    }
+
+    public BigDecimal getCostoUnitario() {
+        return costoUnitario;
+    }
+
+    public void setCostoUnitario(BigDecimal costoUnitario) {
+        this.costoUnitario = costoUnitario;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
 }

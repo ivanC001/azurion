@@ -47,4 +47,84 @@ public class PlatformMessage extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getAsunto() {
+        return asunto;
+    }
+
+    public void setAsunto(String asunto) {
+        this.asunto = asunto;
+    }
+
+    public String getContenido() {
+        return contenido;
+    }
+
+    public void setContenido(String contenido) {
+        this.contenido = contenido;
+    }
+
+    public MessagePriority getPrioridad() {
+        return prioridad;
+    }
+
+    public void setPrioridad(MessagePriority prioridad) {
+        this.prioridad = prioridad;
+    }
+
+    public MessageAudience getAudiencia() {
+        return audiencia;
+    }
+
+    public void setAudiencia(MessageAudience audiencia) {
+        this.audiencia = audiencia;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public Long getEnviadoPorUsuarioId() {
+        return enviadoPorUsuarioId;
+    }
+
+    public void setEnviadoPorUsuarioId(Long enviadoPorUsuarioId) {
+        this.enviadoPorUsuarioId = enviadoPorUsuarioId;
+    }
+
+    public String getEnviadoPorUsername() {
+        return enviadoPorUsername;
+    }
+
+    public void setEnviadoPorUsername(String enviadoPorUsername) {
+        this.enviadoPorUsername = enviadoPorUsername;
+    }
+
+    public LocalDateTime getPublicadoEn() {
+        return publicadoEn;
+    }
+
+    public void setPublicadoEn(LocalDateTime publicadoEn) {
+        this.publicadoEn = publicadoEn;
+    }
+
+    public LocalDateTime getExpiraEn() {
+        return expiraEn;
+    }
+
+    public void setExpiraEn(LocalDateTime expiraEn) {
+        this.expiraEn = expiraEn;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

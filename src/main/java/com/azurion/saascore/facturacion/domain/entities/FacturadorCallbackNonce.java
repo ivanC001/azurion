@@ -19,4 +19,20 @@ public class FacturadorCallbackNonce extends BaseEntity {
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    public String getNonceKeyHash() {
+        return nonceKeyHash;
+    }
+
+    public void setNonceKeyHash(String nonceKeyHash) {
+        this.nonceKeyHash = nonceKeyHash;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
 }

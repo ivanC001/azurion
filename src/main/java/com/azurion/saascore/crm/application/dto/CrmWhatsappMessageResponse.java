@@ -15,6 +15,10 @@ public record CrmWhatsappMessageResponse(
         String estado,
         OffsetDateTime mensajeEn,
         OffsetDateTime leidoEn,
+        String enviadoPorUsuarioId,
+        String enviadoPorNombre,
+        String errorCodigo,
+        String errorDetalle,
         LocalDateTime createdAt
 ) {
 }

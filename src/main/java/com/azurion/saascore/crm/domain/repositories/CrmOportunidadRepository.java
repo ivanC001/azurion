@@ -2,6 +2,7 @@ package com.azurion.saascore.crm.domain.repositories;
 
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -17,8 +18,29 @@ public interface CrmOportunidadRepository extends JpaRepository<CrmOportunidad, 
 
     interface AggregateProjection {
         String getCodigo();
+        String getMoneda();
         long getCantidad();
         BigDecimal getMonto();
+    }
+
+    interface CurrencyAmountProjection {
+        String getMoneda();
+        BigDecimal getMonto();
+    }
+
+    /** Totales de una columna del tablero, resueltos en base de datos. */
+    interface StageBoardTotalsProjection {
+        Long getEtapaId();
+        long getCantidad();
+        BigDecimal getMonto();
+    }
+
+    interface GoalAggregateProjection {
+        String getResponsableId();
+        String getMoneda();
+        long getGanadas();
+        long getCerradas();
+        BigDecimal getMontoGanado();
     }
 
     boolean existsByProspecto_Id(Long prospectoId);
@@ -51,43 +73,109 @@ public interface CrmOportunidadRepository extends JpaRepository<CrmOportunidad, 
     long countQuotedScoped(@Param("responsableId") String responsableId);
 
     @Query("""
-            select coalesce(sum(o.montoEstimado), 0)
+            select o.moneda as moneda,
+                   coalesce(sum(o.montoEstimado), 0) as monto
             from CrmOportunidad o
             where (:responsableId is null or o.responsableId = :responsableId)
               and o.estado = 'ABIERTA'
+            group by o.moneda
             """)
-    BigDecimal sumOpenPipelineScoped(@Param("responsableId") String responsableId);
+    List<CurrencyAmountProjection> sumOpenPipelineScoped(@Param("responsableId") String responsableId);
 
     @Query("""
-            select coalesce(sum(coalesce(o.montoReal, o.montoEstimado)), 0)
+            select o.moneda as moneda,
+                   coalesce(sum(coalesce(o.montoReal, o.montoEstimado)), 0) as monto
             from CrmOportunidad o
             where (:responsableId is null or o.responsableId = :responsableId)
               and o.estado = :estado
+            group by o.moneda
             """)
-    BigDecimal sumRealByEstadoScoped(@Param("responsableId") String responsableId,
-                                     @Param("estado") String estado);
+    List<CurrencyAmountProjection> sumRealByEstadoScoped(@Param("responsableId") String responsableId,
+                                                         @Param("estado") String estado);
 
     @Query("""
             select e.codigo as codigo,
+                   o.moneda as moneda,
                    count(o.id) as cantidad,
                    coalesce(sum(o.montoEstimado), 0) as monto
             from CrmOportunidad o
             join o.etapaPipeline e
             where (:responsableId is null or o.responsableId = :responsableId)
-            group by e.codigo
+            group by e.codigo, o.moneda
             """)
     List<AggregateProjection> summarizeByStageScoped(@Param("responsableId") String responsableId);
 
+    /**
+     * Cantidad e importe de cada columna del tablero.
+     *
+     * El importe replica la regla del tablero: se prefiere el monto real y, si
+     * aun no existe, el estimado.
+     */
+    @Query("""
+            select e.id as etapaId,
+                   count(o.id) as cantidad,
+                   coalesce(sum(coalesce(o.montoReal, o.montoEstimado)), 0) as monto
+            from CrmOportunidad o
+            join o.etapaPipeline e
+            where o.estado = :estado
+              and (:responsableId is null or o.responsableId = :responsableId)
+              and e.id in :etapaIds
+            group by e.id
+            """)
+    List<StageBoardTotalsProjection> summarizeBoardByStage(@Param("estado") String estado,
+                                                           @Param("responsableId") String responsableId,
+                                                           @Param("etapaIds") List<Long> etapaIds);
+
+    /**
+     * Tarjetas visibles de una columna del tablero.
+     *
+     * Se pide acotado por Pageable: un tablero muestra las mas recientes, no
+     * el historico completo de la etapa. El orden coincide con
+     * idx_crm_oportunidades_etapa_estado_updated para resolverse por indice.
+     */
+    @EntityGraph(attributePaths = {"prospecto", "cliente", "etapaPipeline"})
+    @Query("""
+            select o from CrmOportunidad o
+             where o.estado = :estado
+               and o.etapaPipeline.id = :etapaId
+               and (:responsableId is null or o.responsableId = :responsableId)
+             order by o.fechaUltimaActualizacion desc, o.id desc
+            """)
+    List<CrmOportunidad> findBoardCardsByStage(@Param("estado") String estado,
+                                               @Param("etapaId") Long etapaId,
+                                               @Param("responsableId") String responsableId,
+                                               Pageable pageable);
+
     @Query("""
             select coalesce(o.responsableId, 'SIN_ASIGNAR') as codigo,
+                   o.moneda as moneda,
                    count(o.id) as cantidad,
                    coalesce(sum(o.montoEstimado), 0) as monto
             from CrmOportunidad o
             where (:responsableId is null or o.responsableId = :responsableId)
-            group by coalesce(o.responsableId, 'SIN_ASIGNAR')
+            group by coalesce(o.responsableId, 'SIN_ASIGNAR'), o.moneda
             order by count(o.id) desc
             """)
     List<AggregateProjection> summarizeByOwnerScoped(@Param("responsableId") String responsableId);
+
+    @Query("""
+            select coalesce(o.responsableId, 'SIN_ASIGNAR') as responsableId,
+                   o.moneda as moneda,
+                   sum(case when o.estado = 'GANADA' then 1 else 0 end) as ganadas,
+                   count(o.id) as cerradas,
+                   coalesce(sum(case when o.estado = 'GANADA'
+                       then coalesce(o.montoReal, o.montoEstimado)
+                       else 0 end), 0) as montoGanado
+            from CrmOportunidad o
+            where o.estado in ('GANADA', 'PERDIDA')
+              and o.fechaCierreReal >= :desde
+              and o.fechaCierreReal < :hasta
+            group by coalesce(o.responsableId, 'SIN_ASIGNAR'), o.moneda
+            """)
+    List<GoalAggregateProjection> summarizeGoalsByOwner(
+            @Param("desde") OffsetDateTime desde,
+            @Param("hasta") OffsetDateTime hasta
+    );
 
     @Override
     @EntityGraph(attributePaths = {"prospecto", "cliente", "etapaPipeline"})

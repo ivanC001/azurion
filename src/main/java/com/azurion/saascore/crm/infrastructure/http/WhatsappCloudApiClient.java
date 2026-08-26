@@ -21,6 +21,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -28,8 +30,10 @@ import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
-@Slf4j
 public class WhatsappCloudApiClient {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WhatsappCloudApiClient.class);
+    private static final Pattern TEMPLATE_PARAMETER = Pattern.compile("\\{\\{(\\d+)}}");
 
     private final ObjectMapper objectMapper;
     private final CrmSecretEncryptionService secretEncryptionService;
@@ -111,6 +115,140 @@ public class WhatsappCloudApiClient {
             );
             throw new BusinessException("CRM_WHATSAPP_NO_DISPONIBLE", "No se pudo conectar con WhatsApp Cloud API");
         }
+    }
+
+    public List<TemplateInfo> listApprovedTemplates(CrmCanalTokenConfig config) {
+        String accessToken = secretEncryptionService.decrypt(config.getAccessToken());
+        if (!hasText(accessToken) || !hasText(config.getWabaId())) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONFIG_INCOMPLETA",
+                    "Configura el Access token y WABA ID para consultar las plantillas de WhatsApp"
+            );
+        }
+        String wabaId = validatePathSegment(config.getWabaId(), "WABA ID");
+        try {
+            HttpJsonResult result = getJson(
+                    graphBaseUrl + "/" + graphApiVersion + "/" + wabaId
+                            + "/message_templates?fields=name,status,category,language,components&limit=100",
+                    accessToken
+            );
+            if (!result.success()) {
+                throw new BusinessException(
+                        "CRM_WHATSAPP_PLANTILLAS_NO_DISPONIBLES",
+                        metaError(result.body(), "Meta no permitio consultar las plantillas aprobadas")
+                );
+            }
+            return parseApprovedTemplates(result.body());
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONSULTA_INTERRUMPIDA",
+                    "La consulta de plantillas de WhatsApp fue interrumpida"
+            );
+        } catch (Exception exception) {
+            log.warn(
+                    "No se pudieron consultar plantillas WhatsApp wabaId={} errorType={} detail={}",
+                    config.getWabaId(),
+                    exception.getClass().getSimpleName(),
+                    safeDetail(exception)
+            );
+            throw new BusinessException(
+                    "CRM_WHATSAPP_NO_DISPONIBLE",
+                    "No se pudo conectar con Meta para consultar las plantillas"
+            );
+        }
+    }
+
+    public SendResult sendTemplate(
+            CrmCanalTokenConfig config,
+            String recipient,
+            String templateName,
+            String languageCode,
+            List<String> parameters) {
+        String accessToken = secretEncryptionService.decrypt(config.getAccessToken());
+        if (!hasText(accessToken) || !hasText(config.getPhoneNumberId())) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONFIG_INCOMPLETA",
+                    "La integracion de WhatsApp no tiene access token o Phone number ID"
+            );
+        }
+        String phoneNumberId = validatePathSegment(config.getPhoneNumberId(), "Phone number ID");
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("recipient_type", "individual");
+        payload.put("to", recipient);
+        payload.put("type", "template");
+        ObjectNode template = payload.putObject("template");
+        template.put("name", templateName);
+        template.putObject("language").put("code", languageCode);
+        if (parameters != null && !parameters.isEmpty()) {
+            var body = template.putArray("components").addObject();
+            body.put("type", "body");
+            var bodyParameters = body.putArray("parameters");
+            parameters.forEach(value -> bodyParameters.addObject()
+                    .put("type", "text")
+                    .put("text", value == null ? "" : value.trim()));
+        }
+        return postMessage(config, phoneNumberId, accessToken, recipient, payload);
+    }
+
+    private List<TemplateInfo> parseApprovedTemplates(JsonNode response) {
+        java.util.ArrayList<TemplateInfo> templates = new java.util.ArrayList<>();
+        for (JsonNode template : response.path("data")) {
+            if (!"APPROVED".equalsIgnoreCase(template.path("status").asText())) {
+                continue;
+            }
+            String bodyText = null;
+            boolean compatible = true;
+            for (JsonNode component : template.path("components")) {
+                String type = component.path("type").asText("").toUpperCase(java.util.Locale.ROOT);
+                if ("BODY".equals(type)) {
+                    bodyText = component.path("text").asText(null);
+                } else if (requiresUnsupportedParameter(component)) {
+                    compatible = false;
+                }
+            }
+            String name = template.path("name").asText(null);
+            String language = template.path("language").asText(null);
+            if (compatible && hasText(name) && hasText(language) && hasText(bodyText)) {
+                templates.add(new TemplateInfo(
+                        name,
+                        language,
+                        template.path("category").asText("UTILITY"),
+                        bodyText,
+                        templateParameterCount(bodyText)
+                ));
+            }
+        }
+        templates.sort(java.util.Comparator.comparing(TemplateInfo::name).thenComparing(TemplateInfo::languageCode));
+        return List.copyOf(templates);
+    }
+
+    private boolean requiresUnsupportedParameter(JsonNode component) {
+        String type = component.path("type").asText("").toUpperCase(java.util.Locale.ROOT);
+        if ("HEADER".equals(type)) {
+            String format = component.path("format").asText("TEXT").toUpperCase(java.util.Locale.ROOT);
+            return !"TEXT".equals(format) || component.path("text").asText("").contains("{{");
+        }
+        if ("BUTTONS".equals(type)) {
+            for (JsonNode button : component.path("buttons")) {
+                if (button.path("url").asText("").contains("{{")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private int templateParameterCount(String bodyText) {
+        int highest = 0;
+        Matcher matcher = TEMPLATE_PARAMETER.matcher(bodyText);
+        while (matcher.find()) {
+            highest = Math.max(highest, Integer.parseInt(matcher.group(1)));
+        }
+        return highest;
     }
 
     public String uploadMedia(
@@ -559,6 +697,15 @@ public class WhatsappCloudApiClient {
     }
 
     public record SendResult(String metaMessageId, String whatsappId, String rawResponse) {
+    }
+
+    public record TemplateInfo(
+            String name,
+            String languageCode,
+            String category,
+            String bodyText,
+            int parameterCount
+    ) {
     }
 
     private record HttpJsonResult(int statusCode, JsonNode body) {

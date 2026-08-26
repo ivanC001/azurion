@@ -16,4 +16,44 @@ public class EmailTransportProperties {
     private int writeTimeoutMillis = 20_000;
     private String tlsProtocols = "TLSv1.2 TLSv1.3";
     private boolean checkServerIdentity = true;
+
+    public int getConnectTimeoutMillis() {
+        return connectTimeoutMillis;
+    }
+
+    public void setConnectTimeoutMillis(int connectTimeoutMillis) {
+        this.connectTimeoutMillis = connectTimeoutMillis;
+    }
+
+    public int getReadTimeoutMillis() {
+        return readTimeoutMillis;
+    }
+
+    public void setReadTimeoutMillis(int readTimeoutMillis) {
+        this.readTimeoutMillis = readTimeoutMillis;
+    }
+
+    public int getWriteTimeoutMillis() {
+        return writeTimeoutMillis;
+    }
+
+    public void setWriteTimeoutMillis(int writeTimeoutMillis) {
+        this.writeTimeoutMillis = writeTimeoutMillis;
+    }
+
+    public String getTlsProtocols() {
+        return tlsProtocols;
+    }
+
+    public void setTlsProtocols(String tlsProtocols) {
+        this.tlsProtocols = tlsProtocols;
+    }
+
+    public boolean isCheckServerIdentity() {
+        return checkServerIdentity;
+    }
+
+    public void setCheckServerIdentity(boolean checkServerIdentity) {
+        this.checkServerIdentity = checkServerIdentity;
+    }
 }

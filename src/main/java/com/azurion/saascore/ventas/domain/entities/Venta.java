@@ -96,4 +96,204 @@ public class Venta extends BaseEntity {
 
     @Column(name = "request_hash", length = 64)
     private String requestHash;
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getClienteDocumento() {
+        return clienteDocumento;
+    }
+
+    public void setClienteDocumento(String clienteDocumento) {
+        this.clienteDocumento = clienteDocumento;
+    }
+
+    public String getClienteNombre() {
+        return clienteNombre;
+    }
+
+    public void setClienteNombre(String clienteNombre) {
+        this.clienteNombre = clienteNombre;
+    }
+
+    public String getMoneda() {
+        return moneda;
+    }
+
+    public void setMoneda(String moneda) {
+        this.moneda = moneda;
+    }
+
+    public BigDecimal getTotal() {
+        return total;
+    }
+
+    public void setTotal(BigDecimal total) {
+        this.total = total;
+    }
+
+    public Long getCajaTurnoId() {
+        return cajaTurnoId;
+    }
+
+    public void setCajaTurnoId(Long cajaTurnoId) {
+        this.cajaTurnoId = cajaTurnoId;
+    }
+
+    public String getFormaPago() {
+        return formaPago;
+    }
+
+    public void setFormaPago(String formaPago) {
+        this.formaPago = formaPago;
+    }
+
+    public String getMetodoPago() {
+        return metodoPago;
+    }
+
+    public void setMetodoPago(String metodoPago) {
+        this.metodoPago = metodoPago;
+    }
+
+    public OffsetDateTime getFechaVenta() {
+        return fechaVenta;
+    }
+
+    public void setFechaVenta(OffsetDateTime fechaVenta) {
+        this.fechaVenta = fechaVenta;
+    }
+
+    public String getFacturacionEstado() {
+        return facturacionEstado;
+    }
+
+    public void setFacturacionEstado(String facturacionEstado) {
+        this.facturacionEstado = facturacionEstado;
+    }
+
+    public Integer getFacturacionIntentos() {
+        return facturacionIntentos;
+    }
+
+    public void setFacturacionIntentos(Integer facturacionIntentos) {
+        this.facturacionIntentos = facturacionIntentos;
+    }
+
+    public Integer getFacturadorHttpStatus() {
+        return facturadorHttpStatus;
+    }
+
+    public void setFacturadorHttpStatus(Integer facturadorHttpStatus) {
+        this.facturadorHttpStatus = facturadorHttpStatus;
+    }
+
+    public String getFacturadorEndpoint() {
+        return facturadorEndpoint;
+    }
+
+    public void setFacturadorEndpoint(String facturadorEndpoint) {
+        this.facturadorEndpoint = facturadorEndpoint;
+    }
+
+    public String getFacturadorTipoComprobante() {
+        return facturadorTipoComprobante;
+    }
+
+    public void setFacturadorTipoComprobante(String facturadorTipoComprobante) {
+        this.facturadorTipoComprobante = facturadorTipoComprobante;
+    }
+
+    public String getFacturadorMensaje() {
+        return facturadorMensaje;
+    }
+
+    public void setFacturadorMensaje(String facturadorMensaje) {
+        this.facturadorMensaje = facturadorMensaje;
+    }
+
+    public String getFacturadorSunatEstado() {
+        return facturadorSunatEstado;
+    }
+
+    public void setFacturadorSunatEstado(String facturadorSunatEstado) {
+        this.facturadorSunatEstado = facturadorSunatEstado;
+    }
+
+    public String getFacturadorDocumentoId() {
+        return facturadorDocumentoId;
+    }
+
+    public void setFacturadorDocumentoId(String facturadorDocumentoId) {
+        this.facturadorDocumentoId = facturadorDocumentoId;
+    }
+
+    public String getFacturadorTicket() {
+        return facturadorTicket;
+    }
+
+    public void setFacturadorTicket(String facturadorTicket) {
+        this.facturadorTicket = facturadorTicket;
+    }
+
+    public String getFacturadorPdfUrl() {
+        return facturadorPdfUrl;
+    }
+
+    public void setFacturadorPdfUrl(String facturadorPdfUrl) {
+        this.facturadorPdfUrl = facturadorPdfUrl;
+    }
+
+    public String getFacturadorXmlUrl() {
+        return facturadorXmlUrl;
+    }
+
+    public void setFacturadorXmlUrl(String facturadorXmlUrl) {
+        this.facturadorXmlUrl = facturadorXmlUrl;
+    }
+
+    public String getFacturadorCdrUrl() {
+        return facturadorCdrUrl;
+    }
+
+    public void setFacturadorCdrUrl(String facturadorCdrUrl) {
+        this.facturadorCdrUrl = facturadorCdrUrl;
+    }
+
+    public String getFacturadorRespuestaJson() {
+        return facturadorRespuestaJson;
+    }
+
+    public void setFacturadorRespuestaJson(String facturadorRespuestaJson) {
+        this.facturadorRespuestaJson = facturadorRespuestaJson;
+    }
+
+    public OffsetDateTime getFacturacionActualizadoEn() {
+        return facturacionActualizadoEn;
+    }
+
+    public void setFacturacionActualizadoEn(OffsetDateTime facturacionActualizadoEn) {
+        this.facturacionActualizadoEn = facturacionActualizadoEn;
+    }
+
+    public String getClientOperationId() {
+        return clientOperationId;
+    }
+
+    public void setClientOperationId(String clientOperationId) {
+        this.clientOperationId = clientOperationId;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
+    }
 }

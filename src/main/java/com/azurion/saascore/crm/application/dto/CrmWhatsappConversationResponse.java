@@ -22,6 +22,9 @@ public record CrmWhatsappConversationResponse(
         String ultimoMensaje,
         String ultimaDireccion,
         OffsetDateTime ultimoMensajeEn,
+        OffsetDateTime ultimoEntranteEn,
+        OffsetDateTime ventanaAtencionHasta,
+        boolean ventanaAtencionAbierta,
         String notaInterna,
         List<CrmWhatsappInternalNoteResponse> notasInternas
 ) {

@@ -14,14 +14,18 @@ public final class UsuariosMapper {
         List<String> roles = usuario.getUsuarioRoles().stream()
                 .map(usuarioRol -> usuarioRol.getRol().getCodigo())
                 .distinct()
-                .sorted(Comparator.naturalOrder())
+                .sorted()
                 .toList();
 
         return new UsuarioTenantResponse(
                 usuario.getId(),
                 usuario.getUsername(),
                 usuario.getNombres(),
+                usuario.getApellidos(),
                 usuario.getEmail(),
+                usuario.getTelefono(),
+                usuario.getCargo(),
+                usuario.getFotoPerfilUrl(),
                 usuario.isActivo(),
                 roles,
                 sucursales,

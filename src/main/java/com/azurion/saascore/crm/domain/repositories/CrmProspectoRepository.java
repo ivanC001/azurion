@@ -3,6 +3,7 @@ package com.azurion.saascore.crm.domain.repositories;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -14,6 +15,11 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
 
     interface OriginAggregateProjection {
         String getCodigo();
+        long getCantidad();
+    }
+
+    interface OwnerCountProjection {
+        String getResponsableId();
         long getCantidad();
     }
 
@@ -41,6 +47,19 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
             order by count(p.id) desc
             """)
     List<OriginAggregateProjection> summarizeByOriginScoped(@Param("responsableId") String responsableId);
+
+    @Query("""
+            select coalesce(p.responsableId, 'SIN_ASIGNAR') as responsableId,
+                   count(p.id) as cantidad
+            from CrmProspecto p
+            where p.createdAt >= :desde
+              and p.createdAt < :hasta
+            group by coalesce(p.responsableId, 'SIN_ASIGNAR')
+            """)
+    List<OwnerCountProjection> countGoalsByOwner(
+            @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta
+    );
 
     Optional<CrmProspecto> findFirstByTelefonoOrderByIdDesc(String telefono);
 

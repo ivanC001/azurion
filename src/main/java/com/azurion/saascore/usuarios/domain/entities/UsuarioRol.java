@@ -26,4 +26,20 @@ public class UsuarioRol extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "rol_id", nullable = false)
     private Rol rol;
+
+    public UsuarioTenant getUsuario() {
+        return usuario;
+    }
+
+    public void setUsuario(UsuarioTenant usuario) {
+        this.usuario = usuario;
+    }
+
+    public Rol getRol() {
+        return rol;
+    }
+
+    public void setRol(Rol rol) {
+        this.rol = rol;
+    }
 }

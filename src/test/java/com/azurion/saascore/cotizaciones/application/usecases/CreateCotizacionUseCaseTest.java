@@ -12,13 +12,18 @@ import com.azurion.saascore.cotizaciones.application.dto.CreateCotizacionRequest
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.cotizaciones.domain.repositories.PromocionCotizacionRepository;
+import com.azurion.saascore.cotizaciones.application.services.CommercialCurrencyService;
+import com.azurion.saascore.cotizaciones.application.services.CommercialCurrencyService.CurrencySnapshot;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +49,10 @@ class CreateCotizacionUseCaseTest {
     private CrmCatalogoItemRepository catalogoItemRepository;
     @Mock
     private AuthorizationService authorizationService;
+    @Mock
+    private UsuarioTenantRepository usuarioTenantRepository;
+    @Mock
+    private CommercialCurrencyService commercialCurrencyService;
 
     private CreateCotizacionUseCase useCase;
 
@@ -56,7 +65,9 @@ class CreateCotizacionUseCaseTest {
                 productoRepository,
                 promocionRepository,
                 catalogoItemRepository,
-                authorizationService
+                authorizationService,
+                usuarioTenantRepository,
+                commercialCurrencyService
         );
     }
 
@@ -77,9 +88,24 @@ class CreateCotizacionUseCaseTest {
         catalogItem.setPrecioReferencial(new BigDecimal("320.00"));
         catalogItem.setEstado("ACTIVO");
 
+        UsuarioTenant advisor = new UsuarioTenant();
+        advisor.setId(1L);
+        advisor.setNombres("Maria");
+        advisor.setApellidos("Lopez Ramirez");
+        advisor.setTelefono("+51987654321");
+        advisor.setEmail("maria.lopez@azurion.test");
+        advisor.setCargo("Asesora comercial");
+        advisor.setFotoPerfilUrl("/files/user-profiles/tenant-demo/user-1.jpg");
+
         when(authorizationService.currentUsuarioId()).thenReturn(1L);
+        when(usuarioTenantRepository.findById(1L)).thenReturn(Optional.of(advisor));
         when(sucursalRepository.findById(8L)).thenReturn(Optional.of(sucursal));
         when(catalogoItemRepository.findById(24L)).thenReturn(Optional.of(catalogItem));
+        CurrencySnapshot currencySnapshot = new CurrencySnapshot(
+                "USD", "PEN", new BigDecimal("3.850000"), OffsetDateTime.parse("2026-08-09T10:00:00-05:00"));
+        when(commercialCurrencyService.resolve("USD", "USD")).thenReturn(currencySnapshot);
+        when(commercialCurrencyService.toBase(new BigDecimal("600.00"), currencySnapshot))
+                .thenReturn(new BigDecimal("2310.00"));
         when(cotizacionRepository.save(any(Cotizacion.class))).thenAnswer(invocation -> {
             Cotizacion quote = invocation.getArgument(0);
             quote.setId(91L);
@@ -119,5 +145,15 @@ class CreateCotizacionUseCaseTest {
         assertThat(response.detalles().getFirst().catalogoPrecioReferencial())
                 .isEqualByComparingTo("320.00");
         assertThat(response.total()).isEqualByComparingTo("600.00");
+        assertThat(response.moneda()).isEqualTo("USD");
+        assertThat(response.monedaBase()).isEqualTo("PEN");
+        assertThat(response.tipoCambioAplicado()).isEqualByComparingTo("3.850000");
+        assertThat(response.totalMonedaBase()).isEqualByComparingTo("2310.00");
+        assertThat(response.usuarioId()).isEqualTo("1");
+        assertThat(response.usuarioNombre()).isEqualTo("Maria");
+        assertThat(response.asesorApellidos()).isEqualTo("Lopez Ramirez");
+        assertThat(response.asesorTelefono()).isEqualTo("+51987654321");
+        assertThat(response.asesorEmail()).isEqualTo("maria.lopez@azurion.test");
+        assertThat(response.asesorCargo()).isEqualTo("Asesora comercial");
     }
 }

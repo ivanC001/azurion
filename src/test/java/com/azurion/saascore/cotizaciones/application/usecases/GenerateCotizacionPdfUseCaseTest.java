@@ -73,6 +73,10 @@ class GenerateCotizacionPdfUseCaseTest {
             assertThat(text).contains(
                     "FICHA COMERCIAL DEL PRODUCTO",
                     "Curso Java Spring Profesional",
+                    "Maria Lopez Ramirez",
+                    "Asesora comercial",
+                    "+51 987 654 321",
+                    "maria.lopez@azurion.test",
                     "DURACION",
                     "48 horas",
                     "MODALIDAD",
@@ -92,7 +96,11 @@ class GenerateCotizacionPdfUseCaseTest {
         quote.setId(91L);
         quote.setSucursal(sucursal);
         quote.setUsuarioId("seller-1");
-        quote.setUsuarioNombre("Vendedor CRM");
+        quote.setUsuarioNombre("Maria");
+        quote.setAsesorApellidos("Lopez Ramirez");
+        quote.setAsesorTelefono("+51 987 654 321");
+        quote.setAsesorEmail("maria.lopez@azurion.test");
+        quote.setAsesorCargo("Asesora comercial");
         quote.setFechaEmision(LocalDate.of(2026, 8, 9));
         quote.setFechaVencimiento(LocalDate.of(2026, 8, 16));
         quote.setMoneda("USD");

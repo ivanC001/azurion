@@ -75,4 +75,156 @@ public class CajaMovimiento extends BaseEntity {
 
     @Column(name = "request_hash", length = 64)
     private String requestHash;
+
+    public CajaTurno getTurno() {
+        return turno;
+    }
+
+    public void setTurno(CajaTurno turno) {
+        this.turno = turno;
+    }
+
+    public String getTipoMovimiento() {
+        return tipoMovimiento;
+    }
+
+    public void setTipoMovimiento(String tipoMovimiento) {
+        this.tipoMovimiento = tipoMovimiento;
+    }
+
+    public BigDecimal getMonto() {
+        return monto;
+    }
+
+    public void setMonto(BigDecimal monto) {
+        this.monto = monto;
+    }
+
+    public BigDecimal getSaldoAnterior() {
+        return saldoAnterior;
+    }
+
+    public void setSaldoAnterior(BigDecimal saldoAnterior) {
+        this.saldoAnterior = saldoAnterior;
+    }
+
+    public BigDecimal getSaldoResultante() {
+        return saldoResultante;
+    }
+
+    public void setSaldoResultante(BigDecimal saldoResultante) {
+        this.saldoResultante = saldoResultante;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public String getReferencia() {
+        return referencia;
+    }
+
+    public void setReferencia(String referencia) {
+        this.referencia = referencia;
+    }
+
+    public String getCuentaEmpresarial() {
+        return cuentaEmpresarial;
+    }
+
+    public void setCuentaEmpresarial(String cuentaEmpresarial) {
+        this.cuentaEmpresarial = cuentaEmpresarial;
+    }
+
+    public String getOrigen() {
+        return origen;
+    }
+
+    public void setOrigen(String origen) {
+        this.origen = origen;
+    }
+
+    public String getMedioPago() {
+        return medioPago;
+    }
+
+    public void setMedioPago(String medioPago) {
+        this.medioPago = medioPago;
+    }
+
+    public boolean isAfectaEfectivo() {
+        return afectaEfectivo;
+    }
+
+    public void setAfectaEfectivo(boolean afectaEfectivo) {
+        this.afectaEfectivo = afectaEfectivo;
+    }
+
+    public Long getVentaId() {
+        return ventaId;
+    }
+
+    public void setVentaId(Long ventaId) {
+        this.ventaId = ventaId;
+    }
+
+    public boolean isAnulado() {
+        return anulado;
+    }
+
+    public void setAnulado(boolean anulado) {
+        this.anulado = anulado;
+    }
+
+    public String getMotivoAnulacion() {
+        return motivoAnulacion;
+    }
+
+    public void setMotivoAnulacion(String motivoAnulacion) {
+        this.motivoAnulacion = motivoAnulacion;
+    }
+
+    public String getResponsableId() {
+        return responsableId;
+    }
+
+    public void setResponsableId(String responsableId) {
+        this.responsableId = responsableId;
+    }
+
+    public String getResponsableNombre() {
+        return responsableNombre;
+    }
+
+    public void setResponsableNombre(String responsableNombre) {
+        this.responsableNombre = responsableNombre;
+    }
+
+    public OffsetDateTime getFechaMovimiento() {
+        return fechaMovimiento;
+    }
+
+    public void setFechaMovimiento(OffsetDateTime fechaMovimiento) {
+        this.fechaMovimiento = fechaMovimiento;
+    }
+
+    public String getClientOperationId() {
+        return clientOperationId;
+    }
+
+    public void setClientOperationId(String clientOperationId) {
+        this.clientOperationId = clientOperationId;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
+    }
 }

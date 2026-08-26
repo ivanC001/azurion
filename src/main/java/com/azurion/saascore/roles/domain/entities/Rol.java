@@ -43,4 +43,68 @@ public class Rol extends BaseEntity {
 
     @OneToMany(mappedBy = "rol", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<RolPermiso> rolPermisos = new LinkedHashSet<>();
+
+    public String getCodigo() {
+        return codigo;
+    }
+
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    public boolean isSistema() {
+        return sistema;
+    }
+
+    public void setSistema(boolean sistema) {
+        this.sistema = sistema;
+    }
+
+    public boolean isDeprecated() {
+        return deprecated;
+    }
+
+    public void setDeprecated(boolean deprecated) {
+        this.deprecated = deprecated;
+    }
+
+    public RoleScope getAmbito() {
+        return ambito;
+    }
+
+    public void setAmbito(RoleScope ambito) {
+        this.ambito = ambito;
+    }
+
+    public Set<RolPermiso> getRolPermisos() {
+        return rolPermisos;
+    }
+
+    public void setRolPermisos(Set<RolPermiso> rolPermisos) {
+        this.rolPermisos = rolPermisos;
+    }
 }

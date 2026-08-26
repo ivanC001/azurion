@@ -14,11 +14,11 @@ import org.springframework.stereotype.Service;
  * the surrounding PostgreSQL transaction. Non-PostgreSQL test profiles skip
  * the database-specific lock.
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BusinessOperationLockService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BusinessOperationLockService.class);
     private final EntityManager entityManager;
     private final DataSource dataSource;
     private volatile Boolean postgresql;

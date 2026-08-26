@@ -5,6 +5,8 @@ import com.azurion.saascore.auth.application.dto.CurrentUserProfileResponse;
 import com.azurion.saascore.auth.application.dto.UpdateCurrentUserProfileRequest;
 import com.azurion.saascore.auth.domain.entities.UsuarioGlobal;
 import com.azurion.saascore.auth.domain.repositories.UsuarioGlobalRepository;
+import com.azurion.saascore.auth.infrastructure.storage.UserProfilePhotoStorageService;
+import com.azurion.multitenancy.TenantContext;
 import com.azurion.saascore.usuarios.application.dto.UsuarioSucursalResponse;
 import com.azurion.saascore.usuarios.application.services.UsuarioSucursalScopeService;
 import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
@@ -20,6 +22,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class CurrentUserProfileService {
     private final UsuarioGlobalRepository usuarioGlobalRepository;
     private final UsuarioSucursalScopeService usuarioSucursalScopeService;
     private final PasswordEncoder passwordEncoder;
+    private final UserProfilePhotoStorageService profilePhotoStorageService;
 
     @Transactional(readOnly = true)
     public CurrentUserProfileResponse get(Authentication authentication) {
@@ -57,7 +61,33 @@ public class CurrentUserProfileService {
         UsuarioTenant user = findTenantUser(actor.userId());
         validateEmailUnchanged(user.getEmail(), request.email());
         user.setNombres(request.nombres().trim());
+        user.setApellidos(blankToNull(request.apellidos()));
+        user.setTelefono(blankToNull(request.telefono()));
+        user.setCargo(blankToNull(request.cargo()));
         UsuarioTenant saved = usuarioTenantRepository.save(user);
+        return toTenantResponse(saved, actor.roles());
+    }
+
+    @Transactional
+    public CurrentUserProfileResponse updatePhoto(Authentication authentication, MultipartFile file) {
+        ProfileActor actor = requireEditableTenantActor(authentication);
+        UsuarioTenant user = findTenantUser(actor.userId());
+        String previousPhoto = user.getFotoPerfilUrl();
+        String newPhoto = profilePhotoStorageService.store(TenantContext.getTenantId(), user.getId(), file);
+        user.setFotoPerfilUrl(newPhoto);
+        UsuarioTenant saved = usuarioTenantRepository.save(user);
+        profilePhotoStorageService.deleteQuietly(previousPhoto);
+        return toTenantResponse(saved, actor.roles());
+    }
+
+    @Transactional
+    public CurrentUserProfileResponse deletePhoto(Authentication authentication) {
+        ProfileActor actor = requireEditableTenantActor(authentication);
+        UsuarioTenant user = findTenantUser(actor.userId());
+        String previousPhoto = user.getFotoPerfilUrl();
+        user.setFotoPerfilUrl(null);
+        UsuarioTenant saved = usuarioTenantRepository.save(user);
+        profilePhotoStorageService.deleteQuietly(previousPhoto);
         return toTenantResponse(saved, actor.roles());
     }
 
@@ -89,7 +119,11 @@ public class CurrentUserProfileService {
                 user.getId(),
                 user.getUsername(),
                 user.getNombres(),
+                user.getApellidos(),
                 user.getEmail(),
+                user.getTelefono(),
+                user.getCargo(),
+                user.getFotoPerfilUrl(),
                 user.isActivo(),
                 true,
                 true,
@@ -104,6 +138,10 @@ public class CurrentUserProfileService {
                 user.getId(),
                 user.getUsername(),
                 user.getUsername(),
+                null,
+                null,
+                null,
+                null,
                 null,
                 user.isActivo(),
                 false,
@@ -131,6 +169,17 @@ public class CurrentUserProfileService {
         List<String> roles = roleAuthorities(authentication.getAuthorities());
         boolean platformAccount = roles.contains("ADMIN_GENERAL") || roles.contains("PLATFORM_ADMIN");
         return new ProfileActor(details.getUserId(), platformAccount, roles);
+    }
+
+    private ProfileActor requireEditableTenantActor(Authentication authentication) {
+        ProfileActor actor = requireActor(authentication);
+        if (actor.platformAccount()) {
+            throw new BusinessException(
+                    "PERFIL_ADMINISTRATIVO_SOLO_LECTURA",
+                    "El perfil de la administracion de Azurion se gestiona desde seguridad de plataforma."
+            );
+        }
+        return actor;
     }
 
     private List<String> roleAuthorities(Collection<? extends GrantedAuthority> authorities) {

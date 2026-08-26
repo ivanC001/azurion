@@ -19,9 +19,9 @@ import org.springframework.web.multipart.MultipartFile;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@Slf4j
 public class CompanyBrandingStorageService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CompanyBrandingStorageService.class);
     private static final long MAX_LOGO_BYTES = 2L * 1024L * 1024L;
     private static final Set<String> JPEG_EXTENSIONS = Set.of(".jpg", ".jpeg");
 

@@ -15,8 +15,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RateLimitFilter.class);
 
     private static final Duration WINDOW = Duration.ofMinutes(1);
     private static final Set<String> AUTH_PATHS = Set.of(

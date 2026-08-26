@@ -38,4 +38,52 @@ public class Suscripcion extends BaseEntity {
 
     @Column(name = "limite_usuarios")
     private Integer limiteUsuarios;
+
+    public Empresa getEmpresa() {
+        return empresa;
+    }
+
+    public void setEmpresa(Empresa empresa) {
+        this.empresa = empresa;
+    }
+
+    public Plan getPlan() {
+        return plan;
+    }
+
+    public void setPlan(Plan plan) {
+        this.plan = plan;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public LocalDate getFechaInicio() {
+        return fechaInicio;
+    }
+
+    public void setFechaInicio(LocalDate fechaInicio) {
+        this.fechaInicio = fechaInicio;
+    }
+
+    public LocalDate getFechaFin() {
+        return fechaFin;
+    }
+
+    public void setFechaFin(LocalDate fechaFin) {
+        this.fechaFin = fechaFin;
+    }
+
+    public Integer getLimiteUsuarios() {
+        return limiteUsuarios;
+    }
+
+    public void setLimiteUsuarios(Integer limiteUsuarios) {
+        this.limiteUsuarios = limiteUsuarios;
+    }
 }

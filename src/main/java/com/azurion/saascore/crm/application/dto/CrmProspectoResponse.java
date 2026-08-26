@@ -27,6 +27,7 @@ public record CrmProspectoResponse(
         String interesPrincipal,
         String interesDetalle,
         BigDecimal presupuestoEstimado,
+        String presupuestoMoneda,
         LocalDate fechaInteres,
         Long catalogoItemId,
         boolean productoPendiente,

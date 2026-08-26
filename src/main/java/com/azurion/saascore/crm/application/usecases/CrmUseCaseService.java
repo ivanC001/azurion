@@ -1,6 +1,5 @@
 package com.azurion.saascore.crm.application.usecases;
 
-import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.clientes.application.dto.ClienteResponse;
 import com.azurion.saascore.clientes.application.dto.CreateClienteRequest;
 import com.azurion.saascore.clientes.application.mappers.ClienteMapper;
@@ -22,6 +21,7 @@ import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
 import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmCurrencyConfigResponse;
+import com.azurion.saascore.crm.application.dto.CrmCurrencyOptionResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmInboxChannelResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
@@ -33,6 +33,7 @@ import com.azurion.saascore.crm.application.dto.CrmPipelineColumnResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoInteresResponse;
 import com.azurion.saascore.crm.application.dto.CrmProspectoResponse;
 import com.azurion.saascore.crm.application.dto.CrmReporteBucketResponse;
+import com.azurion.saascore.crm.application.dto.CrmResponsableOptionResponse;
 import com.azurion.saascore.crm.application.dto.CrmReportesResponse;
 import com.azurion.saascore.crm.application.dto.CrmSentEmailResponse;
 import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunidadRequest;
@@ -53,13 +54,13 @@ import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmOportunidadEtapaRequest;
 import com.azurion.saascore.crm.application.dto.UpdateCrmProspectoRequest;
 import com.azurion.saascore.crm.application.mappers.CrmMapper;
-import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
+import com.azurion.saascore.crm.application.support.CrmAccessPolicy;
+import com.azurion.saascore.crm.application.support.CrmCurrencyConverter;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
-import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmCurrencyConfig;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
@@ -70,10 +71,8 @@ import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmProspectoInteres;
 import com.azurion.saascore.crm.domain.entities.CrmPublicLeadSubmission;
 import com.azurion.saascore.crm.domain.repositories.CrmActividadRepository;
-import com.azurion.saascore.crm.domain.repositories.CrmCanalTokenConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository.CrmCatalogoUsageProjection;
-import com.azurion.saascore.crm.domain.repositories.CrmCurrencyConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmEtapaPipelineRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmNegociacionRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadHistorialRepository;
@@ -83,10 +82,13 @@ import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmPublicLeadSubmissionRepository;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.settings.email.application.services.EmailSenderService;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import com.azurion.multitenancy.TenantContext;
 import com.azurion.shared.api.PageResponse;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
+import com.azurion.shared.money.CurrencyCatalog;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.JoinType;
@@ -108,6 +110,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -132,7 +135,15 @@ public class CrmUseCaseService {
     private static final Set<String> ESTADOS_PROSPECTO = Set.of(
             "NUEVO", "CONTACTADO", "EN_ESPERA", "INTERESADO", "CALIFICADO", "PERDIDO", "CONVERTIDO", "NO_INTERESADO", "DESCARTADO"
     );
-    private static final Set<String> ESTADOS_OPORTUNIDAD = Set.of("ABIERTA", "GANADA", "PERDIDA");
+    private static final String ESTADO_OPORTUNIDAD_ABIERTA = "ABIERTA";
+
+    private static final Set<String> ESTADOS_OPORTUNIDAD = Set.of(ESTADO_OPORTUNIDAD_ABIERTA, "GANADA", "PERDIDA");
+
+    /**
+     * Tarjetas que se cargan por columna del tablero. El contador de la columna
+     * sigue mostrando el total real; esto solo acota lo que se materializa.
+     */
+    private static final int BOARD_CARDS_PER_STAGE = 50;
     private static final Set<String> ETAPAS_PIPELINE_ACTIVO = Set.of("INTERESADO", "COTIZADO", "NEGOCIACION");
     private static final Set<String> TIPOS_COMERCIALES = Set.of(
             "PRODUCTO", "SERVICIO", "VEHICULO", "INMUEBLE", "PROYECTO", "CURSO",
@@ -171,142 +182,50 @@ public class CrmUseCaseService {
     private final CreateClienteUseCase createClienteUseCase;
     private final CreateCotizacionUseCase createCotizacionUseCase;
     private final CotizacionRepository cotizacionRepository;
-    private final AuthorizationService authorizationService;
-    private final CrmCanalTokenConfigRepository canalTokenConfigRepository;
-    private final CrmCurrencyConfigRepository currencyConfigRepository;
     private final LandingLeadValidationService landingLeadValidationService;
     private final CrmProspectoInteresRepository prospectoInteresRepository;
-    private final CrmSecretEncryptionService crmSecretEncryptionService;
     private final CrmLeadAssignmentService leadAssignmentService;
     private final CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
     private final BusinessOperationLockService ingressLockService;
     private final CrmPhoneNormalizationService phoneNormalizationService;
     private final EmailSenderService emailSenderService;
     private final EmpresaRepository empresaRepository;
+    private final UsuarioTenantRepository usuarioTenantRepository;
+    private final CrmConfiguracionUseCase configuracionUseCase;
+    private final CrmReporteUseCase reporteUseCase;
+    private final CrmAccessPolicy accessPolicy;
+    private final CrmCurrencyConverter currencyConverter;
 
-    @Transactional(readOnly = true)
+    // --- Configuracion de canales y monedas -------------------------------
+    // La logica vive en CrmConfiguracionUseCase. Se mantienen estos metodos
+    // como delegacion para no alterar el contrato de los controladores.
+
     public List<CrmCurrencyConfigResponse> listCurrencyConfig() {
-        Map<String, CrmCurrencyConfig> existing = new LinkedHashMap<>();
-        for (CrmCurrencyConfig item : currencyConfigRepository.findAllByOrderByMonedaAsc()) {
-            existing.put(item.getMoneda(), item);
-        }
-        return List.of("USD", "EUR").stream()
-                .map((moneda) -> toCurrencyConfigResponse(existing.getOrDefault(moneda, defaultCurrencyConfig(moneda))))
-                .toList();
+        return configuracionUseCase.listCurrencyConfig();
     }
 
-    @Transactional
+    public List<CrmCurrencyOptionResponse> listAvailableCurrencies() {
+        return configuracionUseCase.listAvailableCurrencies();
+    }
+
     public CrmCurrencyConfigResponse saveCurrencyConfig(UpdateCrmCurrencyConfigRequest request) {
-        String moneda = requireEnum(request.moneda(), Set.of("USD", "EUR"), "CRM_MONEDA_INVALIDA");
-        CrmCurrencyConfig config = currencyConfigRepository.findByMoneda(moneda)
-                .orElseGet(() -> defaultCurrencyConfig(moneda));
-        config.setMoneda(moneda);
-        updateIfPresent(request.nombre(), (value) -> config.setNombre(required(value, "El nombre de la moneda es obligatorio")));
-        updateIfPresent(request.simbolo(), (value) -> config.setSimbolo(required(value, "El símbolo de la moneda es obligatorio")));
-        if (request.tipoCambioBase() != null) {
-            if (request.tipoCambioBase().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new BusinessException("CRM_TIPO_CAMBIO_INVALIDO", "El tipo de cambio debe ser mayor a cero");
-            }
-            config.setTipoCambioBase(request.tipoCambioBase().setScale(6, RoundingMode.HALF_UP));
-        }
-        if (request.margenConversionPorcentaje() != null) {
-            if (request.margenConversionPorcentaje().compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException("CRM_MARGEN_CONVERSION_INVALIDO", "El margen de conversión no puede ser negativo");
-            }
-            config.setMargenConversionPorcentaje(request.margenConversionPorcentaje().setScale(4, RoundingMode.HALF_UP));
-        }
-        if (request.activo() != null) {
-            config.setActivo(request.activo());
-        }
-        return toCurrencyConfigResponse(currencyConfigRepository.save(config));
+        return configuracionUseCase.saveCurrencyConfig(request);
     }
 
-    @Transactional(readOnly = true)
     public List<CrmCanalTokenConfigResponse> listCanalTokenConfig() {
-        Map<String, CrmCanalTokenConfig> existing = new LinkedHashMap<>();
-        for (CrmCanalTokenConfig item : canalTokenConfigRepository.findAllByOrderByCanalAsc()) {
-            existing.put(item.getCanal(), item);
-        }
-        return List.of("WEB", "WHATSAPP", "INSTAGRAM", "FACEBOOK").stream()
-                .map((canal) -> toCanalTokenConfigResponse(existing.getOrDefault(canal, defaultCanalConfig(canal))))
-                .toList();
+        return configuracionUseCase.listCanalTokenConfig();
     }
 
-    @Transactional(readOnly = true)
     public List<CrmInboxChannelResponse> listInboxChannels(boolean emailActive) {
-        Map<String, CrmCanalTokenConfig> existing = new LinkedHashMap<>();
-        for (CrmCanalTokenConfig item : canalTokenConfigRepository.findAllByOrderByCanalAsc()) {
-            existing.put(item.getCanal(), item);
-        }
-        return List.of(
-                inboxChannel("WHATSAPP", "WhatsApp", existing),
-                inboxChannel("FACEBOOK", "Facebook", existing),
-                inboxChannel("INSTAGRAM", "Instagram", existing),
-                new CrmInboxChannelResponse("CORREO", "Correo", emailActive)
-        );
+        return configuracionUseCase.listInboxChannels(emailActive);
     }
 
-    @Transactional(readOnly = true)
     public PageResponse<CrmSentEmailResponse> pageSentEmails(String query, int page, int size) {
-        String normalizedQuery = normalizeSearch(query);
-        Page<Cotizacion> result = cotizacionRepository.findSentEmails(
-                normalizedQuery == null ? "" : normalizedQuery,
-                safePageable(page, size, Sort.by(Sort.Order.desc("fechaEnvio"), Sort.Order.desc("id")))
-        );
-        return PageResponse.from(result, result.getContent().stream().map(this::toSentEmailResponse).toList());
+        return configuracionUseCase.pageSentEmails(query, page, size);
     }
 
-    @Transactional
     public CrmCanalTokenConfigResponse saveCanalTokenConfig(UpdateCrmCanalTokenConfigRequest request) {
-        String canal = requireEnum(request.canal(), Set.of("WEB", "WHATSAPP", "INSTAGRAM", "FACEBOOK"), "CRM_CANAL_INVALIDO");
-        boolean whatsappConnectionChanged = "WHATSAPP".equals(canal) && (
-                hasText(request.accessToken())
-                        || hasText(request.appId())
-                        || hasText(request.appSecret())
-                        || hasText(request.phoneNumberId())
-                        || hasText(request.wabaId())
-        );
-        boolean whatsappVerifyTokenChanged = "WHATSAPP".equals(canal) && hasText(request.verifyToken());
-        boolean metaWebhookChanged = Set.of("FACEBOOK", "INSTAGRAM").contains(canal) && (
-                hasText(request.verifyToken())
-                        || hasText(request.webhookUrl())
-                        || hasText(request.appId())
-                        || hasText(request.appSecret())
-        );
-        CrmCanalTokenConfig config = canalTokenConfigRepository.findByCanal(canal)
-                .orElseGet(() -> {
-                    CrmCanalTokenConfig item = new CrmCanalTokenConfig();
-                    item.setCanal(canal);
-                    item.setNombre(defaultCanalName(canal));
-                    return item;
-                });
-        updateIfPresent(request.nombre(), value -> config.setNombre(trim(value)));
-        updateIfPresent(request.accessToken(), value -> config.setAccessToken(crmSecretEncryptionService.encrypt(trim(value))));
-        updateIfPresent(request.verifyToken(), value -> config.setVerifyToken(crmSecretEncryptionService.encrypt(trim(value))));
-        updateIfPresent(request.webhookUrl(), value -> config.setWebhookUrl(trim(value)));
-        updateIfPresent(request.appId(), value -> config.setAppId(trim(value)));
-        updateIfPresent(request.appSecret(), value -> config.setAppSecret(crmSecretEncryptionService.encrypt(trim(value))));
-        updateIfPresent(request.phoneNumberId(), value -> config.setPhoneNumberId(trim(value)));
-        updateIfPresent(request.wabaId(), value -> config.setWabaId(trim(value)));
-        updateIfPresent(request.metadataJson(), value -> config.setMetadataJson(trim(value)));
-        if (request.activo() != null) {
-            config.setActivo(request.activo());
-        }
-        if ("WHATSAPP".equals(canal)) {
-            config.setWebhookUrl(null);
-            config.setMetadataJson(null);
-            if (whatsappConnectionChanged) {
-                resetWhatsappConnectionStatus(config);
-            }
-            if (whatsappVerifyTokenChanged) {
-                config.setWebhookVerifiedAt(null);
-            }
-        } else if (metaWebhookChanged) {
-            config.setWebhookVerifiedAt(null);
-        }
-        validateWhatsappConfig(config);
-        validateMetaWebhookConfig(config);
-        return toCanalTokenConfigResponse(canalTokenConfigRepository.save(config));
+        return configuracionUseCase.saveCanalTokenConfig(request);
     }
 
     @Transactional
@@ -338,6 +257,7 @@ public class CrmUseCaseService {
         prospecto.setPresupuestoEstimado(request.presupuestoEstimado() == null
                 ? catalogoItem == null ? null : catalogoItem.getPrecioReferencial()
                 : money(nonNegative(request.presupuestoEstimado())));
+        prospecto.setPresupuestoMoneda(resolveBudgetCurrency(catalogoItem));
         prospecto.setFechaInteres(request.fechaInteres());
         prospecto.setCatalogoItemId(catalogoItem == null ? null : catalogoItem.getId());
         prospecto.setMetadataJson(trim(firstNonBlank(request.metadataJson(), catalogoItem == null ? null : catalogoItem.getMetadataJson())));
@@ -417,6 +337,7 @@ public class CrmUseCaseService {
                     ? firstNonBlank(request.interesDetalle(), request.mensaje())
                     : firstNonBlank(catalogoItem.getDescripcion(), request.interesDetalle())));
             prospecto.setPresupuestoEstimado(catalogoItem == null || catalogoItem.getPrecioReferencial() == null ? null : money(nonNegative(catalogoItem.getPrecioReferencial())));
+            prospecto.setPresupuestoMoneda(resolveBudgetCurrency(catalogoItem));
             prospecto.setCatalogoItemId(catalogoItem == null ? null : catalogoItem.getId());
             prospecto.setProductoPendiente(leadContext.productoPendiente());
             prospecto.setMetadataJson(publicLeadMetadata(request, catalogoItem, leadContext));
@@ -686,7 +607,9 @@ public class CrmUseCaseService {
             prospecto.setFechaInteres(request.fechaInteres());
         }
         if (request.catalogoItemId() != null) {
-            prospecto.setCatalogoItemId(validateCatalogoItemId(request.catalogoItemId()));
+            CrmCatalogoItem catalogoItem = findCatalogoItem(request.catalogoItemId());
+            prospecto.setCatalogoItemId(catalogoItem.getId());
+            prospecto.setPresupuestoMoneda(resolveBudgetCurrency(catalogoItem));
         }
         updateIfPresent(request.metadataJson(), value -> prospecto.setMetadataJson(trim(value)));
         updateIfPresent(request.estado(), value -> prospecto.setEstado(normalizeProspectState(requireEnum(value, ESTADOS_PROSPECTO, "ESTADO_PROSPECTO_INVALIDO"))));
@@ -818,6 +741,7 @@ public class CrmUseCaseService {
         String tipoBase = oportunidad.getProspecto() == null ? null : oportunidad.getProspecto().getTipoInteres();
         oportunidad.setTipoOportunidad(resolveTipoOportunidad(firstNonBlank(request.tipoOportunidad(), tipoBase)));
         oportunidad.setCatalogoItemId(resolveCatalogoItemForOpportunity(request.catalogoItemId(), oportunidad.getProspecto()));
+        oportunidad.setMoneda(resolveOpportunityCurrency(oportunidad.getCatalogoItemId(), oportunidad.getProspecto()));
         oportunidad.setTitulo(required(request.titulo(), "El titulo de la oportunidad es obligatorio"));
         oportunidad.setDescripcion(trim(request.descripcion()));
         oportunidad.setMontoEstimado(money(nonNegative(request.montoEstimado())));
@@ -908,25 +832,56 @@ public class CrmUseCaseService {
         return pageOportunidades(query, null, null, "GANADA", responsableId, cierreDesde, cierreHasta, true, false, page, size);
     }
 
+    /**
+     * Tablero del embudo: una columna por etapa activa.
+     *
+     * Antes se traian todas las oportunidades del tenant y se filtraban y
+     * agrupaban en memoria, asi que el coste crecia con el historico completo
+     * aunque el tablero solo muestre las abiertas. Ahora los totales los
+     * calcula la base de datos y de cada columna se piden solo las tarjetas
+     * visibles: el coste pasa a depender del tamano del tablero, no del
+     * volumen acumulado.
+     */
     @Transactional(readOnly = true)
     public List<CrmPipelineColumnResponse> pipeline() {
-        List<CrmOportunidad> oportunidades = scopedOportunidades().stream()
-                .filter(oportunidad -> "ABIERTA".equals(oportunidad.getEstado()))
-                .toList();
-        return activePipelineStages().stream()
+        List<CrmEtapaPipeline> etapas = activePipelineStages();
+        if (etapas.isEmpty()) {
+            return List.of();
+        }
+
+        String ownerScope = accessPolicy.ownerScope();
+        List<Long> etapaIds = etapas.stream().map(CrmEtapaPipeline::getId).toList();
+
+        Map<Long, CrmOportunidadRepository.StageBoardTotalsProjection> totals = oportunidadRepository
+                .summarizeBoardByStage(ESTADO_OPORTUNIDAD_ABIERTA, ownerScope, etapaIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        CrmOportunidadRepository.StageBoardTotalsProjection::getEtapaId,
+                        row -> row
+                ));
+
+        Pageable cardWindow = PageRequest.of(0, BOARD_CARDS_PER_STAGE);
+
+        return etapas.stream()
                 .map(etapa -> {
-                    List<CrmOportunidad> matches = oportunidades.stream()
-                            .filter(oportunidad -> oportunidad.getEtapaPipeline() != null
-                                    && etapa.getId().equals(oportunidad.getEtapaPipeline().getId()))
-                            .sorted(Comparator.comparing(CrmOportunidad::getFechaUltimaActualizacion,
-                                    Comparator.nullsLast(Comparator.reverseOrder())))
-                            .toList();
-                    BigDecimal monto = sumAmount(matches);
+                    var stageTotals = totals.get(etapa.getId());
+                    long cantidad = stageTotals == null ? 0L : stageTotals.getCantidad();
+
+                    // Sin oportunidades abiertas no hace falta ir a por tarjetas.
+                    List<CrmOportunidad> cards = cantidad == 0L
+                            ? List.of()
+                            : oportunidadRepository.findBoardCardsByStage(
+                                    ESTADO_OPORTUNIDAD_ABIERTA,
+                                    etapa.getId(),
+                                    ownerScope,
+                                    cardWindow
+                            );
+
                     return new CrmPipelineColumnResponse(
                             CrmMapper.toEtapaResponse(etapa),
-                            matches.size(),
-                            monto,
-                            CrmMapper.toOportunidadResponses(matches)
+                            cantidad,
+                            money(stageTotals == null ? BigDecimal.ZERO : moneyOrZero(stageTotals.getMonto())),
+                            CrmMapper.toOportunidadResponses(cards)
                     );
                 })
                 .toList();
@@ -955,7 +910,9 @@ public class CrmUseCaseService {
         }
         updateIfPresent(request.tipoOportunidad(), value -> oportunidad.setTipoOportunidad(resolveTipoOportunidad(value)));
         if (request.catalogoItemId() != null) {
-            oportunidad.setCatalogoItemId(validateCatalogoItemId(request.catalogoItemId()));
+            CrmCatalogoItem catalogoItem = findCatalogoItem(request.catalogoItemId());
+            oportunidad.setCatalogoItemId(catalogoItem.getId());
+            oportunidad.setMoneda(resolveBudgetCurrency(catalogoItem));
         }
         updateIfPresent(request.titulo(), value -> oportunidad.setTitulo(required(value, "El titulo de la oportunidad es obligatorio")));
         updateIfPresent(request.descripcion(), value -> oportunidad.setDescripcion(trim(value)));
@@ -1121,6 +1078,8 @@ public class CrmUseCaseService {
                 oportunidad.getId(),
                 request.detalles()
         ));
+        oportunidad.setMoneda(monedaCotizacion);
+        oportunidadRepository.save(oportunidad);
         appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Cotizacion creada desde CRM. Pendiente de envio al cliente");
         return cotizacion;
     }
@@ -1278,111 +1237,39 @@ public class CrmUseCaseService {
         return CrmMapper.toActividadResponse(actividadRepository.save(actividad));
     }
 
-    @Transactional(readOnly = true)
+    // --- Dashboard y reportes ---------------------------------------------
+    // Agregaciones de solo lectura; viven en CrmReporteUseCase.
+
     public CrmDashboardResponse dashboard() {
-        boolean viewAll = canViewAll();
-        String current = currentUserKey();
-        String ownerScope = viewAll ? null : current;
-        return new CrmDashboardResponse(
-                viewAll ? prospectoRepository.countByEstado("NUEVO") : prospectoRepository.countByResponsableIdAndEstado(current, "NUEVO"),
-                viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO"),
-                viewAll ? oportunidadRepository.countByEstado("ABIERTA") : oportunidadRepository.countByResponsableIdAndEstado(current, "ABIERTA"),
-                viewAll ? oportunidadRepository.countByEstado("GANADA") : oportunidadRepository.countByResponsableIdAndEstado(current, "GANADA"),
-                viewAll ? oportunidadRepository.countByEstado("PERDIDA") : oportunidadRepository.countByResponsableIdAndEstado(current, "PERDIDA"),
-                viewAll ? actividadRepository.countByEstado("PENDIENTE") : actividadRepository.countByUsuarioIdAndEstado(current, "PENDIENTE"),
-                viewAll
-                        ? actividadRepository.countByEstadoAndFechaProgramadaBefore("PENDIENTE", OffsetDateTime.now())
-                        : actividadRepository.countByUsuarioIdAndEstadoAndFechaProgramadaBefore(current, "PENDIENTE", OffsetDateTime.now()),
-                viewAll ? prospectoRepository.countByCanalIngresoNot("MANUAL") : 0,
-                viewAll ? prospectoRepository.countByCanalIngreso("MANUAL") : 0,
-                money(oportunidadRepository.sumOpenPipelineScoped(ownerScope)),
-                resumenPorEtapaScoped(ownerScope)
-        );
+        return reporteUseCase.dashboard();
     }
 
-    @Transactional(readOnly = true)
     public CrmReportesResponse reportes() {
-        boolean viewAll = canViewAll();
-        String current = currentUserKey();
-        return new CrmReportesResponse(
-                resumenPorEtapaScoped(viewAll ? null : current),
-                viewAll ? actividadRepository.countByEstado("PENDIENTE") : actividadRepository.countByUsuarioIdAndEstado(current, "PENDIENTE"),
-                viewAll ? actividadRepository.countByEstado("REALIZADA") : actividadRepository.countByUsuarioIdAndEstado(current, "REALIZADA"),
-                viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO"),
-                viewAll ? prospectoRepository.countByEstado("PERDIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "PERDIDO")
-        );
+        return reporteUseCase.reportes();
     }
 
-    @Transactional(readOnly = true)
     public List<CrmReporteBucketResponse> reporteOportunidadesEtapa() {
-        return resumenPorEtapaScoped(canViewAll() ? null : currentUserKey()).stream()
-                .map(item -> new CrmReporteBucketResponse(item.etapa(), item.etapa(), item.cantidad(), item.monto()))
-                .toList();
+        return reporteUseCase.reporteOportunidadesEtapa();
     }
 
-    @Transactional(readOnly = true)
     public List<CrmReporteBucketResponse> reporteOportunidadesVendedor() {
-        String ownerScope = canViewAll() ? null : currentUserKey();
-        return oportunidadRepository.summarizeByOwnerScoped(ownerScope).stream()
-                .map(row -> new CrmReporteBucketResponse(
-                        row.getCodigo(),
-                        row.getCodigo(),
-                        row.getCantidad(),
-                        money(row.getMonto())
-                ))
-                .toList();
+        return reporteUseCase.reporteOportunidadesVendedor();
     }
 
-    @Transactional(readOnly = true)
     public Map<String, Object> reporteConversiones() {
-        boolean viewAll = canViewAll();
-        String current = currentUserKey();
-        String ownerScope = viewAll ? null : current;
-        long prospectos = viewAll ? prospectoRepository.count() : prospectoRepository.countByResponsableId(current);
-        long convertidos = viewAll ? prospectoRepository.countByEstado("CONVERTIDO") : prospectoRepository.countByResponsableIdAndEstado(current, "CONVERTIDO");
-        long oportunidades = oportunidadRepository.countScoped(ownerScope);
-        long ganadas = viewAll
-                ? oportunidadRepository.countByEstado("GANADA")
-                : oportunidadRepository.countByResponsableIdAndEstado(current, "GANADA");
-        long cotizadas = oportunidadRepository.countQuotedScoped(ownerScope);
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("prospectoCliente", conversion(convertidos, prospectos));
-        response.put("oportunidadGanada", conversion(ganadas, oportunidades));
-        response.put("cotizacionVenta", conversion(ganadas, cotizadas));
-        response.put("prospectos", prospectos);
-        response.put("prospectosConvertidos", convertidos);
-        response.put("oportunidades", oportunidades);
-        response.put("oportunidadesGanadas", ganadas);
-        return response;
+        return reporteUseCase.reporteConversiones();
     }
 
-    @Transactional(readOnly = true)
     public List<CrmReporteBucketResponse> reporteProspectosOrigen() {
-        String ownerScope = canViewAll() ? null : currentUserKey();
-        return prospectoRepository.summarizeByOriginScoped(ownerScope).stream()
-                .map(row -> new CrmReporteBucketResponse(
-                        row.getCodigo(), row.getCodigo(), row.getCantidad(), BigDecimal.ZERO
-                ))
-                .toList();
+        return reporteUseCase.reporteProspectosOrigen();
     }
 
-    @Transactional(readOnly = true)
+    public List<CrmResponsableOptionResponse> reporteResponsables() {
+        return reporteUseCase.reporteResponsables();
+    }
+
     public Map<String, Object> reporteGanadasPerdidas() {
-        boolean viewAll = canViewAll();
-        String current = currentUserKey();
-        String ownerScope = viewAll ? null : current;
-        long ganadas = viewAll
-                ? oportunidadRepository.countByEstado("GANADA")
-                : oportunidadRepository.countByResponsableIdAndEstado(current, "GANADA");
-        long perdidas = viewAll
-                ? oportunidadRepository.countByEstado("PERDIDA")
-                : oportunidadRepository.countByResponsableIdAndEstado(current, "PERDIDA");
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("ganadas", ganadas);
-        response.put("perdidas", perdidas);
-        response.put("montoGanado", money(oportunidadRepository.sumRealByEstadoScoped(ownerScope, "GANADA")));
-        response.put("montoPerdido", money(oportunidadRepository.sumRealByEstadoScoped(ownerScope, "PERDIDA")));
-        return response;
+        return reporteUseCase.reporteGanadasPerdidas();
     }
 
     private void moveStageWithValidation(CrmOportunidad oportunidad, CrmEtapaPipeline destino, String observacion) {
@@ -1700,21 +1587,6 @@ public class CrmUseCaseService {
         }
     }
 
-    private BigDecimal sumAmount(List<CrmOportunidad> oportunidades) {
-        return oportunidades.stream()
-                .map(oportunidad -> moneyOrZero(oportunidad.getMontoReal() != null ? oportunidad.getMontoReal() : oportunidad.getMontoEstimado()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal conversion(long numerator, long denominator) {
-        if (denominator <= 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        return BigDecimal.valueOf(numerator)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(denominator), 2, RoundingMode.HALF_UP);
-    }
 
     private void applyOportunidadLinks(CrmOportunidad oportunidad, Long prospectoId, Long clienteId) {
         if (prospectoId == null && clienteId == null && oportunidad.getProspecto() == null && oportunidad.getCliente() == null) {
@@ -1767,11 +1639,6 @@ public class CrmUseCaseService {
         }
     }
 
-    private List<CrmOportunidad> scopedOportunidades() {
-        return canViewAll()
-                ? oportunidadRepository.findAllByOrderByIdDesc()
-                : oportunidadRepository.findByResponsableIdOrderByIdDesc(currentUserKey());
-    }
 
     private void ensureOpportunityPipelineData(CrmOportunidad oportunidad) {
         if (oportunidad.getProspecto() == null && oportunidad.getCliente() == null) {
@@ -2066,28 +1933,12 @@ public class CrmUseCaseService {
     private BigDecimal sumPipeline(List<CrmOportunidad> oportunidades) {
         return oportunidades.stream()
                 .filter(oportunidad -> "ABIERTA".equals(oportunidad.getEstado()))
-                .map(oportunidad -> moneyOrZero(oportunidad.getMontoEstimado()))
+                .map(oportunidad -> toTenantBase(
+                        oportunidad.getMontoEstimado(), oportunidad.getMoneda()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
-    private List<CrmEtapaResumenResponse> resumenPorEtapaScoped(String ownerScope) {
-        Map<String, CrmOportunidadRepository.AggregateProjection> totals = new LinkedHashMap<>();
-        for (CrmOportunidadRepository.AggregateProjection row
-                : oportunidadRepository.summarizeByStageScoped(ownerScope)) {
-            totals.put(row.getCodigo(), row);
-        }
-        return activeStages().stream()
-                .map(stage -> {
-                    CrmOportunidadRepository.AggregateProjection aggregate = totals.get(stage.getCodigo());
-                    return new CrmEtapaResumenResponse(
-                            stage.getCodigo(),
-                            aggregate == null ? 0 : aggregate.getCantidad(),
-                            aggregate == null ? BigDecimal.ZERO.setScale(2) : money(aggregate.getMonto())
-                    );
-                })
-                .toList();
-    }
 
     private List<CrmEtapaResumenResponse> resumenPorEtapa(List<CrmOportunidad> oportunidades) {
         return activeStages().stream()
@@ -2097,7 +1948,8 @@ public class CrmUseCaseService {
                                     && etapa.getId().equals(oportunidad.getEtapaPipeline().getId()))
                             .toList();
                     BigDecimal monto = matches.stream()
-                            .map(oportunidad -> moneyOrZero(oportunidad.getMontoEstimado()))
+                            .map(oportunidad -> toTenantBase(
+                                    oportunidad.getMontoEstimado(), oportunidad.getMoneda()))
                             .reduce(BigDecimal.ZERO, BigDecimal::add)
                             .setScale(2, RoundingMode.HALF_UP);
                     return new CrmEtapaResumenResponse(etapa.getCodigo(), matches.size(), monto);
@@ -2368,56 +2220,35 @@ public class CrmUseCaseService {
         return resolveResponsable(requested);
     }
 
+    // Las reglas de visibilidad viven en CrmAccessPolicy. Se conservan estos
+    // envoltorios para no tocar las decenas de llamadas internas.
+
     private void ensureCanRead(String owner) {
-        if (PUBLIC_LEAD_OWNER.equals(owner) && canReadPublicLeadQueue()) {
-            return;
-        }
-        if (!canViewAll() && !currentUserKey().equals(owner)) {
-            throw new BusinessException("CRM_SIN_ACCESO", "No tienes acceso a este registro CRM");
-        }
+        accessPolicy.ensureCanRead(owner);
     }
 
     private void ensureCanWrite(String owner) {
-        if (PUBLIC_LEAD_OWNER.equals(owner) && canWritePublicLeadQueue()) {
-            return;
-        }
-        ensureCanRead(owner);
+        accessPolicy.ensureCanWrite(owner);
     }
 
     private boolean canViewAll() {
-        return hasAuthority("CRM_VIEW_ALL")
-                || hasAuthority("ROLE_ADMIN_GENERAL")
-                || hasAuthority("ROLE_PLATFORM_ADMIN");
+        return accessPolicy.canViewAll();
     }
 
     private boolean hasAuthority(String authority) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(granted -> authority.equals(granted.getAuthority()));
+        return accessPolicy.hasAuthority(authority);
     }
 
     private boolean canReadPublicLeadQueue() {
-        return canViewAll()
-                || hasAuthority("CRM_LEADS_READ")
-                || hasAuthority("CRM_ACTIVITIES_READ");
+        return accessPolicy.canReadPublicLeadQueue();
     }
 
     private boolean canWritePublicLeadQueue() {
-        return canViewAll()
-                || hasAuthority("CRM_LEADS_WRITE")
-                || hasAuthority("CRM_ACTIVITIES_WRITE");
+        return accessPolicy.canWritePublicLeadQueue();
     }
 
     private String currentUserKey() {
-        Long usuarioId = authorizationService.currentUsuarioId();
-        if (usuarioId != null) {
-            return String.valueOf(usuarioId);
-        }
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getName() != null && !authentication.getName().isBlank()) {
-            return authentication.getName();
-        }
-        return "system";
+        return accessPolicy.currentUserKey();
     }
 
     private String requireEnum(String value, Set<String> allowed, String code) {
@@ -2682,48 +2513,38 @@ public class CrmUseCaseService {
         return required(value, "Campo CRM obligatorio").toUpperCase(Locale.ROOT);
     }
 
+    // La conversion de moneda vive en CrmCurrencyConverter; estos envoltorios
+    // mantienen intactas las llamadas internas.
+
     private String normalizeCurrency(String value) {
-        String normalized = firstNonBlank(value, currentTenantBaseCurrency()).toUpperCase(Locale.ROOT);
-        try {
-            Currency.getInstance(normalized);
-            return normalized;
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException("CRM_MONEDA_INVALIDA", "Selecciona una moneda ISO valida");
-        }
+        return currencyConverter.normalizeCurrency(value);
     }
 
     private String requireEnabledQuoteCurrency(String value) {
-        return requireEnabledCommercialCurrency(value, "cotización");
+        return currencyConverter.requireEnabledQuoteCurrency(value);
     }
 
     private String requireEnabledCommercialCurrency(String value, String operation) {
-        String currency = normalizeCurrency(value);
-        String baseCurrency = currentTenantBaseCurrency().toUpperCase(Locale.ROOT);
-        if (currency.equals(baseCurrency)) {
-            return currency;
-        }
-        CrmCurrencyConfig config = currencyConfigRepository.findByMoneda(currency)
-                .orElseThrow(() -> new BusinessException(
-                        "CRM_MONEDA_NO_CONFIGURADA",
-                        "Configura el tipo de cambio de " + currency + " antes de continuar con " + operation));
-        if (!config.isActivo()) {
-            throw new BusinessException(
-                    "CRM_MONEDA_INACTIVA",
-                    "La moneda " + currency + " no está disponible para nuevos productos ni cotizaciones");
-        }
-        if (config.getTipoCambioBase() == null || config.getTipoCambioBase().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(
-                    "CRM_TIPO_CAMBIO_INVALIDO",
-                    "Configura un tipo de cambio válido para " + currency);
-        }
-        return currency;
+        return currencyConverter.requireEnabledCommercialCurrency(value, operation);
     }
 
     private String currentTenantBaseCurrency() {
-        return empresaRepository.findByTenantId(TenantContext.getTenantId())
-                .map(empresa -> trim(empresa.getMonedaCodigo()))
-                .filter(value -> value != null)
-                .orElse("PEN");
+        return currencyConverter.currentTenantBaseCurrency();
+    }
+
+    private BigDecimal toTenantBase(BigDecimal amount, String sourceCurrency) {
+        return currencyConverter.toTenantBase(amount, sourceCurrency);
+    }
+
+    private String resolveBudgetCurrency(CrmCatalogoItem catalogoItem) {
+        return normalizeCurrency(catalogoItem == null ? currentTenantBaseCurrency() : catalogoItem.getMoneda());
+    }
+
+    private String resolveOpportunityCurrency(Long catalogoItemId, CrmProspecto prospecto) {
+        if (catalogoItemId != null) {
+            return resolveBudgetCurrency(findCatalogoItem(catalogoItemId));
+        }
+        return normalizeCurrency(prospecto == null ? currentTenantBaseCurrency() : prospecto.getPresupuestoMoneda());
     }
 
     private String normalizeCode(String value) {
@@ -2813,205 +2634,6 @@ public class CrmUseCaseService {
         actividad.setEstadoProspectoResultado("NUEVO");
         actividad.setNivelInteres("FRIO");
         actividadRepository.save(actividad);
-    }
-
-    private CrmCanalTokenConfig defaultCanalConfig(String canal) {
-        CrmCanalTokenConfig config = new CrmCanalTokenConfig();
-        config.setCanal(canal);
-        config.setNombre(defaultCanalName(canal));
-        config.setActivo(false);
-        return config;
-    }
-
-    private CrmInboxChannelResponse inboxChannel(String canal,
-                                                 String nombre,
-                                                 Map<String, CrmCanalTokenConfig> existing) {
-        CrmCanalTokenConfig config = existing.get(canal);
-        return new CrmInboxChannelResponse(canal, nombre, config != null && config.isActivo());
-    }
-
-    private CrmCurrencyConfig defaultCurrencyConfig(String moneda) {
-        CrmCurrencyConfig config = new CrmCurrencyConfig();
-        config.setMoneda(moneda);
-        if ("EUR".equals(moneda)) {
-            config.setNombre("Euro");
-            config.setSimbolo("€");
-            config.setTipoCambioBase(new BigDecimal("4.100000"));
-        } else {
-            config.setNombre("Dólar americano");
-            config.setSimbolo("$");
-            config.setTipoCambioBase(new BigDecimal("3.800000"));
-        }
-        config.setMargenConversionPorcentaje(BigDecimal.ZERO);
-        config.setActivo(false);
-        return config;
-    }
-
-    private String defaultCanalName(String canal) {
-        return switch (canal) {
-            case "WEB" -> "Landing web";
-            case "WHATSAPP" -> "WhatsApp Business";
-            case "INSTAGRAM" -> "Instagram";
-            case "FACEBOOK" -> "Facebook Lead Ads";
-            default -> canal;
-        };
-    }
-
-    private CrmCurrencyConfigResponse toCurrencyConfigResponse(CrmCurrencyConfig config) {
-        BigDecimal base = config.getTipoCambioBase() == null ? BigDecimal.ONE : config.getTipoCambioBase();
-        BigDecimal margin = config.getMargenConversionPorcentaje() == null ? BigDecimal.ZERO : config.getMargenConversionPorcentaje();
-        BigDecimal saleRate = base
-                .multiply(BigDecimal.ONE.add(margin.divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP)))
-                .setScale(6, RoundingMode.HALF_UP);
-        return new CrmCurrencyConfigResponse(
-                config.getId(),
-                config.getMoneda(),
-                config.getNombre(),
-                config.getSimbolo(),
-                base.setScale(6, RoundingMode.HALF_UP),
-                margin.setScale(4, RoundingMode.HALF_UP),
-                saleRate,
-                config.isActivo()
-        );
-    }
-
-    private CrmCanalTokenConfigResponse toCanalTokenConfigResponse(CrmCanalTokenConfig config) {
-        return new CrmCanalTokenConfigResponse(
-                config.getId(),
-                config.getCanal(),
-                config.getNombre(),
-                null,
-                null,
-                config.getWebhookUrl(),
-                config.getAppId(),
-                config.getPhoneNumberId(),
-                config.getWabaId(),
-                hasText(config.getAccessToken()),
-                hasText(config.getVerifyToken()),
-                hasText(config.getAppSecret()),
-                config.getWebhookVerifiedAt(),
-                config.getLastConnectionTestAt(),
-                config.getLastConnectionOk(),
-                config.getLastConnectionMessage(),
-                config.getWabaSubscribed(),
-                config.getMetaDisplayPhoneNumber(),
-                config.getMetaVerifiedName(),
-                config.getMetaQualityRating(),
-                config.getMetaTokenExpiresAt(),
-                config.isActivo(),
-                config.getMetadataJson()
-        );
-    }
-
-    private void validateWhatsappConfig(CrmCanalTokenConfig config) {
-        if (!"WHATSAPP".equals(config.getCanal()) || !config.isActivo()) {
-            return;
-        }
-        if (!hasText(config.getPhoneNumberId())) {
-            throw new BusinessException("CRM_WHATSAPP_PHONE_ID_REQUERIDO", "Configura el Phone number ID de WhatsApp");
-        }
-        if (!hasText(config.getWabaId())) {
-            throw new BusinessException("CRM_WHATSAPP_WABA_ID_REQUERIDO", "Configura el WABA ID de WhatsApp");
-        }
-        if (!hasText(config.getAccessToken())) {
-            throw new BusinessException("CRM_WHATSAPP_ACCESS_TOKEN_REQUERIDO", "Configura el access token de WhatsApp");
-        }
-        if (!hasText(config.getVerifyToken())) {
-            throw new BusinessException("CRM_WHATSAPP_VERIFY_TOKEN_REQUERIDO", "Configura el verify token del webhook");
-        }
-        if (!hasText(config.getAppSecret())) {
-            throw new BusinessException("CRM_WHATSAPP_APP_SECRET_REQUERIDO", "Configura el App secret para validar la firma del webhook");
-        }
-        if (!hasText(config.getAppId())) {
-            throw new BusinessException("CRM_WHATSAPP_APP_ID_REQUERIDO", "Configura el App ID de Meta");
-        }
-    }
-
-    private void validateMetaWebhookConfig(CrmCanalTokenConfig config) {
-        if (!Set.of("FACEBOOK", "INSTAGRAM").contains(config.getCanal()) || !config.isActivo()) {
-            return;
-        }
-        String channelName = "FACEBOOK".equals(config.getCanal()) ? "Facebook" : "Instagram";
-        if (!hasText(config.getAccessToken())) {
-            throw new BusinessException("CRM_META_ACCESS_TOKEN_REQUERIDO", "Configura el access token de " + channelName);
-        }
-        if (!hasText(config.getVerifyToken())) {
-            throw new BusinessException("CRM_META_VERIFY_TOKEN_REQUERIDO", "Configura el verify token del webhook de " + channelName);
-        }
-        if (!hasText(config.getAppId())) {
-            throw new BusinessException("CRM_META_APP_ID_REQUERIDO", "Configura el App ID de Meta para " + channelName);
-        }
-        if (!hasText(config.getAppSecret())) {
-            throw new BusinessException("CRM_META_APP_SECRET_REQUERIDO", "Configura el App secret de Meta para " + channelName);
-        }
-        if (!isPublicHttpsUrl(config.getWebhookUrl())) {
-            throw new BusinessException(
-                    "CRM_META_WEBHOOK_HTTPS_REQUERIDO",
-                    "El webhook de " + channelName + " debe usar una URL publica HTTPS"
-            );
-        }
-    }
-
-    private boolean isPublicHttpsUrl(String value) {
-        if (!hasText(value)) {
-            return false;
-        }
-        try {
-            URI uri = URI.create(value.trim());
-            String host = uri.getHost();
-            return "https".equalsIgnoreCase(uri.getScheme())
-                    && hasText(host)
-                    && !Set.of("localhost", "127.0.0.1", "::1").contains(host.toLowerCase(Locale.ROOT));
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
-    }
-
-    private CrmSentEmailResponse toSentEmailResponse(Cotizacion quote) {
-        Cliente recipient = quote.getCliente();
-        String recipientName = recipient == null ? null : recipient.getNombre();
-        String recipientEmail = recipient == null ? null : recipient.getEmail();
-        if (quote.getCrmOportunidadId() != null && (!hasText(recipientName) || !hasText(recipientEmail))) {
-            CrmOportunidad opportunity = oportunidadRepository.findById(quote.getCrmOportunidadId()).orElse(null);
-            if (opportunity != null) {
-                Cliente opportunityClient = opportunity.getCliente();
-                CrmProspecto prospect = opportunity.getProspecto();
-                recipientName = firstNonBlank(
-                        recipientName,
-                        opportunityClient == null ? null : opportunityClient.getNombre(),
-                        prospect == null ? null : prospect.getNombre(),
-                        "Destinatario CRM"
-                );
-                recipientEmail = firstNonBlank(
-                        recipientEmail,
-                        opportunityClient == null ? null : opportunityClient.getEmail(),
-                        prospect == null ? null : prospect.getCorreo()
-                );
-            }
-        }
-        return new CrmSentEmailResponse(
-                quote.getId(),
-                quote.getCrmOportunidadId(),
-                firstNonBlank(recipientName, "Destinatario CRM"),
-                recipientEmail,
-                "Cotizacion COT-" + String.format(Locale.ROOT, "%03d", quote.getId()),
-                quote.getMoneda(),
-                quote.getTotal(),
-                quote.getEstado(),
-                quote.getUsuarioNombre(),
-                quote.getFechaEnvio()
-        );
-    }
-
-    private void resetWhatsappConnectionStatus(CrmCanalTokenConfig config) {
-        config.setLastConnectionTestAt(null);
-        config.setLastConnectionOk(null);
-        config.setLastConnectionMessage(null);
-        config.setWabaSubscribed(null);
-        config.setMetaDisplayPhoneNumber(null);
-        config.setMetaVerifiedName(null);
-        config.setMetaQualityRating(null);
-        config.setMetaTokenExpiresAt(null);
     }
 
     private String publicLeadMetadata(PublicCrmLeadRequest request, CrmCatalogoItem catalogoItem, LandingLeadContext leadContext) {

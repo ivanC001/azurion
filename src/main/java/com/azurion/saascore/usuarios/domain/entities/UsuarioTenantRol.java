@@ -32,4 +32,44 @@ public class UsuarioTenantRol extends BaseEntity {
 
     @Column(name = "asignado_por_usuario_id")
     private Long asignadoPorUsuarioId;
+
+    public UsuarioGlobal getUsuarioGlobal() {
+        return usuarioGlobal;
+    }
+
+    public void setUsuarioGlobal(UsuarioGlobal usuarioGlobal) {
+        this.usuarioGlobal = usuarioGlobal;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getRolCodigo() {
+        return rolCodigo;
+    }
+
+    public void setRolCodigo(String rolCodigo) {
+        this.rolCodigo = rolCodigo;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    public Long getAsignadoPorUsuarioId() {
+        return asignadoPorUsuarioId;
+    }
+
+    public void setAsignadoPorUsuarioId(Long asignadoPorUsuarioId) {
+        this.asignadoPorUsuarioId = asignadoPorUsuarioId;
+    }
 }

@@ -31,4 +31,52 @@ public class CrmCurrencyConfig extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getMoneda() {
+        return moneda;
+    }
+
+    public void setMoneda(String moneda) {
+        this.moneda = moneda;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getSimbolo() {
+        return simbolo;
+    }
+
+    public void setSimbolo(String simbolo) {
+        this.simbolo = simbolo;
+    }
+
+    public BigDecimal getTipoCambioBase() {
+        return tipoCambioBase;
+    }
+
+    public void setTipoCambioBase(BigDecimal tipoCambioBase) {
+        this.tipoCambioBase = tipoCambioBase;
+    }
+
+    public BigDecimal getMargenConversionPorcentaje() {
+        return margenConversionPorcentaje;
+    }
+
+    public void setMargenConversionPorcentaje(BigDecimal margenConversionPorcentaje) {
+        this.margenConversionPorcentaje = margenConversionPorcentaje;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

@@ -22,12 +22,16 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/v1/auth")
@@ -119,6 +123,21 @@ public class AuthController {
             @Valid @RequestBody UpdateCurrentUserProfileRequest request
     ) {
         return ApiResponse.ok(currentUserProfileService.update(authentication, request), "Perfil actualizado");
+    }
+
+    @PutMapping(value = "/profile/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<CurrentUserProfileResponse> updateCurrentProfilePhoto(
+            Authentication authentication,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ApiResponse.ok(currentUserProfileService.updatePhoto(authentication, file), "Foto del perfil actualizada");
+    }
+
+    @DeleteMapping("/profile/photo")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<CurrentUserProfileResponse> deleteCurrentProfilePhoto(Authentication authentication) {
+        return ApiResponse.ok(currentUserProfileService.deletePhoto(authentication), "Foto del perfil eliminada");
     }
 
     @PutMapping("/profile/password")

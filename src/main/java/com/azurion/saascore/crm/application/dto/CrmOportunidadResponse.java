@@ -17,6 +17,7 @@ public record CrmOportunidadResponse(
         String descripcion,
         BigDecimal montoEstimado,
         BigDecimal montoReal,
+        String moneda,
         Integer probabilidad,
         Long etapaId,
         String etapa,

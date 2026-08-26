@@ -73,4 +73,148 @@ public class CompraDetalle extends BaseEntity {
 
     @Column(name = "fecha_vencimiento")
     private LocalDate fechaVencimiento;
+
+    public Compra getCompra() {
+        return compra;
+    }
+
+    public void setCompra(Compra compra) {
+        this.compra = compra;
+    }
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public BigDecimal getCantidad() {
+        return cantidad;
+    }
+
+    public void setCantidad(BigDecimal cantidad) {
+        this.cantidad = cantidad;
+    }
+
+    public BigDecimal getCostoUnitario() {
+        return costoUnitario;
+    }
+
+    public void setCostoUnitario(BigDecimal costoUnitario) {
+        this.costoUnitario = costoUnitario;
+    }
+
+    public BigDecimal getCostoNetoUnitario() {
+        return costoNetoUnitario;
+    }
+
+    public void setCostoNetoUnitario(BigDecimal costoNetoUnitario) {
+        this.costoNetoUnitario = costoNetoUnitario;
+    }
+
+    public BigDecimal getPorcentajeIgv() {
+        return porcentajeIgv;
+    }
+
+    public void setPorcentajeIgv(BigDecimal porcentajeIgv) {
+        this.porcentajeIgv = porcentajeIgv;
+    }
+
+    public BigDecimal getMontoIgvUnitario() {
+        return montoIgvUnitario;
+    }
+
+    public void setMontoIgvUnitario(BigDecimal montoIgvUnitario) {
+        this.montoIgvUnitario = montoIgvUnitario;
+    }
+
+    public BigDecimal getCostoTotalUnitario() {
+        return costoTotalUnitario;
+    }
+
+    public void setCostoTotalUnitario(BigDecimal costoTotalUnitario) {
+        this.costoTotalUnitario = costoTotalUnitario;
+    }
+
+    public BigDecimal getCostoInventariableUnitario() {
+        return costoInventariableUnitario;
+    }
+
+    public void setCostoInventariableUnitario(BigDecimal costoInventariableUnitario) {
+        this.costoInventariableUnitario = costoInventariableUnitario;
+    }
+
+    public BigDecimal getPrecioVenta() {
+        return precioVenta;
+    }
+
+    public void setPrecioVenta(BigDecimal precioVenta) {
+        this.precioVenta = precioVenta;
+    }
+
+    public BigDecimal getPrecioVentaNeto() {
+        return precioVentaNeto;
+    }
+
+    public void setPrecioVentaNeto(BigDecimal precioVentaNeto) {
+        this.precioVentaNeto = precioVentaNeto;
+    }
+
+    public BigDecimal getTotal() {
+        return total;
+    }
+
+    public void setTotal(BigDecimal total) {
+        this.total = total;
+    }
+
+    public BigDecimal getSubtotalNeto() {
+        return subtotalNeto;
+    }
+
+    public void setSubtotalNeto(BigDecimal subtotalNeto) {
+        this.subtotalNeto = subtotalNeto;
+    }
+
+    public BigDecimal getMontoIgv() {
+        return montoIgv;
+    }
+
+    public void setMontoIgv(BigDecimal montoIgv) {
+        this.montoIgv = montoIgv;
+    }
+
+    public BigDecimal getTotalCostoInventariable() {
+        return totalCostoInventariable;
+    }
+
+    public void setTotalCostoInventariable(BigDecimal totalCostoInventariable) {
+        this.totalCostoInventariable = totalCostoInventariable;
+    }
+
+    public String getCodigoLote() {
+        return codigoLote;
+    }
+
+    public void setCodigoLote(String codigoLote) {
+        this.codigoLote = codigoLote;
+    }
+
+    public LocalDate getFechaFabricacion() {
+        return fechaFabricacion;
+    }
+
+    public void setFechaFabricacion(LocalDate fechaFabricacion) {
+        this.fechaFabricacion = fechaFabricacion;
+    }
+
+    public LocalDate getFechaVencimiento() {
+        return fechaVencimiento;
+    }
+
+    public void setFechaVencimiento(LocalDate fechaVencimiento) {
+        this.fechaVencimiento = fechaVencimiento;
+    }
 }

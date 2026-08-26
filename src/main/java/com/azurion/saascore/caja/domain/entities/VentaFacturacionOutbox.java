@@ -55,4 +55,116 @@ public class VentaFacturacionOutbox extends BaseEntity {
 
     @Column(name = "heartbeat_at")
     private LocalDateTime heartbeatAt;
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getTenantRuc() {
+        return tenantRuc;
+    }
+
+    public void setTenantRuc(String tenantRuc) {
+        this.tenantRuc = tenantRuc;
+    }
+
+    public Long getVentaId() {
+        return ventaId;
+    }
+
+    public void setVentaId(Long ventaId) {
+        this.ventaId = ventaId;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getEndpoint() {
+        return endpoint;
+    }
+
+    public void setEndpoint(String endpoint) {
+        this.endpoint = endpoint;
+    }
+
+    public String getTipoComprobante() {
+        return tipoComprobante;
+    }
+
+    public void setTipoComprobante(String tipoComprobante) {
+        this.tipoComprobante = tipoComprobante;
+    }
+
+    public String getPayloadJson() {
+        return payloadJson;
+    }
+
+    public void setPayloadJson(String payloadJson) {
+        this.payloadJson = payloadJson;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Integer getAttempts() {
+        return attempts;
+    }
+
+    public void setAttempts(Integer attempts) {
+        this.attempts = attempts;
+    }
+
+    public LocalDateTime getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public void setNextAttemptAt(LocalDateTime nextAttemptAt) {
+        this.nextAttemptAt = nextAttemptAt;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
+    }
+
+    public String getLeaseOwner() {
+        return leaseOwner;
+    }
+
+    public void setLeaseOwner(String leaseOwner) {
+        this.leaseOwner = leaseOwner;
+    }
+
+    public LocalDateTime getLeaseUntil() {
+        return leaseUntil;
+    }
+
+    public void setLeaseUntil(LocalDateTime leaseUntil) {
+        this.leaseUntil = leaseUntil;
+    }
+
+    public LocalDateTime getHeartbeatAt() {
+        return heartbeatAt;
+    }
+
+    public void setHeartbeatAt(LocalDateTime heartbeatAt) {
+        this.heartbeatAt = heartbeatAt;
+    }
 }

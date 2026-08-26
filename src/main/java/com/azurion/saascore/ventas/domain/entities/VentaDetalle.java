@@ -63,4 +63,124 @@ public class VentaDetalle extends BaseEntity {
 
     @Column(name = "total", nullable = false, precision = 18, scale = 2)
     private BigDecimal total;
+
+    public Venta getVenta() {
+        return venta;
+    }
+
+    public void setVenta(Venta venta) {
+        this.venta = venta;
+    }
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public String getSku() {
+        return sku;
+    }
+
+    public void setSku(String sku) {
+        this.sku = sku;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public BigDecimal getCantidad() {
+        return cantidad;
+    }
+
+    public void setCantidad(BigDecimal cantidad) {
+        this.cantidad = cantidad;
+    }
+
+    public BigDecimal getPrecioUnitario() {
+        return precioUnitario;
+    }
+
+    public void setPrecioUnitario(BigDecimal precioUnitario) {
+        this.precioUnitario = precioUnitario;
+    }
+
+    public BigDecimal getDescuento() {
+        return descuento;
+    }
+
+    public void setDescuento(BigDecimal descuento) {
+        this.descuento = descuento;
+    }
+
+    public String getTipoOperacionCodigo() {
+        return tipoOperacionCodigo;
+    }
+
+    public void setTipoOperacionCodigo(String tipoOperacionCodigo) {
+        this.tipoOperacionCodigo = tipoOperacionCodigo;
+    }
+
+    public String getTipoAfectacionIgvCodigo() {
+        return tipoAfectacionIgvCodigo;
+    }
+
+    public void setTipoAfectacionIgvCodigo(String tipoAfectacionIgvCodigo) {
+        this.tipoAfectacionIgvCodigo = tipoAfectacionIgvCodigo;
+    }
+
+    public String getTributoCodigo() {
+        return tributoCodigo;
+    }
+
+    public void setTributoCodigo(String tributoCodigo) {
+        this.tributoCodigo = tributoCodigo;
+    }
+
+    public BigDecimal getPorcentajeIgv() {
+        return porcentajeIgv;
+    }
+
+    public void setPorcentajeIgv(BigDecimal porcentajeIgv) {
+        this.porcentajeIgv = porcentajeIgv;
+    }
+
+    public BigDecimal getBaseImponible() {
+        return baseImponible;
+    }
+
+    public void setBaseImponible(BigDecimal baseImponible) {
+        this.baseImponible = baseImponible;
+    }
+
+    public BigDecimal getMontoIgv() {
+        return montoIgv;
+    }
+
+    public void setMontoIgv(BigDecimal montoIgv) {
+        this.montoIgv = montoIgv;
+    }
+
+    public BigDecimal getCostoUnitarioInventariable() {
+        return costoUnitarioInventariable;
+    }
+
+    public void setCostoUnitarioInventariable(BigDecimal costoUnitarioInventariable) {
+        this.costoUnitarioInventariable = costoUnitarioInventariable;
+    }
+
+    public BigDecimal getTotal() {
+        return total;
+    }
+
+    public void setTotal(BigDecimal total) {
+        this.total = total;
+    }
 }

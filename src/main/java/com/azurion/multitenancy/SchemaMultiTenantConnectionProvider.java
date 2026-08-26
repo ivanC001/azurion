@@ -10,11 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.jdbc.connections.spi.MultiTenantConnectionProvider;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class SchemaMultiTenantConnectionProvider implements MultiTenantConnectionProvider<String> {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SchemaMultiTenantConnectionProvider.class);
     private final DataSource dataSource;
     private final TenantSchemaLookupService schemaLookupService;
 

@@ -16,10 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PublicLeadSubmissionAuditService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PublicLeadSubmissionAuditService.class);
 
     private final CrmPublicLeadSubmissionRepository submissionRepository;
     private final BusinessOperationLockService ingressLockService;

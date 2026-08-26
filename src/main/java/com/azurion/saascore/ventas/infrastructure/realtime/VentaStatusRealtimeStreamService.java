@@ -12,10 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-@Slf4j
 @Service
 public class VentaStatusRealtimeStreamService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VentaStatusRealtimeStreamService.class);
     private static final long STREAM_TIMEOUT_MS = 60L * 60L * 1000L;
     private static final String EVENT_NAME_STATUS = "venta-status";
     private static final String EVENT_NAME_CONNECTED = "connected";

@@ -43,6 +43,9 @@ public class CrmOportunidad extends BaseEntity {
     @Column(name = "monto_estimado", nullable = false, precision = 18, scale = 2)
     private BigDecimal montoEstimado = BigDecimal.ZERO;
 
+    @Column(name = "moneda", nullable = false, length = 3)
+    private String moneda = "PEN";
+
     @Column(name = "probabilidad", nullable = false)
     private Integer probabilidad = 0;
 
@@ -79,4 +82,164 @@ public class CrmOportunidad extends BaseEntity {
 
     @Column(name = "monto_real", precision = 18, scale = 2)
     private BigDecimal montoReal;
+
+    public CrmProspecto getProspecto() {
+        return prospecto;
+    }
+
+    public void setProspecto(CrmProspecto prospecto) {
+        this.prospecto = prospecto;
+    }
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public String getTitulo() {
+        return titulo;
+    }
+
+    public void setTitulo(String titulo) {
+        this.titulo = titulo;
+    }
+
+    public String getTipoOportunidad() {
+        return tipoOportunidad;
+    }
+
+    public void setTipoOportunidad(String tipoOportunidad) {
+        this.tipoOportunidad = tipoOportunidad;
+    }
+
+    public Long getCatalogoItemId() {
+        return catalogoItemId;
+    }
+
+    public void setCatalogoItemId(Long catalogoItemId) {
+        this.catalogoItemId = catalogoItemId;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public BigDecimal getMontoEstimado() {
+        return montoEstimado;
+    }
+
+    public void setMontoEstimado(BigDecimal montoEstimado) {
+        this.montoEstimado = montoEstimado;
+    }
+
+    public String getMoneda() {
+        return moneda;
+    }
+
+    public void setMoneda(String moneda) {
+        this.moneda = moneda;
+    }
+
+    public Integer getProbabilidad() {
+        return probabilidad;
+    }
+
+    public void setProbabilidad(Integer probabilidad) {
+        this.probabilidad = probabilidad;
+    }
+
+    public String getEtapa() {
+        return etapa;
+    }
+
+    public void setEtapa(String etapa) {
+        this.etapa = etapa;
+    }
+
+    public CrmEtapaPipeline getEtapaPipeline() {
+        return etapaPipeline;
+    }
+
+    public void setEtapaPipeline(CrmEtapaPipeline etapaPipeline) {
+        this.etapaPipeline = etapaPipeline;
+    }
+
+    public LocalDate getFechaCierreEstimada() {
+        return fechaCierreEstimada;
+    }
+
+    public void setFechaCierreEstimada(LocalDate fechaCierreEstimada) {
+        this.fechaCierreEstimada = fechaCierreEstimada;
+    }
+
+    public String getResponsableId() {
+        return responsableId;
+    }
+
+    public void setResponsableId(String responsableId) {
+        this.responsableId = responsableId;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public String getMotivoPerdida() {
+        return motivoPerdida;
+    }
+
+    public void setMotivoPerdida(String motivoPerdida) {
+        this.motivoPerdida = motivoPerdida;
+    }
+
+    public OffsetDateTime getFechaCierreReal() {
+        return fechaCierreReal;
+    }
+
+    public void setFechaCierreReal(OffsetDateTime fechaCierreReal) {
+        this.fechaCierreReal = fechaCierreReal;
+    }
+
+    public OffsetDateTime getFechaUltimaActualizacion() {
+        return fechaUltimaActualizacion;
+    }
+
+    public void setFechaUltimaActualizacion(OffsetDateTime fechaUltimaActualizacion) {
+        this.fechaUltimaActualizacion = fechaUltimaActualizacion;
+    }
+
+    public OffsetDateTime getFechaGanada() {
+        return fechaGanada;
+    }
+
+    public void setFechaGanada(OffsetDateTime fechaGanada) {
+        this.fechaGanada = fechaGanada;
+    }
+
+    public OffsetDateTime getFechaPerdida() {
+        return fechaPerdida;
+    }
+
+    public void setFechaPerdida(OffsetDateTime fechaPerdida) {
+        this.fechaPerdida = fechaPerdida;
+    }
+
+    public BigDecimal getMontoReal() {
+        return montoReal;
+    }
+
+    public void setMontoReal(BigDecimal montoReal) {
+        this.montoReal = montoReal;
+    }
 }

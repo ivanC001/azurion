@@ -18,7 +18,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
 @ConditionalOnProperty(
         name = "azurion.facturador.provisioning-enabled",
@@ -27,6 +26,7 @@ import org.springframework.stereotype.Service;
 )
 public class FacturadorTenantProvisioningWorker {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FacturadorTenantProvisioningWorker.class);
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration LEASE_DURATION = Duration.ofMinutes(2);
     private static final List<Duration> RETRY_DELAYS = List.of(

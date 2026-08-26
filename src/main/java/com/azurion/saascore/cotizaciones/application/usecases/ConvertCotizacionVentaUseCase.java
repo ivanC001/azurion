@@ -64,7 +64,7 @@ public class ConvertCotizacionVentaUseCase {
                 cliente == null ? null : cliente.getNombre(),
                 request.fechaEmision(),
                 request.moneda() == null || request.moneda().isBlank() ? cotizacion.getMoneda() : request.moneda(),
-                request.tipoCambio(),
+                request.tipoCambio() == null ? cotizacion.getTipoCambioAplicado() : request.tipoCambio(),
                 request.formaPago(),
                 "EFECTIVO",
                 false,

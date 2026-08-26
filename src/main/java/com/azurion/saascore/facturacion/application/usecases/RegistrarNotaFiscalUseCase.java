@@ -31,12 +31,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import com.azurion.shared.util.StringUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class RegistrarNotaFiscalUseCase {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RegistrarNotaFiscalUseCase.class);
 
     private final EmpresaRepository empresaRepository;
     private final VentaRepository ventaRepository;
@@ -368,7 +372,8 @@ public class RegistrarNotaFiscalUseCase {
             remote = facturadorClient
                     .consultarDocumentosPorExternalIds(tenantId, tenantRuc, List.of(venta.getExternalId()))
                     .get(venta.getExternalId());
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.debug("No se pudo consultar el documento remoto previo del facturador para la nota fiscal: {}", ex.getMessage());
             remote = null;
         }
 
@@ -407,7 +412,8 @@ public class RegistrarNotaFiscalUseCase {
         }
         try {
             return objectMapper.readTree(raw);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.debug("No se pudo parsear el JSON de respuesta de venta para la nota fiscal: {}", ex.getMessage());
             return null;
         }
     }
@@ -536,26 +542,11 @@ public class RegistrarNotaFiscalUseCase {
     }
 
     private String trimToMax(String value, int maxLength) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() <= maxLength) {
-            return trimmed;
-        }
-        return trimmed.substring(0, maxLength);
+        return StringUtil.trimToMax(value, maxLength);
     }
 
     private String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (value != null && !value.trim().isBlank()) {
-                return value.trim();
-            }
-        }
-        return null;
+        return StringUtil.firstNonBlank(values);
     }
 
     private record DocumentoReferencia(String tipoDocumento, String numeroDocumento) {

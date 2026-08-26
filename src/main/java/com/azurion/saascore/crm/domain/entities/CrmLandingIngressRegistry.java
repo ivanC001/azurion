@@ -35,4 +35,44 @@ public class CrmLandingIngressRegistry extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getSourceKey() {
+        return sourceKey;
+    }
+
+    public void setSourceKey(String sourceKey) {
+        this.sourceKey = sourceKey;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public Long getLandingConfigId() {
+        return landingConfigId;
+    }
+
+    public void setLandingConfigId(Long landingConfigId) {
+        this.landingConfigId = landingConfigId;
+    }
+
+    public String getRelaySecretEncrypted() {
+        return relaySecretEncrypted;
+    }
+
+    public void setRelaySecretEncrypted(String relaySecretEncrypted) {
+        this.relaySecretEncrypted = relaySecretEncrypted;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

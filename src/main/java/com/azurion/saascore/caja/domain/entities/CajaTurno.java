@@ -102,4 +102,228 @@ public class CajaTurno extends BaseEntity {
 
     @Column(name = "observacion_cierre", length = 500)
     private String observacionCierre;
+
+    public String getNumero() {
+        return numero;
+    }
+
+    public void setNumero(String numero) {
+        this.numero = numero;
+    }
+
+    public CajaFisica getCaja() {
+        return caja;
+    }
+
+    public void setCaja(CajaFisica caja) {
+        this.caja = caja;
+    }
+
+    public Long getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(Long usuarioId) {
+        this.usuarioId = usuarioId;
+    }
+
+    public String getMoneda() {
+        return moneda;
+    }
+
+    public void setMoneda(String moneda) {
+        this.moneda = moneda;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public OffsetDateTime getFechaApertura() {
+        return fechaApertura;
+    }
+
+    public void setFechaApertura(OffsetDateTime fechaApertura) {
+        this.fechaApertura = fechaApertura;
+    }
+
+    public OffsetDateTime getFechaCierre() {
+        return fechaCierre;
+    }
+
+    public void setFechaCierre(OffsetDateTime fechaCierre) {
+        this.fechaCierre = fechaCierre;
+    }
+
+    public BigDecimal getSaldoApertura() {
+        return saldoApertura;
+    }
+
+    public void setSaldoApertura(BigDecimal saldoApertura) {
+        this.saldoApertura = saldoApertura;
+    }
+
+    public BigDecimal getSaldoEsperado() {
+        return saldoEsperado;
+    }
+
+    public void setSaldoEsperado(BigDecimal saldoEsperado) {
+        this.saldoEsperado = saldoEsperado;
+    }
+
+    public BigDecimal getConteoFisico() {
+        return conteoFisico;
+    }
+
+    public void setConteoFisico(BigDecimal conteoFisico) {
+        this.conteoFisico = conteoFisico;
+    }
+
+    public BigDecimal getDiferenciaCierre() {
+        return diferenciaCierre;
+    }
+
+    public void setDiferenciaCierre(BigDecimal diferenciaCierre) {
+        this.diferenciaCierre = diferenciaCierre;
+    }
+
+    public Integer getNumeroVentas() {
+        return numeroVentas;
+    }
+
+    public void setNumeroVentas(Integer numeroVentas) {
+        this.numeroVentas = numeroVentas;
+    }
+
+    public BigDecimal getTotalVentas() {
+        return totalVentas;
+    }
+
+    public void setTotalVentas(BigDecimal totalVentas) {
+        this.totalVentas = totalVentas;
+    }
+
+    public BigDecimal getTotalEfectivo() {
+        return totalEfectivo;
+    }
+
+    public void setTotalEfectivo(BigDecimal totalEfectivo) {
+        this.totalEfectivo = totalEfectivo;
+    }
+
+    public BigDecimal getTotalTarjeta() {
+        return totalTarjeta;
+    }
+
+    public void setTotalTarjeta(BigDecimal totalTarjeta) {
+        this.totalTarjeta = totalTarjeta;
+    }
+
+    public BigDecimal getTotalBilleteraDigital() {
+        return totalBilleteraDigital;
+    }
+
+    public void setTotalBilleteraDigital(BigDecimal totalBilleteraDigital) {
+        this.totalBilleteraDigital = totalBilleteraDigital;
+    }
+
+    public BigDecimal getTotalTransferencia() {
+        return totalTransferencia;
+    }
+
+    public void setTotalTransferencia(BigDecimal totalTransferencia) {
+        this.totalTransferencia = totalTransferencia;
+    }
+
+    public BigDecimal getTotalCredito() {
+        return totalCredito;
+    }
+
+    public void setTotalCredito(BigDecimal totalCredito) {
+        this.totalCredito = totalCredito;
+    }
+
+    public BigDecimal getTotalIngresosManuales() {
+        return totalIngresosManuales;
+    }
+
+    public void setTotalIngresosManuales(BigDecimal totalIngresosManuales) {
+        this.totalIngresosManuales = totalIngresosManuales;
+    }
+
+    public BigDecimal getTotalRetiros() {
+        return totalRetiros;
+    }
+
+    public void setTotalRetiros(BigDecimal totalRetiros) {
+        this.totalRetiros = totalRetiros;
+    }
+
+    public BigDecimal getTotalDepositos() {
+        return totalDepositos;
+    }
+
+    public void setTotalDepositos(BigDecimal totalDepositos) {
+        this.totalDepositos = totalDepositos;
+    }
+
+    public BigDecimal getTotalReembolsos() {
+        return totalReembolsos;
+    }
+
+    public void setTotalReembolsos(BigDecimal totalReembolsos) {
+        this.totalReembolsos = totalReembolsos;
+    }
+
+    public String getResponsableAperturaId() {
+        return responsableAperturaId;
+    }
+
+    public void setResponsableAperturaId(String responsableAperturaId) {
+        this.responsableAperturaId = responsableAperturaId;
+    }
+
+    public String getResponsableAperturaNombre() {
+        return responsableAperturaNombre;
+    }
+
+    public void setResponsableAperturaNombre(String responsableAperturaNombre) {
+        this.responsableAperturaNombre = responsableAperturaNombre;
+    }
+
+    public String getResponsableCierreId() {
+        return responsableCierreId;
+    }
+
+    public void setResponsableCierreId(String responsableCierreId) {
+        this.responsableCierreId = responsableCierreId;
+    }
+
+    public String getResponsableCierreNombre() {
+        return responsableCierreNombre;
+    }
+
+    public void setResponsableCierreNombre(String responsableCierreNombre) {
+        this.responsableCierreNombre = responsableCierreNombre;
+    }
+
+    public String getObservacionApertura() {
+        return observacionApertura;
+    }
+
+    public void setObservacionApertura(String observacionApertura) {
+        this.observacionApertura = observacionApertura;
+    }
+
+    public String getObservacionCierre() {
+        return observacionCierre;
+    }
+
+    public void setObservacionCierre(String observacionCierre) {
+        this.observacionCierre = observacionCierre;
+    }
 }

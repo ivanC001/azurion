@@ -43,4 +43,84 @@ public class CrmCatalogoItem extends BaseEntity {
 
     @Column(name = "landing_slug", length = 140)
     private String landingSlug;
+
+    public String getTipoItem() {
+        return tipoItem;
+    }
+
+    public void setTipoItem(String tipoItem) {
+        this.tipoItem = tipoItem;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public BigDecimal getPrecioReferencial() {
+        return precioReferencial;
+    }
+
+    public void setPrecioReferencial(BigDecimal precioReferencial) {
+        this.precioReferencial = precioReferencial;
+    }
+
+    public String getMoneda() {
+        return moneda;
+    }
+
+    public void setMoneda(String moneda) {
+        this.moneda = moneda;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
+    }
+
+    public String getPublicToken() {
+        return publicToken;
+    }
+
+    public void setPublicToken(String publicToken) {
+        this.publicToken = publicToken;
+    }
+
+    public boolean isPublicEnabled() {
+        return publicEnabled;
+    }
+
+    public void setPublicEnabled(boolean publicEnabled) {
+        this.publicEnabled = publicEnabled;
+    }
+
+    public String getLandingSlug() {
+        return landingSlug;
+    }
+
+    public void setLandingSlug(String landingSlug) {
+        this.landingSlug = landingSlug;
+    }
 }

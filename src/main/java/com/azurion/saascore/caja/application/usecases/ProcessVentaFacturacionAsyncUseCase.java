@@ -20,11 +20,11 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProcessVentaFacturacionAsyncUseCase {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProcessVentaFacturacionAsyncUseCase.class);
     private final FacturadorClient facturadorClient;
     private final VentaRepository ventaRepository;
     private final PlatformTransactionManager transactionManager;

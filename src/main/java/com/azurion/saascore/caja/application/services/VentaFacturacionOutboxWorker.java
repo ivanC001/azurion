@@ -26,12 +26,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
-@Slf4j
 @Service
 @ConditionalOnProperty(name = "azurion.facturador.outbox.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class VentaFacturacionOutboxWorker {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VentaFacturacionOutboxWorker.class);
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration LEASE_DURATION = Duration.ofMinutes(2);
     private static final long HEARTBEAT_SECONDS = 30;

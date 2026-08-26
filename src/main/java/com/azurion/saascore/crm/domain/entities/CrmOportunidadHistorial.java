@@ -37,4 +37,52 @@ public class CrmOportunidadHistorial extends BaseEntity {
 
     @Column(name = "fecha_cambio", nullable = false)
     private OffsetDateTime fechaCambio = OffsetDateTime.now();
+
+    public CrmOportunidad getOportunidad() {
+        return oportunidad;
+    }
+
+    public void setOportunidad(CrmOportunidad oportunidad) {
+        this.oportunidad = oportunidad;
+    }
+
+    public CrmEtapaPipeline getEtapaOrigen() {
+        return etapaOrigen;
+    }
+
+    public void setEtapaOrigen(CrmEtapaPipeline etapaOrigen) {
+        this.etapaOrigen = etapaOrigen;
+    }
+
+    public CrmEtapaPipeline getEtapaDestino() {
+        return etapaDestino;
+    }
+
+    public void setEtapaDestino(CrmEtapaPipeline etapaDestino) {
+        this.etapaDestino = etapaDestino;
+    }
+
+    public String getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(String usuarioId) {
+        this.usuarioId = usuarioId;
+    }
+
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
+
+    public OffsetDateTime getFechaCambio() {
+        return fechaCambio;
+    }
+
+    public void setFechaCambio(OffsetDateTime fechaCambio) {
+        this.fechaCambio = fechaCambio;
+    }
 }

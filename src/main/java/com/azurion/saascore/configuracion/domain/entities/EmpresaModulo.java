@@ -44,4 +44,60 @@ public class EmpresaModulo extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "configuracion_extra", columnDefinition = "jsonb")
     private String configuracionExtra;
+
+    public Empresa getEmpresa() {
+        return empresa;
+    }
+
+    public void setEmpresa(Empresa empresa) {
+        this.empresa = empresa;
+    }
+
+    public Modulo getModulo() {
+        return modulo;
+    }
+
+    public void setModulo(Modulo modulo) {
+        this.modulo = modulo;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public LocalDate getFechaInicio() {
+        return fechaInicio;
+    }
+
+    public void setFechaInicio(LocalDate fechaInicio) {
+        this.fechaInicio = fechaInicio;
+    }
+
+    public LocalDate getFechaFin() {
+        return fechaFin;
+    }
+
+    public void setFechaFin(LocalDate fechaFin) {
+        this.fechaFin = fechaFin;
+    }
+
+    public String getConfiguracionExtra() {
+        return configuracionExtra;
+    }
+
+    public void setConfiguracionExtra(String configuracionExtra) {
+        this.configuracionExtra = configuracionExtra;
+    }
 }

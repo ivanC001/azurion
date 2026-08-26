@@ -52,4 +52,108 @@ public class Sucursal extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getCodigo() {
+        return codigo;
+    }
+
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
+
+    public String getUbigeoCodigo() {
+        return ubigeoCodigo;
+    }
+
+    public void setUbigeoCodigo(String ubigeoCodigo) {
+        this.ubigeoCodigo = ubigeoCodigo;
+    }
+
+    public String getDepartamento() {
+        return departamento;
+    }
+
+    public void setDepartamento(String departamento) {
+        this.departamento = departamento;
+    }
+
+    public String getProvincia() {
+        return provincia;
+    }
+
+    public void setProvincia(String provincia) {
+        this.provincia = provincia;
+    }
+
+    public String getDistrito() {
+        return distrito;
+    }
+
+    public void setDistrito(String distrito) {
+        this.distrito = distrito;
+    }
+
+    public BigDecimal getIgvPorcentaje() {
+        return igvPorcentaje;
+    }
+
+    public void setIgvPorcentaje(BigDecimal igvPorcentaje) {
+        this.igvPorcentaje = igvPorcentaje;
+    }
+
+    public String getTipoOperacionDefaultId() {
+        return tipoOperacionDefaultId;
+    }
+
+    public void setTipoOperacionDefaultId(String tipoOperacionDefaultId) {
+        this.tipoOperacionDefaultId = tipoOperacionDefaultId;
+    }
+
+    public String getTipoAfectacionDefaultId() {
+        return tipoAfectacionDefaultId;
+    }
+
+    public void setTipoAfectacionDefaultId(String tipoAfectacionDefaultId) {
+        this.tipoAfectacionDefaultId = tipoAfectacionDefaultId;
+    }
+
+    public String getTributoDefaultId() {
+        return tributoDefaultId;
+    }
+
+    public void setTributoDefaultId(String tributoDefaultId) {
+        this.tributoDefaultId = tributoDefaultId;
+    }
+
+    public BigDecimal getPorcentajeIgvDefault() {
+        return porcentajeIgvDefault;
+    }
+
+    public void setPorcentajeIgvDefault(BigDecimal porcentajeIgvDefault) {
+        this.porcentajeIgvDefault = porcentajeIgvDefault;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

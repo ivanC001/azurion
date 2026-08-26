@@ -18,9 +18,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class SmtpEmailTransportService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SmtpEmailTransportService.class);
     private final EmailSecretEncryptionService encryptionService;
     private final EmailTransportProperties transportProperties;
 

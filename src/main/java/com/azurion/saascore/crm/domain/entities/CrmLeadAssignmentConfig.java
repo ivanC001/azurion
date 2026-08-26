@@ -24,4 +24,36 @@ public class CrmLeadAssignmentConfig extends BaseEntity {
 
     @Column(name = "responsable_ids", columnDefinition = "TEXT")
     private String responsableIds;
+
+    public String getCodigo() {
+        return codigo;
+    }
+
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
+    }
+
+    public boolean isAutomatico() {
+        return automatico;
+    }
+
+    public void setAutomatico(boolean automatico) {
+        this.automatico = automatico;
+    }
+
+    public String getEstrategia() {
+        return estrategia;
+    }
+
+    public void setEstrategia(String estrategia) {
+        this.estrategia = estrategia;
+    }
+
+    public String getResponsableIds() {
+        return responsableIds;
+    }
+
+    public void setResponsableIds(String responsableIds) {
+        this.responsableIds = responsableIds;
+    }
 }

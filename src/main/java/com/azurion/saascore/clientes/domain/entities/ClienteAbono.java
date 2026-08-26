@@ -38,4 +38,60 @@ public class ClienteAbono extends BaseEntity {
 
     @Column(name = "request_hash", length = 64)
     private String requestHash;
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public BigDecimal getMonto() {
+        return monto;
+    }
+
+    public void setMonto(BigDecimal monto) {
+        this.monto = monto;
+    }
+
+    public BigDecimal getSaldoAnterior() {
+        return saldoAnterior;
+    }
+
+    public void setSaldoAnterior(BigDecimal saldoAnterior) {
+        this.saldoAnterior = saldoAnterior;
+    }
+
+    public BigDecimal getSaldoResultante() {
+        return saldoResultante;
+    }
+
+    public void setSaldoResultante(BigDecimal saldoResultante) {
+        this.saldoResultante = saldoResultante;
+    }
+
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
+
+    public String getClientOperationId() {
+        return clientOperationId;
+    }
+
+    public void setClientOperationId(String clientOperationId) {
+        this.clientOperationId = clientOperationId;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
+    }
 }

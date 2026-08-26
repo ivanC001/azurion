@@ -12,11 +12,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DistributedRequestRateLimiter {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DistributedRequestRateLimiter.class);
     private final JdbcTemplate jdbcTemplate;
     private final PlatformTransactionManager transactionManager;
 

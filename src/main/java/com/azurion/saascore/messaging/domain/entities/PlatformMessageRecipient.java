@@ -41,4 +41,60 @@ public class PlatformMessageRecipient extends BaseEntity {
 
     @Column(name = "read_at")
     private LocalDateTime readAt;
+
+    public PlatformMessage getMessage() {
+        return message;
+    }
+
+    public void setMessage(PlatformMessage message) {
+        this.message = message;
+    }
+
+    public MessageRecipientScope getRecipientScope() {
+        return recipientScope;
+    }
+
+    public void setRecipientScope(MessageRecipientScope recipientScope) {
+        this.recipientScope = recipientScope;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public String getUsernameSnapshot() {
+        return usernameSnapshot;
+    }
+
+    public void setUsernameSnapshot(String usernameSnapshot) {
+        this.usernameSnapshot = usernameSnapshot;
+    }
+
+    public String getDisplayNameSnapshot() {
+        return displayNameSnapshot;
+    }
+
+    public void setDisplayNameSnapshot(String displayNameSnapshot) {
+        this.displayNameSnapshot = displayNameSnapshot;
+    }
+
+    public LocalDateTime getReadAt() {
+        return readAt;
+    }
+
+    public void setReadAt(LocalDateTime readAt) {
+        this.readAt = readAt;
+    }
 }
