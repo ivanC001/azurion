@@ -26,5 +26,10 @@ public interface CrmWhatsappMessageRepository extends JpaRepository<CrmWhatsappM
             String direccion
     );
 
+    Optional<CrmWhatsappMessage> findFirstByProspecto_IdAndEnviadoPorUsuarioIdOrderByMensajeEnDescIdDesc(
+            Long prospectoId,
+            String enviadoPorUsuarioId
+    );
+
     List<CrmWhatsappMessage> findAllByProspecto_IdAndDireccionAndLeidoEnIsNull(Long prospectoId, String direccion);
 }

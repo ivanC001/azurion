@@ -7,6 +7,8 @@ import com.azurion.saascore.cotizaciones.application.dto.CotizacionDetalleReques
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.saascore.cotizaciones.application.dto.CreateCotizacionRequest;
 import com.azurion.saascore.cotizaciones.application.mappers.CotizacionMapper;
+import com.azurion.saascore.cotizaciones.application.services.CommercialCurrencyService;
+import com.azurion.saascore.cotizaciones.application.services.CommercialCurrencyService.CurrencySnapshot;
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.cotizaciones.domain.entities.CotizacionDetalle;
 import com.azurion.saascore.cotizaciones.domain.entities.PromocionCotizacion;
@@ -18,6 +20,8 @@ import com.azurion.saascore.inventory.domain.entities.Producto;
 import com.azurion.saascore.inventory.domain.repositories.ProductoRepository;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import com.azurion.shared.exception.BusinessException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -38,6 +42,8 @@ public class CreateCotizacionUseCase {
     private final PromocionCotizacionRepository promocionRepository;
     private final CrmCatalogoItemRepository catalogoItemRepository;
     private final AuthorizationService authorizationService;
+    private final UsuarioTenantRepository usuarioTenantRepository;
+    private final CommercialCurrencyService commercialCurrencyService;
 
     @Transactional
     public CotizacionResponse execute(CreateCotizacionRequest request) {
@@ -50,12 +56,15 @@ public class CreateCotizacionUseCase {
 
         Cotizacion cotizacion = new Cotizacion();
         cotizacion.setCliente(cliente);
-        cotizacion.setUsuarioId(request.usuarioId().trim());
-        cotizacion.setUsuarioNombre(request.usuarioNombre().trim());
+        applyAdvisorSnapshot(cotizacion, request);
         cotizacion.setSucursal(sucursal);
         cotizacion.setFechaEmision(request.fechaEmision() == null ? LocalDate.now() : request.fechaEmision());
         cotizacion.setFechaVencimiento(request.fechaVencimiento());
-        cotizacion.setMoneda(normalizeMoneda(request.moneda()));
+        CurrencySnapshot currencySnapshot = commercialCurrencyService.resolve(request.moneda(), resolveCatalogCurrency(request));
+        cotizacion.setMoneda(currencySnapshot.currency());
+        cotizacion.setMonedaBase(currencySnapshot.baseCurrency());
+        cotizacion.setTipoCambioAplicado(currencySnapshot.exchangeRate());
+        cotizacion.setFechaTipoCambio(currencySnapshot.capturedAt());
         cotizacion.setObservacion(trim(request.observacion()));
         cotizacion.setCrmOportunidadId(request.crmOportunidadId());
         cotizacion.setEstado("BORRADOR");
@@ -68,8 +77,30 @@ public class CreateCotizacionUseCase {
         }
         cotizacion.setSubtotal(money(subtotal));
         cotizacion.setTotal(money(subtotal));
+        cotizacion.setSubtotalMonedaBase(commercialCurrencyService.toBase(cotizacion.getSubtotal(), currencySnapshot));
+        cotizacion.setTotalMonedaBase(commercialCurrencyService.toBase(cotizacion.getTotal(), currencySnapshot));
 
         return CotizacionMapper.toResponse(cotizacionRepository.save(cotizacion));
+    }
+
+    private void applyAdvisorSnapshot(Cotizacion cotizacion, CreateCotizacionRequest request) {
+        Long currentUserId = authorizationService.currentUsuarioId();
+        UsuarioTenant advisor = currentUserId == null
+                ? null
+                : usuarioTenantRepository.findById(currentUserId).orElse(null);
+        if (advisor == null) {
+            cotizacion.setUsuarioId(request.usuarioId().trim());
+            cotizacion.setUsuarioNombre(request.usuarioNombre().trim());
+            return;
+        }
+
+        cotizacion.setUsuarioId(String.valueOf(advisor.getId()));
+        cotizacion.setUsuarioNombre(firstNonBlank(trim(advisor.getNombres()), request.usuarioNombre().trim()));
+        cotizacion.setAsesorApellidos(trim(advisor.getApellidos()));
+        cotizacion.setAsesorTelefono(trim(advisor.getTelefono()));
+        cotizacion.setAsesorEmail(trim(advisor.getEmail()));
+        cotizacion.setAsesorCargo(trim(advisor.getCargo()));
+        cotizacion.setAsesorFotoUrl(trim(advisor.getFotoPerfilUrl()));
     }
 
     private CotizacionDetalle buildDetalle(Cotizacion cotizacion, CotizacionDetalleRequest request) {
@@ -179,8 +210,16 @@ public class CreateCotizacionUseCase {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private String normalizeMoneda(String value) {
-        return value == null || value.isBlank() ? "PEN" : value.trim().toUpperCase();
+    private String resolveCatalogCurrency(CreateCotizacionRequest request) {
+        return request.detalles().stream()
+                .map(CotizacionDetalleRequest::catalogoItemId)
+                .filter(java.util.Objects::nonNull)
+                .map(catalogoItemRepository::findById)
+                .flatMap(java.util.Optional::stream)
+                .map(CrmCatalogoItem::getMoneda)
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElse(null);
     }
 
     private String trim(String value) {

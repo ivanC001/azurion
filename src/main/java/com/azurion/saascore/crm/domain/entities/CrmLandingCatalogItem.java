@@ -30,4 +30,28 @@ public class CrmLandingCatalogItem extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public CrmLandingConfig getLandingConfig() {
+        return landingConfig;
+    }
+
+    public void setLandingConfig(CrmLandingConfig landingConfig) {
+        this.landingConfig = landingConfig;
+    }
+
+    public CrmCatalogoItem getCatalogoItem() {
+        return catalogoItem;
+    }
+
+    public void setCatalogoItem(CrmCatalogoItem catalogoItem) {
+        this.catalogoItem = catalogoItem;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

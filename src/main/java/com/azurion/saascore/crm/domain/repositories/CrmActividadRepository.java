@@ -14,6 +14,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface CrmActividadRepository extends JpaRepository<CrmActividad, Long>, JpaSpecificationExecutor<CrmActividad> {
 
+    interface OwnerCountProjection {
+        String getResponsableId();
+        long getCantidad();
+    }
+
     void deleteByProspecto_Id(Long prospectoId);
 
     @EntityGraph(attributePaths = {"prospecto", "oportunidad", "cliente"})
@@ -35,6 +40,20 @@ public interface CrmActividadRepository extends JpaRepository<CrmActividad, Long
     long countByEstadoAndFechaProgramadaBefore(String estado, OffsetDateTime fechaProgramada);
 
     long countByUsuarioIdAndEstadoAndFechaProgramadaBefore(String usuarioId, String estado, OffsetDateTime fechaProgramada);
+
+    @Query("""
+            select coalesce(a.usuarioId, 'SIN_ASIGNAR') as responsableId,
+                   count(a.id) as cantidad
+            from CrmActividad a
+            where a.estado = 'REALIZADA'
+              and a.fechaRealizada >= :desde
+              and a.fechaRealizada < :hasta
+            group by coalesce(a.usuarioId, 'SIN_ASIGNAR')
+            """)
+    List<OwnerCountProjection> countGoalsByOwner(
+            @Param("desde") OffsetDateTime desde,
+            @Param("hasta") OffsetDateTime hasta
+    );
 
     @Override
     @EntityGraph(attributePaths = {"prospecto", "oportunidad", "cliente"})

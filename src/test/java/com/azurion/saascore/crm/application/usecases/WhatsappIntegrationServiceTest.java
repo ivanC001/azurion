@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,11 +12,13 @@ import static org.mockito.Mockito.when;
 
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
+import com.azurion.saascore.crm.application.dto.SendWhatsappTemplateRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
+import com.azurion.saascore.crm.application.services.WhatsappAutoReplyEnqueueService;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmWhatsappConversation;
@@ -32,12 +35,15 @@ import com.azurion.saascore.cotizaciones.application.usecases.UpdateCotizacionEs
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.SendResult;
+import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.TemplateInfo;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
 import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -86,7 +92,11 @@ class WhatsappIntegrationServiceTest {
     @Mock
     private CrmLeadAssignmentService leadAssignmentService;
     @Mock
+    private WhatsappAutoReplyEnqueueService autoReplyEnqueueService;
+    @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private UsuarioTenantRepository usuarioTenantRepository;
 
     private WhatsappIntegrationService service;
     private CrmCanalTokenConfig config;
@@ -108,6 +118,7 @@ class WhatsappIntegrationServiceTest {
                 cloudApiClient,
                 new ObjectMapper(),
                 leadAssignmentService,
+                autoReplyEnqueueService,
                 transactionTemplate
         );
         org.mockito.Mockito.lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
@@ -222,6 +233,7 @@ class WhatsappIntegrationServiceTest {
             message.setId(99L);
             return message;
         });
+        mockOpenCustomerServiceWindow(prospecto);
 
         var response = service.sendMessage(44L, new SendWhatsappMessageRequest("Hola Luis", false));
 
@@ -330,6 +342,7 @@ class WhatsappIntegrationServiceTest {
             message.setId(55L);
             return message;
         });
+        mockOpenCustomerServiceWindow(prospecto);
 
         var response = service.sendQuote(44L, 12L, new SendWhatsappQuoteRequest("Adjunto"));
 
@@ -355,6 +368,7 @@ class WhatsappIntegrationServiceTest {
         when(cotizacionRepository.findByIdAndCrmProspectoId(12L, 44L)).thenReturn(Optional.of(quote));
         when(cotizacionRepository.claimWhatsappSend(eq(12L), any(), any(), any())).thenReturn(0);
         when(cotizacionRepository.findById(12L)).thenReturn(Optional.of(quote));
+        mockOpenCustomerServiceWindow(prospecto);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -364,6 +378,111 @@ class WhatsappIntegrationServiceTest {
         assertEquals("CRM_WHATSAPP_COTIZACION_YA_ENVIADA", exception.getCode());
         verify(cloudApiClient, never()).uploadMedia(any(), any(), any(), any());
         verify(cloudApiClient, never()).sendDocument(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsFreeFormMessageOutsideCustomerServiceWindow() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setTelefono("51999888777");
+        CrmWhatsappConversation conversation = new CrmWhatsappConversation();
+        conversation.setProspecto(prospecto);
+        conversation.setUltimoEntranteEn(OffsetDateTime.now().minusHours(25));
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        when(conversationRepository.findByProspecto_Id(44L)).thenReturn(Optional.of(conversation));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.sendMessage(44L, new SendWhatsappMessageRequest("Hola", false))
+        );
+
+        assertEquals("CRM_WHATSAPP_VENTANA_ATENCION_CERRADA", exception.getCode());
+        verify(cloudApiClient, never()).sendText(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void sendsApprovedTemplateOutsideCustomerServiceWindow() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setNombre("Luis");
+        prospecto.setTelefono("51999888777");
+        prospecto.setEstado("NUEVO");
+        prospecto.setNivelInteres("FRIO");
+        TemplateInfo template = new TemplateInfo(
+                "retomar_contacto",
+                "es_PE",
+                "UTILITY",
+                "Hola {{1}}, retomamos tu consulta sobre {{2}}.",
+                2
+        );
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(cloudApiClient.listApprovedTemplates(config)).thenReturn(List.of(template));
+        when(cloudApiClient.sendTemplate(
+                config,
+                "51999888777",
+                "retomar_contacto",
+                "es_PE",
+                List.of("Luis", "Python")
+        )).thenReturn(new SendResult(
+                "wamid.template-1",
+                "51999888777",
+                "{\"messages\":[{\"id\":\"wamid.template-1\"}]}"
+        ));
+        when(messageRepository.save(any(CrmWhatsappMessage.class))).thenAnswer(invocation -> {
+            CrmWhatsappMessage message = invocation.getArgument(0);
+            message.setId(101L);
+            return message;
+        });
+
+        var response = service.sendTemplate(
+                44L,
+                new SendWhatsappTemplateRequest(
+                        "retomar_contacto",
+                        "es_PE",
+                        List.of("Luis", "Python")
+                )
+        );
+
+        assertEquals("template", response.tipoMensaje());
+        assertEquals("Hola Luis, retomamos tu consulta sobre Python.", response.contenido());
+        assertEquals("wamid.template-1", response.metaMessageId());
+        verify(actividadRepository).save(any());
+    }
+
+    @Test
+    void rejectsTemplateWithMissingParametersBeforeSending() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setTelefono("51999888777");
+        TemplateInfo template = new TemplateInfo(
+                "retomar_contacto",
+                "es_PE",
+                "UTILITY",
+                "Hola {{1}}, tu solicitud {{2}} sigue disponible.",
+                2
+        );
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(cloudApiClient.listApprovedTemplates(config)).thenReturn(List.of(template));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.sendTemplate(
+                        44L,
+                        new SendWhatsappTemplateRequest("retomar_contacto", "es_PE", List.of("Luis"))
+                )
+        );
+
+        assertEquals("CRM_WHATSAPP_PARAMETROS_PLANTILLA_INVALIDOS", exception.getCode());
+        verify(cloudApiClient, never()).sendTemplate(any(), any(), any(), any(), any());
+    }
+
+    private void mockOpenCustomerServiceWindow(CrmProspecto prospecto) {
+        CrmWhatsappConversation conversation = new CrmWhatsappConversation();
+        conversation.setProspecto(prospecto);
+        conversation.setUltimoEntranteEn(OffsetDateTime.now().minusMinutes(15));
+        org.mockito.Mockito.lenient().when(conversationRepository.findByProspecto_Id(prospecto.getId())).thenReturn(Optional.of(conversation));
     }
 
     private CrmWhatsappConversationNote note(CrmWhatsappConversation conversation, int slot) {

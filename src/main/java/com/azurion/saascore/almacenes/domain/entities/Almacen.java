@@ -41,4 +41,68 @@ public class Almacen extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getCodigo() {
+        return codigo;
+    }
+
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
+
+    public Sucursal getSucursal() {
+        return sucursal;
+    }
+
+    public void setSucursal(Sucursal sucursal) {
+        this.sucursal = sucursal;
+    }
+
+    public String getTipoAlmacen() {
+        return tipoAlmacen;
+    }
+
+    public void setTipoAlmacen(String tipoAlmacen) {
+        this.tipoAlmacen = tipoAlmacen;
+    }
+
+    public boolean isPermiteVenta() {
+        return permiteVenta;
+    }
+
+    public void setPermiteVenta(boolean permiteVenta) {
+        this.permiteVenta = permiteVenta;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

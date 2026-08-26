@@ -35,6 +35,126 @@ public class FacturadorProperties {
     private String defaultApiKey;
     private Map<String, String> tenantApiKeys = new HashMap<>();
 
+    public String getBaseUrl() {
+        return baseUrl;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
+    }
+
+    public String getArtifactBaseUrl() {
+        return artifactBaseUrl;
+    }
+
+    public void setArtifactBaseUrl(String artifactBaseUrl) {
+        this.artifactBaseUrl = artifactBaseUrl;
+    }
+
+    public String getApiPrefix() {
+        return apiPrefix;
+    }
+
+    public void setApiPrefix(String apiPrefix) {
+        this.apiPrefix = apiPrefix;
+    }
+
+    public long getConnectTimeoutMillis() {
+        return connectTimeoutMillis;
+    }
+
+    public void setConnectTimeoutMillis(long connectTimeoutMillis) {
+        this.connectTimeoutMillis = connectTimeoutMillis;
+    }
+
+    public long getReadTimeoutMillis() {
+        return readTimeoutMillis;
+    }
+
+    public void setReadTimeoutMillis(long readTimeoutMillis) {
+        this.readTimeoutMillis = readTimeoutMillis;
+    }
+
+    public boolean isWaitProcessedEnabled() {
+        return waitProcessedEnabled;
+    }
+
+    public void setWaitProcessedEnabled(boolean waitProcessedEnabled) {
+        this.waitProcessedEnabled = waitProcessedEnabled;
+    }
+
+    public long getWaitProcessedTimeoutMillis() {
+        return waitProcessedTimeoutMillis;
+    }
+
+    public void setWaitProcessedTimeoutMillis(long waitProcessedTimeoutMillis) {
+        this.waitProcessedTimeoutMillis = waitProcessedTimeoutMillis;
+    }
+
+    public long getWaitProcessedPollIntervalMillis() {
+        return waitProcessedPollIntervalMillis;
+    }
+
+    public void setWaitProcessedPollIntervalMillis(long waitProcessedPollIntervalMillis) {
+        this.waitProcessedPollIntervalMillis = waitProcessedPollIntervalMillis;
+    }
+
+    public boolean isProvisioningEnabled() {
+        return provisioningEnabled;
+    }
+
+    public void setProvisioningEnabled(boolean provisioningEnabled) {
+        this.provisioningEnabled = provisioningEnabled;
+    }
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
+    }
+
+    public String getClientSecret() {
+        return clientSecret;
+    }
+
+    public void setClientSecret(String clientSecret) {
+        this.clientSecret = clientSecret;
+    }
+
+    public String getSignatureVersion() {
+        return signatureVersion;
+    }
+
+    public void setSignatureVersion(String signatureVersion) {
+        this.signatureVersion = signatureVersion;
+    }
+
+    public boolean isAllowLegacyApiKey() {
+        return allowLegacyApiKey;
+    }
+
+    public void setAllowLegacyApiKey(boolean allowLegacyApiKey) {
+        this.allowLegacyApiKey = allowLegacyApiKey;
+    }
+
+    public String getDefaultApiKey() {
+        return defaultApiKey;
+    }
+
+    public void setDefaultApiKey(String defaultApiKey) {
+        this.defaultApiKey = defaultApiKey;
+    }
+
+    public Map<String, String> getTenantApiKeys() {
+        return tenantApiKeys;
+    }
+
+    public void setTenantApiKeys(Map<String, String> tenantApiKeys) {
+        this.tenantApiKeys = tenantApiKeys;
+    }
+
     public Optional<FacturadorCredential> resolveCredential(String tenantId) {
         if (allowLegacyApiKey && tenantId != null) {
             String tenantKey = tenantApiKeys.get(tenantId);

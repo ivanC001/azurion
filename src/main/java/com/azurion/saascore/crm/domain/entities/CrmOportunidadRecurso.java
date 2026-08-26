@@ -43,4 +43,76 @@ public class CrmOportunidadRecurso extends BaseEntity {
 
     @Column(name = "created_by", nullable = false, length = 160)
     private String createdBy;
+
+    public CrmOportunidad getOportunidad() {
+        return oportunidad;
+    }
+
+    public void setOportunidad(CrmOportunidad oportunidad) {
+        this.oportunidad = oportunidad;
+    }
+
+    public String getTipo() {
+        return tipo;
+    }
+
+    public void setTipo(String tipo) {
+        this.tipo = tipo;
+    }
+
+    public String getExternalKey() {
+        return externalKey;
+    }
+
+    public void setExternalKey(String externalKey) {
+        this.externalKey = externalKey;
+    }
+
+    public String getDataJson() {
+        return dataJson;
+    }
+
+    public void setDataJson(String dataJson) {
+        this.dataJson = dataJson;
+    }
+
+    public String getArchivoNombre() {
+        return archivoNombre;
+    }
+
+    public void setArchivoNombre(String archivoNombre) {
+        this.archivoNombre = archivoNombre;
+    }
+
+    public String getArchivoPath() {
+        return archivoPath;
+    }
+
+    public void setArchivoPath(String archivoPath) {
+        this.archivoPath = archivoPath;
+    }
+
+    public String getArchivoMimeType() {
+        return archivoMimeType;
+    }
+
+    public void setArchivoMimeType(String archivoMimeType) {
+        this.archivoMimeType = archivoMimeType;
+    }
+
+    public Long getArchivoSize() {
+        return archivoSize;
+    }
+
+    public void setArchivoSize(Long archivoSize) {
+        this.archivoSize = archivoSize;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
 }

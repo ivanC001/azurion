@@ -26,4 +26,28 @@ public class UsuarioGlobalRol extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public UsuarioGlobal getUsuarioGlobal() {
+        return usuarioGlobal;
+    }
+
+    public void setUsuarioGlobal(UsuarioGlobal usuarioGlobal) {
+        this.usuarioGlobal = usuarioGlobal;
+    }
+
+    public String getRolCodigo() {
+        return rolCodigo;
+    }
+
+    public void setRolCodigo(String rolCodigo) {
+        this.rolCodigo = rolCodigo;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

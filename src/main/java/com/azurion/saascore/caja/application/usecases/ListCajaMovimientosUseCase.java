@@ -7,6 +7,7 @@ import com.azurion.saascore.caja.application.services.CajaTurnoService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -15,6 +16,7 @@ public class ListCajaMovimientosUseCase {
     private final CajaMovimientoRepository cajaMovimientoRepository;
     private final CajaTurnoService cajaTurnoService;
 
+    @Transactional(readOnly = true)
     public List<CajaMovimientoResponse> execute(Long turnoId) {
         var turno = cajaTurnoService.find(turnoId);
         cajaTurnoService.requireAccess(turno, false);

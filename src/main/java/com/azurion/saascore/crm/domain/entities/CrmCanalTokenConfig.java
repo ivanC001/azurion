@@ -79,4 +79,180 @@ public class CrmCanalTokenConfig extends BaseEntity {
 
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
+
+    public String getCanal() {
+        return canal;
+    }
+
+    public void setCanal(String canal) {
+        this.canal = canal;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+
+    public String getVerifyToken() {
+        return verifyToken;
+    }
+
+    public void setVerifyToken(String verifyToken) {
+        this.verifyToken = verifyToken;
+    }
+
+    public String getWebhookUrl() {
+        return webhookUrl;
+    }
+
+    public void setWebhookUrl(String webhookUrl) {
+        this.webhookUrl = webhookUrl;
+    }
+
+    public String getAppId() {
+        return appId;
+    }
+
+    public void setAppId(String appId) {
+        this.appId = appId;
+    }
+
+    public String getAppSecret() {
+        return appSecret;
+    }
+
+    public void setAppSecret(String appSecret) {
+        this.appSecret = appSecret;
+    }
+
+    public String getPhoneNumberId() {
+        return phoneNumberId;
+    }
+
+    public void setPhoneNumberId(String phoneNumberId) {
+        this.phoneNumberId = phoneNumberId;
+    }
+
+    public String getWabaId() {
+        return wabaId;
+    }
+
+    public void setWabaId(String wabaId) {
+        this.wabaId = wabaId;
+    }
+
+    public OffsetDateTime getWebhookVerifiedAt() {
+        return webhookVerifiedAt;
+    }
+
+    public void setWebhookVerifiedAt(OffsetDateTime webhookVerifiedAt) {
+        this.webhookVerifiedAt = webhookVerifiedAt;
+    }
+
+    public OffsetDateTime getLastWebhookAt() {
+        return lastWebhookAt;
+    }
+
+    public void setLastWebhookAt(OffsetDateTime lastWebhookAt) {
+        this.lastWebhookAt = lastWebhookAt;
+    }
+
+    public OffsetDateTime getLastInboundMessageAt() {
+        return lastInboundMessageAt;
+    }
+
+    public void setLastInboundMessageAt(OffsetDateTime lastInboundMessageAt) {
+        this.lastInboundMessageAt = lastInboundMessageAt;
+    }
+
+    public OffsetDateTime getLastConnectionTestAt() {
+        return lastConnectionTestAt;
+    }
+
+    public void setLastConnectionTestAt(OffsetDateTime lastConnectionTestAt) {
+        this.lastConnectionTestAt = lastConnectionTestAt;
+    }
+
+    public Boolean getLastConnectionOk() {
+        return lastConnectionOk;
+    }
+
+    public void setLastConnectionOk(Boolean lastConnectionOk) {
+        this.lastConnectionOk = lastConnectionOk;
+    }
+
+    public String getLastConnectionMessage() {
+        return lastConnectionMessage;
+    }
+
+    public void setLastConnectionMessage(String lastConnectionMessage) {
+        this.lastConnectionMessage = lastConnectionMessage;
+    }
+
+    public Boolean getWabaSubscribed() {
+        return wabaSubscribed;
+    }
+
+    public void setWabaSubscribed(Boolean wabaSubscribed) {
+        this.wabaSubscribed = wabaSubscribed;
+    }
+
+    public String getMetaDisplayPhoneNumber() {
+        return metaDisplayPhoneNumber;
+    }
+
+    public void setMetaDisplayPhoneNumber(String metaDisplayPhoneNumber) {
+        this.metaDisplayPhoneNumber = metaDisplayPhoneNumber;
+    }
+
+    public String getMetaVerifiedName() {
+        return metaVerifiedName;
+    }
+
+    public void setMetaVerifiedName(String metaVerifiedName) {
+        this.metaVerifiedName = metaVerifiedName;
+    }
+
+    public String getMetaQualityRating() {
+        return metaQualityRating;
+    }
+
+    public void setMetaQualityRating(String metaQualityRating) {
+        this.metaQualityRating = metaQualityRating;
+    }
+
+    public OffsetDateTime getMetaTokenExpiresAt() {
+        return metaTokenExpiresAt;
+    }
+
+    public void setMetaTokenExpiresAt(OffsetDateTime metaTokenExpiresAt) {
+        this.metaTokenExpiresAt = metaTokenExpiresAt;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
+    }
 }

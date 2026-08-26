@@ -31,10 +31,10 @@ import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String GENERIC_OPERATION_ERROR =
             "No se pudo completar la operacion en este momento. Intenta nuevamente.";
 

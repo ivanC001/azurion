@@ -50,4 +50,136 @@ public class CrmWhatsappMessage extends BaseEntity {
 
     @Column(name = "leido_en")
     private OffsetDateTime leidoEn;
+
+    @Column(name = "enviado_por_usuario_id", length = 120)
+    private String enviadoPorUsuarioId;
+
+    @Column(name = "enviado_por_nombre", length = 160)
+    private String enviadoPorNombre;
+
+    @Column(name = "error_codigo", length = 80)
+    private String errorCodigo;
+
+    @Column(name = "error_detalle", length = 500)
+    private String errorDetalle;
+
+    public CrmProspecto getProspecto() {
+        return prospecto;
+    }
+
+    public void setProspecto(CrmProspecto prospecto) {
+        this.prospecto = prospecto;
+    }
+
+    public String getMetaMessageId() {
+        return metaMessageId;
+    }
+
+    public void setMetaMessageId(String metaMessageId) {
+        this.metaMessageId = metaMessageId;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
+
+    public String getRemitente() {
+        return remitente;
+    }
+
+    public void setRemitente(String remitente) {
+        this.remitente = remitente;
+    }
+
+    public String getDestinatario() {
+        return destinatario;
+    }
+
+    public void setDestinatario(String destinatario) {
+        this.destinatario = destinatario;
+    }
+
+    public String getTipoMensaje() {
+        return tipoMensaje;
+    }
+
+    public void setTipoMensaje(String tipoMensaje) {
+        this.tipoMensaje = tipoMensaje;
+    }
+
+    public String getContenido() {
+        return contenido;
+    }
+
+    public void setContenido(String contenido) {
+        this.contenido = contenido;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public OffsetDateTime getMensajeEn() {
+        return mensajeEn;
+    }
+
+    public void setMensajeEn(OffsetDateTime mensajeEn) {
+        this.mensajeEn = mensajeEn;
+    }
+
+    public String getRawPayload() {
+        return rawPayload;
+    }
+
+    public void setRawPayload(String rawPayload) {
+        this.rawPayload = rawPayload;
+    }
+
+    public OffsetDateTime getLeidoEn() {
+        return leidoEn;
+    }
+
+    public void setLeidoEn(OffsetDateTime leidoEn) {
+        this.leidoEn = leidoEn;
+    }
+
+    public String getEnviadoPorUsuarioId() {
+        return enviadoPorUsuarioId;
+    }
+
+    public void setEnviadoPorUsuarioId(String enviadoPorUsuarioId) {
+        this.enviadoPorUsuarioId = enviadoPorUsuarioId;
+    }
+
+    public String getEnviadoPorNombre() {
+        return enviadoPorNombre;
+    }
+
+    public void setEnviadoPorNombre(String enviadoPorNombre) {
+        this.enviadoPorNombre = enviadoPorNombre;
+    }
+
+    public String getErrorCodigo() {
+        return errorCodigo;
+    }
+
+    public void setErrorCodigo(String errorCodigo) {
+        this.errorCodigo = errorCodigo;
+    }
+
+    public String getErrorDetalle() {
+        return errorDetalle;
+    }
+
+    public void setErrorDetalle(String errorDetalle) {
+        this.errorDetalle = errorDetalle;
+    }
 }

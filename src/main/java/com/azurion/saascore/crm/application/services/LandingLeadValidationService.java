@@ -14,10 +14,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LandingLeadValidationService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LandingLeadValidationService.class);
 
     private final CrmCatalogoItemRepository catalogoItemRepository;
     private final CrmCanalTokenConfigRepository canalTokenConfigRepository;

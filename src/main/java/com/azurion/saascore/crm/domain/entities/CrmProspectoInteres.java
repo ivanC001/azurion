@@ -67,4 +67,132 @@ public class CrmProspectoInteres extends BaseEntity {
 
     @Column(name = "ultimo_envio_en", nullable = false)
     private OffsetDateTime ultimoEnvioEn = OffsetDateTime.now();
+
+    public CrmProspecto getProspecto() {
+        return prospecto;
+    }
+
+    public void setProspecto(CrmProspecto prospecto) {
+        this.prospecto = prospecto;
+    }
+
+    public String getLandingKey() {
+        return landingKey;
+    }
+
+    public void setLandingKey(String landingKey) {
+        this.landingKey = landingKey;
+    }
+
+    public String getCampania() {
+        return campania;
+    }
+
+    public void setCampania(String campania) {
+        this.campania = campania;
+    }
+
+    public String getCanalIngreso() {
+        return canalIngreso;
+    }
+
+    public void setCanalIngreso(String canalIngreso) {
+        this.canalIngreso = canalIngreso;
+    }
+
+    public Long getCatalogoItemId() {
+        return catalogoItemId;
+    }
+
+    public void setCatalogoItemId(Long catalogoItemId) {
+        this.catalogoItemId = catalogoItemId;
+    }
+
+    public boolean isProductoPendiente() {
+        return productoPendiente;
+    }
+
+    public void setProductoPendiente(boolean productoPendiente) {
+        this.productoPendiente = productoPendiente;
+    }
+
+    public String getTipoInteres() {
+        return tipoInteres;
+    }
+
+    public void setTipoInteres(String tipoInteres) {
+        this.tipoInteres = tipoInteres;
+    }
+
+    public String getInteresPrincipal() {
+        return interesPrincipal;
+    }
+
+    public void setInteresPrincipal(String interesPrincipal) {
+        this.interesPrincipal = interesPrincipal;
+    }
+
+    public String getInteresDetalle() {
+        return interesDetalle;
+    }
+
+    public void setInteresDetalle(String interesDetalle) {
+        this.interesDetalle = interesDetalle;
+    }
+
+    public String getMensaje() {
+        return mensaje;
+    }
+
+    public void setMensaje(String mensaje) {
+        this.mensaje = mensaje;
+    }
+
+    public BigDecimal getPresupuestoEstimado() {
+        return presupuestoEstimado;
+    }
+
+    public void setPresupuestoEstimado(BigDecimal presupuestoEstimado) {
+        this.presupuestoEstimado = presupuestoEstimado;
+    }
+
+    public LocalDate getFechaInteres() {
+        return fechaInteres;
+    }
+
+    public void setFechaInteres(LocalDate fechaInteres) {
+        this.fechaInteres = fechaInteres;
+    }
+
+    public String getLandingUrl() {
+        return landingUrl;
+    }
+
+    public void setLandingUrl(String landingUrl) {
+        this.landingUrl = landingUrl;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
+    }
+
+    public Integer getContadorEnvios() {
+        return contadorEnvios;
+    }
+
+    public void setContadorEnvios(Integer contadorEnvios) {
+        this.contadorEnvios = contadorEnvios;
+    }
+
+    public OffsetDateTime getUltimoEnvioEn() {
+        return ultimoEnvioEn;
+    }
+
+    public void setUltimoEnvioEn(OffsetDateTime ultimoEnvioEn) {
+        this.ultimoEnvioEn = ultimoEnvioEn;
+    }
 }

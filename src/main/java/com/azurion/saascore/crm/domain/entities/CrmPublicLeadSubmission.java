@@ -43,4 +43,84 @@ public class CrmPublicLeadSubmission extends BaseEntity {
 
     @Column(name = "error_message", length = 500)
     private String errorMessage;
+
+    public String getReceiptId() {
+        return receiptId;
+    }
+
+    public void setReceiptId(String receiptId) {
+        this.receiptId = receiptId;
+    }
+
+    public String getIdempotencyHash() {
+        return idempotencyHash;
+    }
+
+    public void setIdempotencyHash(String idempotencyHash) {
+        this.idempotencyHash = idempotencyHash;
+    }
+
+    public String getSourceKey() {
+        return sourceKey;
+    }
+
+    public void setSourceKey(String sourceKey) {
+        this.sourceKey = sourceKey;
+    }
+
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
+    }
+
+    public Long getProspectoId() {
+        return prospectoId;
+    }
+
+    public void setProspectoId(Long prospectoId) {
+        this.prospectoId = prospectoId;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public OffsetDateTime getReceivedAt() {
+        return receivedAt;
+    }
+
+    public void setReceivedAt(OffsetDateTime receivedAt) {
+        this.receivedAt = receivedAt;
+    }
+
+    public OffsetDateTime getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(OffsetDateTime completedAt) {
+        this.completedAt = completedAt;
+    }
+
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
 }

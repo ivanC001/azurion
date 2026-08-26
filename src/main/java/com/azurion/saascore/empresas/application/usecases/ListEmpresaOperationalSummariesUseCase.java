@@ -19,10 +19,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ListEmpresaOperationalSummariesUseCase {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ListEmpresaOperationalSummariesUseCase.class);
 
     private final EmpresaRepository empresaRepository;
     private final SuscripcionRepository suscripcionRepository;

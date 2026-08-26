@@ -46,4 +46,68 @@ public class Stock extends BaseEntity {
 
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "ACTIVO";
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public Almacen getAlmacen() {
+        return almacen;
+    }
+
+    public void setAlmacen(Almacen almacen) {
+        this.almacen = almacen;
+    }
+
+    public BigDecimal getCantidad() {
+        return cantidad;
+    }
+
+    public void setCantidad(BigDecimal cantidad) {
+        this.cantidad = cantidad;
+    }
+
+    public BigDecimal getStockReservado() {
+        return stockReservado;
+    }
+
+    public void setStockReservado(BigDecimal stockReservado) {
+        this.stockReservado = stockReservado;
+    }
+
+    public BigDecimal getStockMinimo() {
+        return stockMinimo;
+    }
+
+    public void setStockMinimo(BigDecimal stockMinimo) {
+        this.stockMinimo = stockMinimo;
+    }
+
+    public BigDecimal getStockMaximo() {
+        return stockMaximo;
+    }
+
+    public void setStockMaximo(BigDecimal stockMaximo) {
+        this.stockMaximo = stockMaximo;
+    }
+
+    public String getUbicacionFisica() {
+        return ubicacionFisica;
+    }
+
+    public void setUbicacionFisica(String ubicacionFisica) {
+        this.ubicacionFisica = ubicacionFisica;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
 }

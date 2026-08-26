@@ -17,11 +17,11 @@ import org.flywaydb.core.Flyway;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TenantMigrationService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TenantMigrationService.class);
     private final DataSource dataSource;
     private final EmpresaRepository empresaRepository;
     private final EmpresaModuloRepository empresaModuloRepository;

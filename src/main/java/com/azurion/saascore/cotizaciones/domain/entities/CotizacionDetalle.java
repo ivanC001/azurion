@@ -68,4 +68,132 @@ public class CotizacionDetalle extends BaseEntity {
 
     @Column(name = "total", nullable = false, precision = 18, scale = 2)
     private BigDecimal total;
+
+    public Cotizacion getCotizacion() {
+        return cotizacion;
+    }
+
+    public void setCotizacion(Cotizacion cotizacion) {
+        this.cotizacion = cotizacion;
+    }
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public PromocionCotizacion getPromocion() {
+        return promocion;
+    }
+
+    public void setPromocion(PromocionCotizacion promocion) {
+        this.promocion = promocion;
+    }
+
+    public Long getCatalogoItemId() {
+        return catalogoItemId;
+    }
+
+    public void setCatalogoItemId(Long catalogoItemId) {
+        this.catalogoItemId = catalogoItemId;
+    }
+
+    public String getCatalogoTipoItem() {
+        return catalogoTipoItem;
+    }
+
+    public void setCatalogoTipoItem(String catalogoTipoItem) {
+        this.catalogoTipoItem = catalogoTipoItem;
+    }
+
+    public String getCatalogoNombre() {
+        return catalogoNombre;
+    }
+
+    public void setCatalogoNombre(String catalogoNombre) {
+        this.catalogoNombre = catalogoNombre;
+    }
+
+    public String getCatalogoDescripcion() {
+        return catalogoDescripcion;
+    }
+
+    public void setCatalogoDescripcion(String catalogoDescripcion) {
+        this.catalogoDescripcion = catalogoDescripcion;
+    }
+
+    public String getCatalogoMetadataJson() {
+        return catalogoMetadataJson;
+    }
+
+    public void setCatalogoMetadataJson(String catalogoMetadataJson) {
+        this.catalogoMetadataJson = catalogoMetadataJson;
+    }
+
+    public String getCatalogoMoneda() {
+        return catalogoMoneda;
+    }
+
+    public void setCatalogoMoneda(String catalogoMoneda) {
+        this.catalogoMoneda = catalogoMoneda;
+    }
+
+    public BigDecimal getCatalogoPrecioReferencial() {
+        return catalogoPrecioReferencial;
+    }
+
+    public void setCatalogoPrecioReferencial(BigDecimal catalogoPrecioReferencial) {
+        this.catalogoPrecioReferencial = catalogoPrecioReferencial;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public BigDecimal getCantidad() {
+        return cantidad;
+    }
+
+    public void setCantidad(BigDecimal cantidad) {
+        this.cantidad = cantidad;
+    }
+
+    public BigDecimal getPrecioUnitario() {
+        return precioUnitario;
+    }
+
+    public void setPrecioUnitario(BigDecimal precioUnitario) {
+        this.precioUnitario = precioUnitario;
+    }
+
+    public BigDecimal getDescuento() {
+        return descuento;
+    }
+
+    public void setDescuento(BigDecimal descuento) {
+        this.descuento = descuento;
+    }
+
+    public BigDecimal getPromocionDescuento() {
+        return promocionDescuento;
+    }
+
+    public void setPromocionDescuento(BigDecimal promocionDescuento) {
+        this.promocionDescuento = promocionDescuento;
+    }
+
+    public BigDecimal getTotal() {
+        return total;
+    }
+
+    public void setTotal(BigDecimal total) {
+        this.total = total;
+    }
 }

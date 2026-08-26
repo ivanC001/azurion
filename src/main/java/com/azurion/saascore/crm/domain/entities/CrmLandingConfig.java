@@ -51,4 +51,100 @@ public class CrmLandingConfig extends BaseEntity {
 
     @Column(name = "validar_duplicados_por", nullable = false, length = 40)
     private String validarDuplicadosPor = "TELEFONO_CORREO";
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getLandingKey() {
+        return landingKey;
+    }
+
+    public void setLandingKey(String landingKey) {
+        this.landingKey = landingKey;
+    }
+
+    public String getCampania() {
+        return campania;
+    }
+
+    public void setCampania(String campania) {
+        this.campania = campania;
+    }
+
+    public String getCanalIngreso() {
+        return canalIngreso;
+    }
+
+    public void setCanalIngreso(String canalIngreso) {
+        this.canalIngreso = canalIngreso;
+    }
+
+    public boolean isActiva() {
+        return activa;
+    }
+
+    public void setActiva(boolean activa) {
+        this.activa = activa;
+    }
+
+    public boolean isRecibirLeads() {
+        return recibirLeads;
+    }
+
+    public void setRecibirLeads(boolean recibirLeads) {
+        this.recibirLeads = recibirLeads;
+    }
+
+    public LandingProductMode getModoProducto() {
+        return modoProducto;
+    }
+
+    public void setModoProducto(LandingProductMode modoProducto) {
+        this.modoProducto = modoProducto;
+    }
+
+    public boolean isCrearSeguimiento() {
+        return crearSeguimiento;
+    }
+
+    public void setCrearSeguimiento(boolean crearSeguimiento) {
+        this.crearSeguimiento = crearSeguimiento;
+    }
+
+    public boolean isCrearActividadInicial() {
+        return crearActividadInicial;
+    }
+
+    public void setCrearActividadInicial(boolean crearActividadInicial) {
+        this.crearActividadInicial = crearActividadInicial;
+    }
+
+    public String getResponsableId() {
+        return responsableId;
+    }
+
+    public void setResponsableId(String responsableId) {
+        this.responsableId = responsableId;
+    }
+
+    public String getCamposObligatorios() {
+        return camposObligatorios;
+    }
+
+    public void setCamposObligatorios(String camposObligatorios) {
+        this.camposObligatorios = camposObligatorios;
+    }
+
+    public String getValidarDuplicadosPor() {
+        return validarDuplicadosPor;
+    }
+
+    public void setValidarDuplicadosPor(String validarDuplicadosPor) {
+        this.validarDuplicadosPor = validarDuplicadosPor;
+    }
 }

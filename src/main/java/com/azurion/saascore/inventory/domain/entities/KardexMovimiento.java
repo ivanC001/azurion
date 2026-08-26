@@ -78,4 +78,156 @@ public class KardexMovimiento extends BaseEntity {
 
     @Column(name = "observacion", length = 500)
     private String observacion;
+
+    public Producto getProducto() {
+        return producto;
+    }
+
+    public void setProducto(Producto producto) {
+        this.producto = producto;
+    }
+
+    public Almacen getAlmacen() {
+        return almacen;
+    }
+
+    public void setAlmacen(Almacen almacen) {
+        this.almacen = almacen;
+    }
+
+    public Lote getLote() {
+        return lote;
+    }
+
+    public void setLote(Lote lote) {
+        this.lote = lote;
+    }
+
+    public String getTipoMovimiento() {
+        return tipoMovimiento;
+    }
+
+    public void setTipoMovimiento(String tipoMovimiento) {
+        this.tipoMovimiento = tipoMovimiento;
+    }
+
+    public String getMotivo() {
+        return motivo;
+    }
+
+    public void setMotivo(String motivo) {
+        this.motivo = motivo;
+    }
+
+    public String getReferenciaTipo() {
+        return referenciaTipo;
+    }
+
+    public void setReferenciaTipo(String referenciaTipo) {
+        this.referenciaTipo = referenciaTipo;
+    }
+
+    public Long getReferenciaId() {
+        return referenciaId;
+    }
+
+    public void setReferenciaId(Long referenciaId) {
+        this.referenciaId = referenciaId;
+    }
+
+    public BigDecimal getCantidad() {
+        return cantidad;
+    }
+
+    public void setCantidad(BigDecimal cantidad) {
+        this.cantidad = cantidad;
+    }
+
+    public BigDecimal getStockAnterior() {
+        return stockAnterior;
+    }
+
+    public void setStockAnterior(BigDecimal stockAnterior) {
+        this.stockAnterior = stockAnterior;
+    }
+
+    public BigDecimal getStockNuevo() {
+        return stockNuevo;
+    }
+
+    public void setStockNuevo(BigDecimal stockNuevo) {
+        this.stockNuevo = stockNuevo;
+    }
+
+    public BigDecimal getSaldoResultante() {
+        return saldoResultante;
+    }
+
+    public void setSaldoResultante(BigDecimal saldoResultante) {
+        this.saldoResultante = saldoResultante;
+    }
+
+    public BigDecimal getCostoUnitario() {
+        return costoUnitario;
+    }
+
+    public void setCostoUnitario(BigDecimal costoUnitario) {
+        this.costoUnitario = costoUnitario;
+    }
+
+    public BigDecimal getCostoTotal() {
+        return costoTotal;
+    }
+
+    public void setCostoTotal(BigDecimal costoTotal) {
+        this.costoTotal = costoTotal;
+    }
+
+    public BigDecimal getPrecioCompra() {
+        return precioCompra;
+    }
+
+    public void setPrecioCompra(BigDecimal precioCompra) {
+        this.precioCompra = precioCompra;
+    }
+
+    public BigDecimal getPrecioVenta() {
+        return precioVenta;
+    }
+
+    public void setPrecioVenta(BigDecimal precioVenta) {
+        this.precioVenta = precioVenta;
+    }
+
+    public String getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(String usuarioId) {
+        this.usuarioId = usuarioId;
+    }
+
+    public String getReferencia() {
+        return referencia;
+    }
+
+    public void setReferencia(String referencia) {
+        this.referencia = referencia;
+    }
+
+    public OffsetDateTime getFechaMovimiento() {
+        return fechaMovimiento;
+    }
+
+    public void setFechaMovimiento(OffsetDateTime fechaMovimiento) {
+        this.fechaMovimiento = fechaMovimiento;
+    }
+
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
 }

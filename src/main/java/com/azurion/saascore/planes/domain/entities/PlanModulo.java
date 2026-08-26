@@ -28,4 +28,20 @@ public class PlanModulo extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "modulo_id", nullable = false)
     private Modulo modulo;
+
+    public Plan getPlan() {
+        return plan;
+    }
+
+    public void setPlan(Plan plan) {
+        this.plan = plan;
+    }
+
+    public Modulo getModulo() {
+        return modulo;
+    }
+
+    public void setModulo(Modulo modulo) {
+        this.modulo = modulo;
+    }
 }

@@ -314,7 +314,7 @@ public class GenerateCotizacionPdfUseCase {
             write(content, fonts.bold, 11, PAGE_LEFT, y, "CONTENIDO Y CARACTERISTICAS", PAGE_WIDTH, 5, 48, 91);
             y -= 20;
             for (CommercialAttribute attribute : attributes) {
-                if (y < 90) {
+                if (y < 160) {
                     break;
                 }
                 fillRect(content, PAGE_LEFT, y - 26, PAGE_WIDTH, 26, 250, 252, 255);
@@ -324,7 +324,46 @@ public class GenerateCotizacionPdfUseCase {
             }
         }
 
+        if (hasAdvisorInfo(cotizacion)) {
+            y -= 10;
+            if (y >= 120) {
+                drawAdvisorCommercialCard(content, fonts, cotizacion, y);
+            }
+        }
+
         drawFooter(content, fonts, empresa, cotizacion, pageNumber, totalPages);
+    }
+
+    private boolean hasAdvisorInfo(Cotizacion cotizacion) {
+        return (cotizacion.getAsesorApellidos() != null && !cotizacion.getAsesorApellidos().isBlank())
+                || (cotizacion.getAsesorCargo() != null && !cotizacion.getAsesorCargo().isBlank())
+                || (cotizacion.getAsesorTelefono() != null && !cotizacion.getAsesorTelefono().isBlank())
+                || (cotizacion.getAsesorEmail() != null && !cotizacion.getAsesorEmail().isBlank());
+    }
+
+    private String advisorFullName(Cotizacion cotizacion) {
+        String name = defaultText(cotizacion.getUsuarioNombre(), "");
+        String lastName = defaultText(cotizacion.getAsesorApellidos(), "");
+        String full = (name + " " + lastName).trim();
+        return full.isBlank() ? "Asesor Comercial" : full;
+    }
+
+    private void drawAdvisorCommercialCard(PDPageContentStream content, Fonts fonts, Cotizacion cotizacion, float y) throws IOException {
+        float cardHeight = 55;
+        strokeRect(content, PAGE_LEFT, y - cardHeight, PAGE_WIDTH, cardHeight, 191, 205, 222);
+        fillRect(content, PAGE_LEFT, y - 20, PAGE_WIDTH, 20, 234, 245, 255);
+        write(content, fonts.bold, 9, 62, y - 14, "ASESOR COMERCIAL", 200, 0, 75, 155);
+
+        write(content, fonts.bold, 9, 62, y - 35, advisorFullName(cotizacion), 220);
+        if (cotizacion.getAsesorCargo() != null && !cotizacion.getAsesorCargo().isBlank()) {
+            write(content, fonts.regular, 8, 62, y - 48, cotizacion.getAsesorCargo(), 220, 71, 85, 105);
+        }
+        if (cotizacion.getAsesorTelefono() != null && !cotizacion.getAsesorTelefono().isBlank()) {
+            write(content, fonts.regular, 8, 300, y - 35, cotizacion.getAsesorTelefono(), 220);
+        }
+        if (cotizacion.getAsesorEmail() != null && !cotizacion.getAsesorEmail().isBlank()) {
+            write(content, fonts.regular, 8, 300, y - 48, cotizacion.getAsesorEmail(), 220);
+        }
     }
 
     private void drawRowLines(PDPageContentStream content, float[] columns, float y, float rowHeight) throws IOException {

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.azurion.saascore.auth.application.dto.ChangeCurrentUserPasswordRequest;
 import com.azurion.saascore.auth.application.dto.UpdateCurrentUserProfileRequest;
 import com.azurion.saascore.auth.domain.repositories.UsuarioGlobalRepository;
+import com.azurion.saascore.auth.infrastructure.storage.UserProfilePhotoStorageService;
 import com.azurion.saascore.usuarios.application.dto.UsuarioSucursalResponse;
 import com.azurion.saascore.usuarios.application.services.UsuarioSucursalScopeService;
 import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
@@ -30,11 +31,13 @@ class CurrentUserProfileServiceTest {
     private final UsuarioGlobalRepository globalUsers = mock(UsuarioGlobalRepository.class);
     private final UsuarioSucursalScopeService userBranches = mock(UsuarioSucursalScopeService.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+    private final UserProfilePhotoStorageService profilePhotoStorage = mock(UserProfilePhotoStorageService.class);
     private final CurrentUserProfileService service = new CurrentUserProfileService(
             tenantUsers,
             globalUsers,
             userBranches,
-            passwordEncoder
+            passwordEncoder,
+            profilePhotoStorage
     );
 
     @Test
@@ -48,10 +51,15 @@ class CurrentUserProfileServiceTest {
 
         var response = service.update(
                 authentication(18L, "ROLE_CRM_VENDEDOR"),
-                new UpdateCurrentUserProfileRequest("  Ana Diaz  ", null)
+                new UpdateCurrentUserProfileRequest(
+                        "  Ana  ", " Diaz ", "+51 999 999 999", "Asesora comercial", "ana@old.example.com"
+                )
         );
 
-        assertThat(response.nombres()).isEqualTo("Ana Diaz");
+        assertThat(response.nombres()).isEqualTo("Ana");
+        assertThat(response.apellidos()).isEqualTo("Diaz");
+        assertThat(response.telefono()).isEqualTo("+51 999 999 999");
+        assertThat(response.cargo()).isEqualTo("Asesora comercial");
         assertThat(response.email()).isEqualTo("ana@old.example.com");
         assertThat(response.roles()).containsExactly("CRM_VENDEDOR");
         assertThat(response.sucursales()).hasSize(1);
@@ -65,7 +73,7 @@ class CurrentUserProfileServiceTest {
 
         assertThatThrownBy(() -> service.update(
                 authentication(18L, "ROLE_CRM_VENDEDOR"),
-                new UpdateCurrentUserProfileRequest("Ana Diaz", "otro@example.com")
+                new UpdateCurrentUserProfileRequest("Ana", "Diaz", null, null, "otro@example.com")
         ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("no puede modificarse");
@@ -111,7 +119,7 @@ class CurrentUserProfileServiceTest {
     void rejectsPersonalDataChangesForPlatformAdministrators() {
         assertThatThrownBy(() -> service.update(
                 authentication(1L, "ROLE_ADMIN_GENERAL"),
-                new UpdateCurrentUserProfileRequest("No debe cambiar", "admin@azurion.tech")
+                new UpdateCurrentUserProfileRequest("No debe cambiar", null, null, null, "admin@azurion.tech")
         ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("seguridad de plataforma");

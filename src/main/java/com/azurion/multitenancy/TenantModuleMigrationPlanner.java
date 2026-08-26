@@ -27,7 +27,8 @@ public class TenantModuleMigrationPlanner {
             "V57__retire_generic_crm_permissions.sql",
             "V60__disable_known_seeded_tenant_credentials.sql",
             "V67__activate_default_tenant_admin.sql",
-            "V70__reconcile_default_tenant_admin.sql"
+            "V70__reconcile_default_tenant_admin.sql",
+            "V90__user_commercial_profile.sql"
     );
 
     private static final List<String> ALL_TENANT_MIGRATIONS = List.of(
@@ -121,7 +122,14 @@ public class TenantModuleMigrationPlanner {
             "V85__professional_tax_and_margin_model.sql",
             "V86__reconcile_erp_tax_permissions.sql",
             "V87__crm_catalog_item_currency.sql",
-            "V88__cotizacion_detalle_catalog_snapshot.sql"
+            "V88__cotizacion_detalle_catalog_snapshot.sql",
+            "V89__crm_whatsapp_delivery_audit.sql",
+            "V90__user_commercial_profile.sql",
+            "V91__crm_budget_currency_snapshot.sql",
+            "V92__commercial_currency_and_quote_snapshot.sql",
+            "V93__crm_opportunity_latest_quote_currency.sql",
+            "V94__crm_whatsapp_automation_and_quick_replies.sql",
+            "V95__crm_monthly_goals.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -283,7 +291,8 @@ public class TenantModuleMigrationPlanner {
                 "V43__crm_default_branch_support.sql",
                 "V44__crm_quote_permissions.sql",
                 "V63__cotizacion_email_send_guard.sql",
-                "V88__cotizacion_detalle_catalog_snapshot.sql"
+                "V88__cotizacion_detalle_catalog_snapshot.sql",
+                "V92__commercial_currency_and_quote_snapshot.sql"
         ));
         mapping.put("CRM", List.of(
                 "V18__clientes_datos_fiscales_credito.sql",
@@ -331,7 +340,14 @@ public class TenantModuleMigrationPlanner {
                 "V79__crm_open_opportunity_next_action.sql",
                 "V80__crm_prospect_person_classification.sql",
                 "V81__crm_prospect_country_identification.sql",
-                "V87__crm_catalog_item_currency.sql"
+                "V87__crm_catalog_item_currency.sql",
+                "V89__crm_whatsapp_delivery_audit.sql",
+                "V90__user_commercial_profile.sql",
+                "V91__crm_budget_currency_snapshot.sql",
+                "V92__commercial_currency_and_quote_snapshot.sql",
+                "V93__crm_opportunity_latest_quote_currency.sql",
+                "V94__crm_whatsapp_automation_and_quick_replies.sql",
+                "V95__crm_monthly_goals.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

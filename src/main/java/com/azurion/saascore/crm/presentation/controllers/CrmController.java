@@ -12,6 +12,7 @@ import com.azurion.saascore.crm.application.dto.CrmActividadResponse;
 import com.azurion.saascore.crm.application.dto.CrmCanalTokenConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmCatalogoItemResponse;
 import com.azurion.saascore.crm.application.dto.CrmCurrencyConfigResponse;
+import com.azurion.saascore.crm.application.dto.CrmCurrencyOptionResponse;
 import com.azurion.saascore.crm.application.dto.CrmDashboardResponse;
 import com.azurion.saascore.crm.application.dto.CrmInboxChannelResponse;
 import com.azurion.saascore.crm.application.dto.CrmEtapaPipelineResponse;
@@ -24,6 +25,7 @@ import com.azurion.saascore.crm.application.dto.CrmProspectoResponse;
 import com.azurion.saascore.crm.application.dto.CrmLeadAssignmentConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmLandingConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmReporteBucketResponse;
+import com.azurion.saascore.crm.application.dto.CrmResponsableOptionResponse;
 import com.azurion.saascore.crm.application.dto.CrmReportesResponse;
 import com.azurion.saascore.crm.application.dto.CrmSentEmailResponse;
 import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunidadRequest;
@@ -82,6 +84,12 @@ public class CrmController {
     @PreAuthorize("hasAnyAuthority('CRM_CONFIG_MANAGE','CRM_CATALOG_MANAGE','CRM_QUOTES_CREATE','CRM_OPPORTUNITIES_READ')")
     public ApiResponse<List<CrmCurrencyConfigResponse>> listCurrencyConfig() {
         return ApiResponse.ok(crmUseCaseService.listCurrencyConfig(), "Monedas CRM");
+    }
+
+    @GetMapping("/configuracion/monedas/disponibles")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<List<CrmCurrencyOptionResponse>> listAvailableCurrencies() {
+        return ApiResponse.ok(crmUseCaseService.listAvailableCurrencies(), "Catálogo ISO 4217");
     }
 
     @PutMapping("/configuracion/monedas")
@@ -503,6 +511,12 @@ public class CrmController {
     @PreAuthorize("hasAnyAuthority('CRM_REPORTS_READ','CRM_REPORTS_TEAM')")
     public ApiResponse<List<CrmReporteBucketResponse>> oportunidadesVendedor() {
         return ApiResponse.ok(crmUseCaseService.reporteOportunidadesVendedor(), "Oportunidades por vendedor");
+    }
+
+    @GetMapping("/reportes/responsables")
+    @PreAuthorize("hasAnyAuthority('CRM_REPORTS_READ','CRM_REPORTS_TEAM')")
+    public ApiResponse<List<CrmResponsableOptionResponse>> responsablesReporte() {
+        return ApiResponse.ok(crmUseCaseService.reporteResponsables(), "Responsables CRM para reportes");
     }
 
     @GetMapping("/reportes/conversiones")

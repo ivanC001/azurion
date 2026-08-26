@@ -25,4 +25,20 @@ public class RolPermiso extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "permiso_id", nullable = false)
     private Permiso permiso;
+
+    public Rol getRol() {
+        return rol;
+    }
+
+    public void setRol(Rol rol) {
+        this.rol = rol;
+    }
+
+    public Permiso getPermiso() {
+        return permiso;
+    }
+
+    public void setPermiso(Permiso permiso) {
+        this.permiso = permiso;
+    }
 }

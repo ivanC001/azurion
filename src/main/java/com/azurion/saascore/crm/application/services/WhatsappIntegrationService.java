@@ -3,9 +3,11 @@ package com.azurion.saascore.crm.application.services;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappInternalNoteResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
+import com.azurion.saascore.crm.application.dto.CrmWhatsappTemplateResponse;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteResponse;
+import com.azurion.saascore.crm.application.dto.SendWhatsappTemplateRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
@@ -66,10 +68,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class WhatsappIntegrationService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WhatsappIntegrationService.class);
     private static final String PUBLIC_WHATSAPP_OWNER = "crm-whatsapp";
+    public static final String AUTOMATIC_WHATSAPP_OWNER = "crm-whatsapp-auto";
+    private static final String AUTOMATIC_WHATSAPP_NAME = "Respuesta automatica";
+    private static final long CUSTOMER_SERVICE_WINDOW_HOURS = 24;
 
     private final CrmCanalTokenConfigRepository configRepository;
     private final CrmProspectoRepository prospectoRepository;
@@ -85,6 +90,7 @@ public class WhatsappIntegrationService {
     private final WhatsappCloudApiClient cloudApiClient;
     private final ObjectMapper objectMapper;
     private final CrmLeadAssignmentService leadAssignmentService;
+    private final WhatsappAutoReplyEnqueueService autoReplyEnqueueService;
     private final TransactionTemplate transactionTemplate;
 
     @Transactional
@@ -329,10 +335,12 @@ public class WhatsappIntegrationService {
 
     public CrmWhatsappMessageResponse sendMessage(Long prospectoId, SendWhatsappMessageRequest request) {
         CrmProspecto prospecto = requireProspecto(prospectoId);
+        assertCustomerServiceWindowOpen(prospectoId);
         CrmCanalTokenConfig config = requireActiveConfig();
         String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
         String body = request.mensaje().trim();
         SendResult sendResult = cloudApiClient.sendText(config, recipient, body, Boolean.TRUE.equals(request.previewUrl()));
+        String actor = currentUser();
 
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
             CrmWhatsappMessage message = new CrmWhatsappMessage();
@@ -346,11 +354,141 @@ public class WhatsappIntegrationService {
             message.setEstado("ENVIADO");
             message.setMensajeEn(OffsetDateTime.now(ZoneOffset.UTC));
             message.setRawPayload(sendResult.rawResponse());
+            message.setEnviadoPorUsuarioId(actor);
+            message.setEnviadoPorNombre(actor);
             CrmWhatsappMessage saved = messageRepository.save(message);
             updateConversation(prospecto, saved, false);
-            createWhatsappActivity(prospecto, body, saved.getMensajeEn(), false);
+            createWhatsappActivity(prospecto, body, saved.getMensajeEn(), false, actor);
             return toResponse(saved);
         }));
+    }
+
+    public CrmWhatsappMessageResponse sendAutomaticMessage(Long prospectoId, String body) {
+        CrmProspecto prospecto = requireProspecto(prospectoId);
+        assertCustomerServiceWindowOpen(prospectoId);
+        CrmCanalTokenConfig config = requireActiveConfig();
+        String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+        String normalizedBody = truncate(body, 4096);
+        SendResult sendResult = cloudApiClient.sendText(config, recipient, normalizedBody, false);
+
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            CrmWhatsappMessage message = new CrmWhatsappMessage();
+            message.setProspecto(prospecto);
+            message.setMetaMessageId(sendResult.metaMessageId());
+            message.setDireccion("SALIENTE");
+            message.setRemitente(config.getPhoneNumberId());
+            message.setDestinatario(sendResult.whatsappId());
+            message.setTipoMensaje("text");
+            message.setContenido(normalizedBody);
+            message.setEstado("ENVIADO");
+            message.setMensajeEn(OffsetDateTime.now(ZoneOffset.UTC));
+            message.setRawPayload(sendResult.rawResponse());
+            message.setEnviadoPorUsuarioId(AUTOMATIC_WHATSAPP_OWNER);
+            message.setEnviadoPorNombre(AUTOMATIC_WHATSAPP_NAME);
+            CrmWhatsappMessage saved = messageRepository.save(message);
+            updateConversation(prospecto, saved, false);
+            createWhatsappActivity(
+                    prospecto,
+                    normalizedBody,
+                    saved.getMensajeEn(),
+                    false,
+                    AUTOMATIC_WHATSAPP_OWNER
+            );
+            return toResponse(saved);
+        }));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CrmWhatsappTemplateResponse> listApprovedTemplates() {
+        CrmCanalTokenConfig config = requireActiveConfig();
+        return cloudApiClient.listApprovedTemplates(config).stream()
+                .map(t -> new CrmWhatsappTemplateResponse(
+                        t.name(),
+                        t.languageCode(),
+                        t.category(),
+                        t.bodyText(),
+                        t.parameterCount()
+                ))
+                .toList();
+    }
+
+    public CrmWhatsappMessageResponse sendTemplate(Long prospectoId, SendWhatsappTemplateRequest request) {
+        CrmProspecto prospecto = requireProspecto(prospectoId);
+        CrmCanalTokenConfig config = requireActiveConfig();
+        String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+
+        List<WhatsappCloudApiClient.TemplateInfo> templates = cloudApiClient.listApprovedTemplates(config);
+        WhatsappCloudApiClient.TemplateInfo matched = templates.stream()
+                .filter(t -> t.name().equals(request.nombre()) && t.languageCode().equals(request.idioma()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_PLANTILLA_NO_ENCONTRADA",
+                        "La plantilla solicitada no existe o no esta aprobada"
+                ));
+
+        List<String> params = request.parametros() == null ? List.of() : request.parametros();
+        if (params.size() != matched.parameterCount()) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_PARAMETROS_PLANTILLA_INVALIDOS",
+                    "La plantilla requiere " + matched.parameterCount() + " parametros, pero se recibieron " + params.size()
+            );
+        }
+
+        SendResult sendResult = cloudApiClient.sendTemplate(
+                config,
+                recipient,
+                request.nombre(),
+                request.idioma(),
+                params
+        );
+
+        String renderedBody = renderTemplateBody(matched.bodyText(), params);
+        String actor = currentUser();
+
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            CrmWhatsappMessage message = new CrmWhatsappMessage();
+            message.setProspecto(prospecto);
+            message.setMetaMessageId(sendResult.metaMessageId());
+            message.setDireccion("SALIENTE");
+            message.setRemitente(config.getPhoneNumberId());
+            message.setDestinatario(sendResult.whatsappId());
+            message.setTipoMensaje("template");
+            message.setContenido(renderedBody);
+            message.setEstado("ENVIADO");
+            message.setMensajeEn(OffsetDateTime.now(ZoneOffset.UTC));
+            message.setRawPayload(sendResult.rawResponse());
+            message.setEnviadoPorUsuarioId(actor);
+            message.setEnviadoPorNombre(actor);
+            CrmWhatsappMessage saved = messageRepository.save(message);
+            updateConversation(prospecto, saved, false);
+            createWhatsappActivity(prospecto, renderedBody, saved.getMensajeEn(), false, actor);
+            return toResponse(saved);
+        }));
+    }
+
+    private void assertCustomerServiceWindowOpen(Long prospectoId) {
+        conversationRepository.findByProspecto_Id(prospectoId).ifPresent(conversation -> {
+            if (conversation.getUltimoEntranteEn() != null) {
+                OffsetDateTime windowEnd = conversation.getUltimoEntranteEn().plusHours(CUSTOMER_SERVICE_WINDOW_HOURS);
+                if (OffsetDateTime.now(ZoneOffset.UTC).isAfter(windowEnd)) {
+                    throw new BusinessException(
+                            "CRM_WHATSAPP_VENTANA_ATENCION_CERRADA",
+                            "La ventana de atencion de 24 horas de WhatsApp ha expirado. Debes enviar una plantilla aprobada para retomar el contacto."
+                    );
+                }
+            }
+        });
+    }
+
+    private String renderTemplateBody(String bodyText, List<String> parameters) {
+        if (bodyText == null) {
+            return "";
+        }
+        String rendered = bodyText;
+        for (int i = 0; i < parameters.size(); i++) {
+            rendered = rendered.replace("{{" + (i + 1) + "}}", parameters.get(i));
+        }
+        return rendered;
     }
 
     @Transactional(readOnly = true)
@@ -419,6 +557,7 @@ public class WhatsappIntegrationService {
             }
             deliveryConfirmed = true;
 
+            String actor = currentUser();
             CrmWhatsappMessage message = new CrmWhatsappMessage();
             message.setProspecto(prospecto);
             message.setMetaMessageId(sendResult.metaMessageId());
@@ -430,9 +569,11 @@ public class WhatsappIntegrationService {
             message.setEstado("ENVIADO");
             message.setMensajeEn(OffsetDateTime.now(ZoneOffset.UTC));
             message.setRawPayload(sendResult.rawResponse());
+            message.setEnviadoPorUsuarioId(actor);
+            message.setEnviadoPorNombre(actor);
             CrmWhatsappMessage saved = messageRepository.save(message);
             updateConversation(prospecto, saved, false);
-            createWhatsappActivity(prospecto, caption, saved.getMensajeEn(), false);
+            createWhatsappActivity(prospecto, caption, saved.getMensajeEn(), false, actor);
 
             CotizacionResponse updatedQuote = updateCotizacionEstadoUseCase.execute(
                     quoteId,
@@ -531,7 +672,8 @@ public class WhatsappIntegrationService {
         message.setRawPayload(messageNode.toString());
         CrmWhatsappMessage saved = messageRepository.save(message);
         updateConversation(prospecto, saved, true);
-        createWhatsappActivity(prospecto, body, messageTime, true);
+        createWhatsappActivity(prospecto, body, messageTime, true, PUBLIC_WHATSAPP_OWNER);
+        autoReplyEnqueueService.enqueueIfEnabled(saved);
         counters.processed++;
     }
 
@@ -593,7 +735,8 @@ public class WhatsappIntegrationService {
     private void createWhatsappActivity(CrmProspecto prospecto,
                                         String body,
                                         OffsetDateTime messageTime,
-                                        boolean inbound) {
+                                        boolean inbound,
+                                        String actorId) {
         CrmActividad activity = new CrmActividad();
         activity.setProspecto(prospecto);
         activity.setTipoActividad("WHATSAPP");
@@ -605,7 +748,7 @@ public class WhatsappIntegrationService {
         activity.setFechaProgramada(messageTime);
         activity.setFechaRealizada(messageTime);
         activity.setEstado("REALIZADA");
-        activity.setUsuarioId(inbound ? PUBLIC_WHATSAPP_OWNER : currentUser());
+        activity.setUsuarioId(actorId);
         activity.setResultado(inbound ? "Mensaje recibido por WhatsApp" : "Mensaje enviado por WhatsApp");
         activity.setResultadoContacto("CONTACTADO");
         activity.setEstadoProspectoResultado(prospecto.getEstado());
@@ -684,6 +827,7 @@ public class WhatsappIntegrationService {
         conversation.setUltimaDireccion(message.getDireccion());
         conversation.setUltimoMensajeEn(message.getMensajeEn());
         if (inbound) {
+            conversation.setUltimoEntranteEn(message.getMensajeEn());
             conversation.setNoLeidos(safeUnreadCount(conversation) + 1);
         }
         conversationRepository.save(conversation);
@@ -769,6 +913,10 @@ public class WhatsappIntegrationService {
                 ))
                 .toList();
         String legacyNote = notes.isEmpty() ? conversation.getNotaInterna() : notes.getFirst().contenido();
+        OffsetDateTime lastInbound = conversation.getUltimoEntranteEn();
+        OffsetDateTime ventanaAtencionHasta = lastInbound == null ? null : lastInbound.plusHours(CUSTOMER_SERVICE_WINDOW_HOURS);
+        boolean ventanaAbierta = lastInbound != null && OffsetDateTime.now(ZoneOffset.UTC).isBefore(ventanaAtencionHasta);
+
         return new CrmWhatsappConversationResponse(
                 conversation.getId(),
                 prospecto.getId(),
@@ -788,6 +936,9 @@ public class WhatsappIntegrationService {
                 conversation.getUltimoMensaje(),
                 conversation.getUltimaDireccion(),
                 conversation.getUltimoMensajeEn(),
+                conversation.getUltimoEntranteEn(),
+                ventanaAtencionHasta,
+                ventanaAbierta,
                 legacyNote,
                 notes
         );
@@ -824,6 +975,10 @@ public class WhatsappIntegrationService {
                 message.getEstado(),
                 message.getMensajeEn(),
                 message.getLeidoEn(),
+                message.getEnviadoPorUsuarioId(),
+                message.getEnviadoPorNombre(),
+                message.getErrorCodigo(),
+                message.getErrorDetalle(),
                 message.getCreatedAt()
         );
     }

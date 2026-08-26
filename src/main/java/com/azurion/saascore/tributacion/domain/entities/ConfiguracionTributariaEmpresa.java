@@ -31,4 +31,52 @@ public class ConfiguracionTributariaEmpresa extends BaseEntity {
 
     @Column(name = "estado", nullable = false, length = 20)
     private String estado;
+
+    public String getTipoOperacionDefaultId() {
+        return tipoOperacionDefaultId;
+    }
+
+    public void setTipoOperacionDefaultId(String tipoOperacionDefaultId) {
+        this.tipoOperacionDefaultId = tipoOperacionDefaultId;
+    }
+
+    public String getTipoAfectacionDefaultId() {
+        return tipoAfectacionDefaultId;
+    }
+
+    public void setTipoAfectacionDefaultId(String tipoAfectacionDefaultId) {
+        this.tipoAfectacionDefaultId = tipoAfectacionDefaultId;
+    }
+
+    public String getTributoDefaultId() {
+        return tributoDefaultId;
+    }
+
+    public void setTributoDefaultId(String tributoDefaultId) {
+        this.tributoDefaultId = tributoDefaultId;
+    }
+
+    public BigDecimal getPorcentajeIgvDefault() {
+        return porcentajeIgvDefault;
+    }
+
+    public void setPorcentajeIgvDefault(BigDecimal porcentajeIgvDefault) {
+        this.porcentajeIgvDefault = porcentajeIgvDefault;
+    }
+
+    public String getMonedaDefault() {
+        return monedaDefault;
+    }
+
+    public void setMonedaDefault(String monedaDefault) {
+        this.monedaDefault = monedaDefault;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
 }

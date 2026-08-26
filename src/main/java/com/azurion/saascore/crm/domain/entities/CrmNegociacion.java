@@ -65,4 +65,124 @@ public class CrmNegociacion extends BaseEntity {
 
     @Column(name = "usuario_nombre", length = 160)
     private String usuarioNombre;
+
+    public CrmOportunidad getOportunidad() {
+        return oportunidad;
+    }
+
+    public void setOportunidad(CrmOportunidad oportunidad) {
+        this.oportunidad = oportunidad;
+    }
+
+    public Cotizacion getCotizacion() {
+        return cotizacion;
+    }
+
+    public void setCotizacion(Cotizacion cotizacion) {
+        this.cotizacion = cotizacion;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public String getSolicitudCliente() {
+        return solicitudCliente;
+    }
+
+    public void setSolicitudCliente(String solicitudCliente) {
+        this.solicitudCliente = solicitudCliente;
+    }
+
+    public BigDecimal getPrecioOriginal() {
+        return precioOriginal;
+    }
+
+    public void setPrecioOriginal(BigDecimal precioOriginal) {
+        this.precioOriginal = precioOriginal;
+    }
+
+    public BigDecimal getDescuento() {
+        return descuento;
+    }
+
+    public void setDescuento(BigDecimal descuento) {
+        this.descuento = descuento;
+    }
+
+    public BigDecimal getPrecioFinal() {
+        return precioFinal;
+    }
+
+    public void setPrecioFinal(BigDecimal precioFinal) {
+        this.precioFinal = precioFinal;
+    }
+
+    public String getFormaPago() {
+        return formaPago;
+    }
+
+    public void setFormaPago(String formaPago) {
+        this.formaPago = formaPago;
+    }
+
+    public Integer getCuotas() {
+        return cuotas;
+    }
+
+    public void setCuotas(Integer cuotas) {
+        this.cuotas = cuotas;
+    }
+
+    public LocalDate getFechaInicio() {
+        return fechaInicio;
+    }
+
+    public void setFechaInicio(LocalDate fechaInicio) {
+        this.fechaInicio = fechaInicio;
+    }
+
+    public LocalDate getFechaEntrega() {
+        return fechaEntrega;
+    }
+
+    public void setFechaEntrega(LocalDate fechaEntrega) {
+        this.fechaEntrega = fechaEntrega;
+    }
+
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
+
+    public String getResultado() {
+        return resultado;
+    }
+
+    public void setResultado(String resultado) {
+        this.resultado = resultado;
+    }
+
+    public String getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(String usuarioId) {
+        this.usuarioId = usuarioId;
+    }
+
+    public String getUsuarioNombre() {
+        return usuarioNombre;
+    }
+
+    public void setUsuarioNombre(String usuarioNombre) {
+        this.usuarioNombre = usuarioNombre;
+    }
 }

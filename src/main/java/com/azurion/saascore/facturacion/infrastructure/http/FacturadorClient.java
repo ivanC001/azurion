@@ -22,11 +22,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import com.azurion.shared.util.StringUtil;
 import org.springframework.stereotype.Component;
 
 @Component
 public class FacturadorClient {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FacturadorClient.class);
     private static final long MIN_WAIT_PROCESSED_TIMEOUT_MS = 5_000;
     private static final long MAX_WAIT_PROCESSED_TIMEOUT_MS = 300_000;
     private static final long MIN_WAIT_PROCESSED_POLL_INTERVAL_MS = 250;
@@ -931,8 +934,9 @@ public class FacturadorClient {
             if (externalId.isBlank() && payload.has("documento")) {
                 externalId = readExternalId(payload.path("documento"));
             }
-            return externalId.isBlank() ? null : trimHeaderValue(externalId, 180);
-        } catch (Exception ignored) {
+            return externalId.isBlank() ? null : StringUtil.trimHeaderValue(externalId, 180);
+        } catch (Exception ex) {
+            log.debug("No se pudo extraer externalId del payload para header de tracking: {}", ex.getMessage());
             return null;
         }
     }
@@ -945,8 +949,7 @@ public class FacturadorClient {
     }
 
     private String trimHeaderValue(String value, int maxLength) {
-        String safe = value.replace("\r", "").replace("\n", "").trim();
-        return safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
+        return StringUtil.trimHeaderValue(value, maxLength);
     }
 
     private String normalizePath(String endpointPath) {
@@ -976,7 +979,8 @@ public class FacturadorClient {
         }
         try {
             return objectMapper.readTree(body);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.debug("No se pudo parsear el cuerpo JSON de respuesta del facturador: {}", ex.getMessage());
             return null;
         }
     }

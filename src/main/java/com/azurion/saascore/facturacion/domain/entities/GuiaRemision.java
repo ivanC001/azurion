@@ -107,4 +107,236 @@ public class GuiaRemision extends BaseEntity {
 
     @Column(name = "facturacion_actualizado_en")
     private OffsetDateTime facturacionActualizadoEn;
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getClientOperationId() {
+        return clientOperationId;
+    }
+
+    public void setClientOperationId(String clientOperationId) {
+        this.clientOperationId = clientOperationId;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
+    }
+
+    public Long getSucursalOrigenId() {
+        return sucursalOrigenId;
+    }
+
+    public void setSucursalOrigenId(Long sucursalOrigenId) {
+        this.sucursalOrigenId = sucursalOrigenId;
+    }
+
+    public String getSucursalOrigenNombre() {
+        return sucursalOrigenNombre;
+    }
+
+    public void setSucursalOrigenNombre(String sucursalOrigenNombre) {
+        this.sucursalOrigenNombre = sucursalOrigenNombre;
+    }
+
+    public Long getSucursalDestinoId() {
+        return sucursalDestinoId;
+    }
+
+    public void setSucursalDestinoId(Long sucursalDestinoId) {
+        this.sucursalDestinoId = sucursalDestinoId;
+    }
+
+    public String getSucursalDestinoNombre() {
+        return sucursalDestinoNombre;
+    }
+
+    public void setSucursalDestinoNombre(String sucursalDestinoNombre) {
+        this.sucursalDestinoNombre = sucursalDestinoNombre;
+    }
+
+    public LocalDate getFechaEmision() {
+        return fechaEmision;
+    }
+
+    public void setFechaEmision(LocalDate fechaEmision) {
+        this.fechaEmision = fechaEmision;
+    }
+
+    public LocalDate getFechaTraslado() {
+        return fechaTraslado;
+    }
+
+    public void setFechaTraslado(LocalDate fechaTraslado) {
+        this.fechaTraslado = fechaTraslado;
+    }
+
+    public String getMotivoTraslado() {
+        return motivoTraslado;
+    }
+
+    public void setMotivoTraslado(String motivoTraslado) {
+        this.motivoTraslado = motivoTraslado;
+    }
+
+    public String getTransportista() {
+        return transportista;
+    }
+
+    public void setTransportista(String transportista) {
+        this.transportista = transportista;
+    }
+
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
+
+    public String getResponsableId() {
+        return responsableId;
+    }
+
+    public void setResponsableId(String responsableId) {
+        this.responsableId = responsableId;
+    }
+
+    public String getResponsableNombre() {
+        return responsableNombre;
+    }
+
+    public void setResponsableNombre(String responsableNombre) {
+        this.responsableNombre = responsableNombre;
+    }
+
+    public String getItemsResumen() {
+        return itemsResumen;
+    }
+
+    public void setItemsResumen(String itemsResumen) {
+        this.itemsResumen = itemsResumen;
+    }
+
+    public String getFacturacionEstado() {
+        return facturacionEstado;
+    }
+
+    public void setFacturacionEstado(String facturacionEstado) {
+        this.facturacionEstado = facturacionEstado;
+    }
+
+    public Integer getFacturacionIntentos() {
+        return facturacionIntentos;
+    }
+
+    public void setFacturacionIntentos(Integer facturacionIntentos) {
+        this.facturacionIntentos = facturacionIntentos;
+    }
+
+    public Integer getFacturadorHttpStatus() {
+        return facturadorHttpStatus;
+    }
+
+    public void setFacturadorHttpStatus(Integer facturadorHttpStatus) {
+        this.facturadorHttpStatus = facturadorHttpStatus;
+    }
+
+    public String getFacturadorEndpoint() {
+        return facturadorEndpoint;
+    }
+
+    public void setFacturadorEndpoint(String facturadorEndpoint) {
+        this.facturadorEndpoint = facturadorEndpoint;
+    }
+
+    public String getFacturadorTipoComprobante() {
+        return facturadorTipoComprobante;
+    }
+
+    public void setFacturadorTipoComprobante(String facturadorTipoComprobante) {
+        this.facturadorTipoComprobante = facturadorTipoComprobante;
+    }
+
+    public String getFacturadorMensaje() {
+        return facturadorMensaje;
+    }
+
+    public void setFacturadorMensaje(String facturadorMensaje) {
+        this.facturadorMensaje = facturadorMensaje;
+    }
+
+    public String getFacturadorSunatEstado() {
+        return facturadorSunatEstado;
+    }
+
+    public void setFacturadorSunatEstado(String facturadorSunatEstado) {
+        this.facturadorSunatEstado = facturadorSunatEstado;
+    }
+
+    public String getFacturadorDocumentoId() {
+        return facturadorDocumentoId;
+    }
+
+    public void setFacturadorDocumentoId(String facturadorDocumentoId) {
+        this.facturadorDocumentoId = facturadorDocumentoId;
+    }
+
+    public String getFacturadorTicket() {
+        return facturadorTicket;
+    }
+
+    public void setFacturadorTicket(String facturadorTicket) {
+        this.facturadorTicket = facturadorTicket;
+    }
+
+    public String getFacturadorPdfUrl() {
+        return facturadorPdfUrl;
+    }
+
+    public void setFacturadorPdfUrl(String facturadorPdfUrl) {
+        this.facturadorPdfUrl = facturadorPdfUrl;
+    }
+
+    public String getFacturadorXmlUrl() {
+        return facturadorXmlUrl;
+    }
+
+    public void setFacturadorXmlUrl(String facturadorXmlUrl) {
+        this.facturadorXmlUrl = facturadorXmlUrl;
+    }
+
+    public String getFacturadorCdrUrl() {
+        return facturadorCdrUrl;
+    }
+
+    public void setFacturadorCdrUrl(String facturadorCdrUrl) {
+        this.facturadorCdrUrl = facturadorCdrUrl;
+    }
+
+    public String getFacturadorRespuestaJson() {
+        return facturadorRespuestaJson;
+    }
+
+    public void setFacturadorRespuestaJson(String facturadorRespuestaJson) {
+        this.facturadorRespuestaJson = facturadorRespuestaJson;
+    }
+
+    public OffsetDateTime getFacturacionActualizadoEn() {
+        return facturacionActualizadoEn;
+    }
+
+    public void setFacturacionActualizadoEn(OffsetDateTime facturacionActualizadoEn) {
+        this.facturacionActualizadoEn = facturacionActualizadoEn;
+    }
 }

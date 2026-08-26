@@ -155,4 +155,340 @@ public class Empresa extends BaseEntity {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public String getRuc() {
+        return ruc;
+    }
+
+    public void setRuc(String ruc) {
+        this.ruc = ruc;
+    }
+
+    public String getRazonSocial() {
+        return razonSocial;
+    }
+
+    public void setRazonSocial(String razonSocial) {
+        this.razonSocial = razonSocial;
+    }
+
+    public String getTipoDocumentoFiscal() {
+        return tipoDocumentoFiscal;
+    }
+
+    public void setTipoDocumentoFiscal(String tipoDocumentoFiscal) {
+        this.tipoDocumentoFiscal = tipoDocumentoFiscal;
+    }
+
+    public String getNombreComercial() {
+        return nombreComercial;
+    }
+
+    public void setNombreComercial(String nombreComercial) {
+        this.nombreComercial = nombreComercial;
+    }
+
+    public String getDireccionFiscal() {
+        return direccionFiscal;
+    }
+
+    public void setDireccionFiscal(String direccionFiscal) {
+        this.direccionFiscal = direccionFiscal;
+    }
+
+    public String getDistrito() {
+        return distrito;
+    }
+
+    public void setDistrito(String distrito) {
+        this.distrito = distrito;
+    }
+
+    public String getProvincia() {
+        return provincia;
+    }
+
+    public void setProvincia(String provincia) {
+        this.provincia = provincia;
+    }
+
+    public String getDepartamento() {
+        return departamento;
+    }
+
+    public void setDepartamento(String departamento) {
+        this.departamento = departamento;
+    }
+
+    public String getPaisCodigo() {
+        return paisCodigo;
+    }
+
+    public void setPaisCodigo(String paisCodigo) {
+        this.paisCodigo = paisCodigo;
+    }
+
+    public String getPaisNombre() {
+        return paisNombre;
+    }
+
+    public void setPaisNombre(String paisNombre) {
+        this.paisNombre = paisNombre;
+    }
+
+    public String getCorreoPrincipal() {
+        return correoPrincipal;
+    }
+
+    public void setCorreoPrincipal(String correoPrincipal) {
+        this.correoPrincipal = correoPrincipal;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+    }
+
+    public String getCelular() {
+        return celular;
+    }
+
+    public void setCelular(String celular) {
+        this.celular = celular;
+    }
+
+    public String getSitioWeb() {
+        return sitioWeb;
+    }
+
+    public void setSitioWeb(String sitioWeb) {
+        this.sitioWeb = sitioWeb;
+    }
+
+    public String getFacebook() {
+        return facebook;
+    }
+
+    public void setFacebook(String facebook) {
+        this.facebook = facebook;
+    }
+
+    public String getInstagram() {
+        return instagram;
+    }
+
+    public void setInstagram(String instagram) {
+        this.instagram = instagram;
+    }
+
+    public String getRepresentanteNombre() {
+        return representanteNombre;
+    }
+
+    public void setRepresentanteNombre(String representanteNombre) {
+        this.representanteNombre = representanteNombre;
+    }
+
+    public String getRepresentanteTipoDocumento() {
+        return representanteTipoDocumento;
+    }
+
+    public void setRepresentanteTipoDocumento(String representanteTipoDocumento) {
+        this.representanteTipoDocumento = representanteTipoDocumento;
+    }
+
+    public String getRepresentanteNumeroDocumento() {
+        return representanteNumeroDocumento;
+    }
+
+    public void setRepresentanteNumeroDocumento(String representanteNumeroDocumento) {
+        this.representanteNumeroDocumento = representanteNumeroDocumento;
+    }
+
+    public String getRepresentanteCargo() {
+        return representanteCargo;
+    }
+
+    public void setRepresentanteCargo(String representanteCargo) {
+        this.representanteCargo = representanteCargo;
+    }
+
+    public String getRepresentanteCorreo() {
+        return representanteCorreo;
+    }
+
+    public void setRepresentanteCorreo(String representanteCorreo) {
+        this.representanteCorreo = representanteCorreo;
+    }
+
+    public String getRepresentanteTelefono() {
+        return representanteTelefono;
+    }
+
+    public void setRepresentanteTelefono(String representanteTelefono) {
+        this.representanteTelefono = representanteTelefono;
+    }
+
+    public String getZonaHoraria() {
+        return zonaHoraria;
+    }
+
+    public void setZonaHoraria(String zonaHoraria) {
+        this.zonaHoraria = zonaHoraria;
+    }
+
+    public String getIdioma() {
+        return idioma;
+    }
+
+    public void setIdioma(String idioma) {
+        this.idioma = idioma;
+    }
+
+    public String getFormatoFecha() {
+        return formatoFecha;
+    }
+
+    public void setFormatoFecha(String formatoFecha) {
+        this.formatoFecha = formatoFecha;
+    }
+
+    public String getFormatoHora() {
+        return formatoHora;
+    }
+
+    public void setFormatoHora(String formatoHora) {
+        this.formatoHora = formatoHora;
+    }
+
+    public String getMonedaCodigo() {
+        return monedaCodigo;
+    }
+
+    public void setMonedaCodigo(String monedaCodigo) {
+        this.monedaCodigo = monedaCodigo;
+    }
+
+    public String getMonedaSimbolo() {
+        return monedaSimbolo;
+    }
+
+    public void setMonedaSimbolo(String monedaSimbolo) {
+        this.monedaSimbolo = monedaSimbolo;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getSchemaName() {
+        return schemaName;
+    }
+
+    public void setSchemaName(String schemaName) {
+        this.schemaName = schemaName;
+    }
+
+    public String getLogoPanelUrl() {
+        return logoPanelUrl;
+    }
+
+    public void setLogoPanelUrl(String logoPanelUrl) {
+        this.logoPanelUrl = logoPanelUrl;
+    }
+
+    public String getFacturadorStatus() {
+        return facturadorStatus;
+    }
+
+    public void setFacturadorStatus(String facturadorStatus) {
+        this.facturadorStatus = facturadorStatus;
+    }
+
+    public String getFacturadorDocumentMode() {
+        return facturadorDocumentMode;
+    }
+
+    public void setFacturadorDocumentMode(String facturadorDocumentMode) {
+        this.facturadorDocumentMode = facturadorDocumentMode;
+    }
+
+    public String getFacturadorFiscalStatus() {
+        return facturadorFiscalStatus;
+    }
+
+    public void setFacturadorFiscalStatus(String facturadorFiscalStatus) {
+        this.facturadorFiscalStatus = facturadorFiscalStatus;
+    }
+
+    public String getFacturadorSunatMode() {
+        return facturadorSunatMode;
+    }
+
+    public void setFacturadorSunatMode(String facturadorSunatMode) {
+        this.facturadorSunatMode = facturadorSunatMode;
+    }
+
+    public String getFacturadorLastError() {
+        return facturadorLastError;
+    }
+
+    public void setFacturadorLastError(String facturadorLastError) {
+        this.facturadorLastError = facturadorLastError;
+    }
+
+    public OffsetDateTime getFacturadorProvisionedAt() {
+        return facturadorProvisionedAt;
+    }
+
+    public void setFacturadorProvisionedAt(OffsetDateTime facturadorProvisionedAt) {
+        this.facturadorProvisionedAt = facturadorProvisionedAt;
+    }
+
+    public OffsetDateTime getFacturadorNextAttemptAt() {
+        return facturadorNextAttemptAt;
+    }
+
+    public void setFacturadorNextAttemptAt(OffsetDateTime facturadorNextAttemptAt) {
+        this.facturadorNextAttemptAt = facturadorNextAttemptAt;
+    }
+
+    public Integer getFacturadorAttempts() {
+        return facturadorAttempts;
+    }
+
+    public void setFacturadorAttempts(Integer facturadorAttempts) {
+        this.facturadorAttempts = facturadorAttempts;
+    }
+
+    public String getFacturadorLeaseOwner() {
+        return facturadorLeaseOwner;
+    }
+
+    public void setFacturadorLeaseOwner(String facturadorLeaseOwner) {
+        this.facturadorLeaseOwner = facturadorLeaseOwner;
+    }
+
+    public OffsetDateTime getFacturadorLeaseUntil() {
+        return facturadorLeaseUntil;
+    }
+
+    public void setFacturadorLeaseUntil(OffsetDateTime facturadorLeaseUntil) {
+        this.facturadorLeaseUntil = facturadorLeaseUntil;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }

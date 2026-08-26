@@ -28,4 +28,36 @@ public class Categoria extends BaseEntity {
 
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "ACTIVO";
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public Categoria getPadre() {
+        return padre;
+    }
+
+    public void setPadre(Categoria padre) {
+        this.padre = padre;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
 }

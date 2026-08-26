@@ -24,9 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
-@Slf4j
 public class CrmPrivateFileStorageService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CrmPrivateFileStorageService.class);
     public static final long MAX_FILE_BYTES = 8L * 1024L * 1024L;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".doc", ".docx", ".xls", ".xlsx"

@@ -76,6 +76,9 @@ public class CrmProspecto extends BaseEntity {
     @Column(name = "presupuesto_estimado", precision = 18, scale = 2)
     private BigDecimal presupuestoEstimado;
 
+    @Column(name = "presupuesto_moneda", nullable = false, length = 3)
+    private String presupuestoMoneda = "PEN";
+
     @Column(name = "fecha_interes")
     private LocalDate fechaInteres;
 
@@ -141,4 +144,350 @@ public class CrmProspecto extends BaseEntity {
 
     @Column(name = "fecha_conversion")
     private OffsetDateTime fechaConversion;
+
+    public String getTipoPersona() {
+        return tipoPersona;
+    }
+
+    public void setTipoPersona(String tipoPersona) {
+        this.tipoPersona = tipoPersona;
+    }
+
+    public String getPaisCodigo() {
+        return paisCodigo;
+    }
+
+    public void setPaisCodigo(String paisCodigo) {
+        this.paisCodigo = paisCodigo;
+    }
+
+    public String getTipoDocumento() {
+        return tipoDocumento;
+    }
+
+    public void setTipoDocumento(String tipoDocumento) {
+        this.tipoDocumento = tipoDocumento;
+    }
+
+    public String getNumeroDocumento() {
+        return numeroDocumento;
+    }
+
+    public void setNumeroDocumento(String numeroDocumento) {
+        this.numeroDocumento = numeroDocumento;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getRazonSocial() {
+        return razonSocial;
+    }
+
+    public void setRazonSocial(String razonSocial) {
+        this.razonSocial = razonSocial;
+    }
+
+    public String getNombreComercial() {
+        return nombreComercial;
+    }
+
+    public void setNombreComercial(String nombreComercial) {
+        this.nombreComercial = nombreComercial;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+    }
+
+    public String getCorreo() {
+        return correo;
+    }
+
+    public void setCorreo(String correo) {
+        this.correo = correo;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
+
+    public String getOrigen() {
+        return origen;
+    }
+
+    public void setOrigen(String origen) {
+        this.origen = origen;
+    }
+
+    public String getCanalIngreso() {
+        return canalIngreso;
+    }
+
+    public void setCanalIngreso(String canalIngreso) {
+        this.canalIngreso = canalIngreso;
+    }
+
+    public String getCampania() {
+        return campania;
+    }
+
+    public void setCampania(String campania) {
+        this.campania = campania;
+    }
+
+    public String getLandingUrl() {
+        return landingUrl;
+    }
+
+    public void setLandingUrl(String landingUrl) {
+        this.landingUrl = landingUrl;
+    }
+
+    public String getLandingKey() {
+        return landingKey;
+    }
+
+    public void setLandingKey(String landingKey) {
+        this.landingKey = landingKey;
+    }
+
+    public String getMensaje() {
+        return mensaje;
+    }
+
+    public void setMensaje(String mensaje) {
+        this.mensaje = mensaje;
+    }
+
+    public String getTipoInteres() {
+        return tipoInteres;
+    }
+
+    public void setTipoInteres(String tipoInteres) {
+        this.tipoInteres = tipoInteres;
+    }
+
+    public String getInteresPrincipal() {
+        return interesPrincipal;
+    }
+
+    public void setInteresPrincipal(String interesPrincipal) {
+        this.interesPrincipal = interesPrincipal;
+    }
+
+    public String getInteresDetalle() {
+        return interesDetalle;
+    }
+
+    public void setInteresDetalle(String interesDetalle) {
+        this.interesDetalle = interesDetalle;
+    }
+
+    public BigDecimal getPresupuestoEstimado() {
+        return presupuestoEstimado;
+    }
+
+    public void setPresupuestoEstimado(BigDecimal presupuestoEstimado) {
+        this.presupuestoEstimado = presupuestoEstimado;
+    }
+
+    public String getPresupuestoMoneda() {
+        return presupuestoMoneda;
+    }
+
+    public void setPresupuestoMoneda(String presupuestoMoneda) {
+        this.presupuestoMoneda = presupuestoMoneda;
+    }
+
+    public LocalDate getFechaInteres() {
+        return fechaInteres;
+    }
+
+    public void setFechaInteres(LocalDate fechaInteres) {
+        this.fechaInteres = fechaInteres;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
+    }
+
+    public Long getCatalogoItemId() {
+        return catalogoItemId;
+    }
+
+    public void setCatalogoItemId(Long catalogoItemId) {
+        this.catalogoItemId = catalogoItemId;
+    }
+
+    public boolean isProductoPendiente() {
+        return productoPendiente;
+    }
+
+    public void setProductoPendiente(boolean productoPendiente) {
+        this.productoPendiente = productoPendiente;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public String getNivelInteres() {
+        return nivelInteres;
+    }
+
+    public void setNivelInteres(String nivelInteres) {
+        this.nivelInteres = nivelInteres;
+    }
+
+    public boolean isNecesidadIdentificada() {
+        return necesidadIdentificada;
+    }
+
+    public void setNecesidadIdentificada(boolean necesidadIdentificada) {
+        this.necesidadIdentificada = handyBoolean(necesidadIdentificada);
+    }
+
+    public String getInteresReal() {
+        return interesReal;
+    }
+
+    public void setInteresReal(String interesReal) {
+        this.interesReal = interesReal;
+    }
+
+    public String getPresupuestoDefinido() {
+        return presupuestoDefinido;
+    }
+
+    public void setPresupuestoDefinido(String presupuestoDefinido) {
+        this.presupuestoDefinido = presupuestoDefinido;
+    }
+
+    public String getTomadorDecision() {
+        return tomadorDecision;
+    }
+
+    public void setTomadorDecision(String tomadorDecision) {
+        this.tomadorDecision = tomadorDecision;
+    }
+
+    public String getFechaEstimadaCompra() {
+        return fechaEstimadaCompra;
+    }
+
+    public void setFechaEstimadaCompra(String fechaEstimadaCompra) {
+        this.fechaEstimadaCompra = fechaEstimadaCompra;
+    }
+
+    public Integer getScoreCalificacion() {
+        return scoreCalificacion;
+    }
+
+    public void setScoreCalificacion(Integer scoreCalificacion) {
+        this.scoreCalificacion = scoreCalificacion;
+    }
+
+    public String getTemperatura() {
+        return temperatura;
+    }
+
+    public void setTemperatura(String temperatura) {
+        this.temperatura = temperatura;
+    }
+
+    public String getMotivoEspera() {
+        return motivoEspera;
+    }
+
+    public void setMotivoEspera(String motivoEspera) {
+        this.motivoEspera = motivoEspera;
+    }
+
+    public OffsetDateTime getFechaProximoContacto() {
+        return fechaProximoContacto;
+    }
+
+    public void setFechaProximoContacto(OffsetDateTime fechaProximoContacto) {
+        this.fechaProximoContacto = fechaProximoContacto;
+    }
+
+    public String getMotivoPerdida() {
+        return motivoPerdida;
+    }
+
+    public void setMotivoPerdida(String motivoPerdida) {
+        this.motivoPerdida = motivoPerdida;
+    }
+
+    public String getObservacionPerdida() {
+        return observacionPerdida;
+    }
+
+    public void setObservacionPerdida(String observacionPerdida) {
+        this.observacionPerdida = observacionPerdida;
+    }
+
+    public Long getOportunidadId() {
+        return oportunidadId;
+    }
+
+    public void setOportunidadId(Long oportunidadId) {
+        this.oportunidadId = oportunidadId;
+    }
+
+    public String getResponsableId() {
+        return responsableId;
+    }
+
+    public void setResponsableId(String responsableId) {
+        this.responsableId = responsableId;
+    }
+
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
+
+    public Long getClienteId() {
+        return clienteId;
+    }
+
+    public void setClienteId(Long clienteId) {
+        this.clienteId = clienteId;
+    }
+
+    public OffsetDateTime getFechaConversion() {
+        return fechaConversion;
+    }
+
+    public void setFechaConversion(OffsetDateTime fechaConversion) {
+        this.fechaConversion = fechaConversion;
+    }
+
+    private boolean handyBoolean(boolean b) { return b; }
 }
