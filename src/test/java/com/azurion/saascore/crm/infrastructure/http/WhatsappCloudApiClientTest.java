@@ -132,11 +132,37 @@ class WhatsappCloudApiClientTest {
     @Test void propagatesMetaRejectionWithoutReturningASuccess() throws Exception {
         var template = WhatsappTemplateParser.approved(mapper.readTree(catalog("APPROVED", "Hola"))).getFirst();
         status = 400;
-        response = "{\"error\":{\"message\":\"Template paused\",\"code\":132015}}";
+        response = "{\"error\":{\"message\":\"Unknown rejection\",\"code\":999999}}";
         var error = assertThrows(BusinessException.class, () -> client.sendTemplate(config, "51999888777", template, List.of()));
-        assertTrue(error.getMessage().contains("132015"));
-        assertTrue(error.getMessage().contains("Template paused"));
+        assertEquals("CRM_WHATSAPP_META_ERROR", error.getCode());
+        assertTrue(error.getMessage().contains("999999"));
+        assertTrue(error.getMessage().contains("Unknown rejection"));
         assertFalse(error.getMessage().contains("test-token"));
+    }
+
+    @Test void translatesKnownMetaCodesIntoActionableErrorsWithoutLeakingMetaText() throws Exception {
+        var template = WhatsappTemplateParser.approved(mapper.readTree(catalog("APPROVED", "Hola"))).getFirst();
+        status = 400;
+        response = """
+                {"error":{"message":"Hello World templates can only be sent from the Public Test Numbers",
+                 "code":131058,"error_subcode":2494010}}
+                """;
+        var error = assertThrows(BusinessException.class, () -> client.sendTemplate(config, "51999888777", template, List.of()));
+        assertEquals("CRM_WHATSAPP_PLANTILLA_RECHAZADA", error.getCode());
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, error.getStatus());
+        assertTrue(error.isUserActionable());
+        assertTrue(error.getMessage().contains("hello_world"));
+        assertFalse(error.getMessage().contains("Public Test Numbers"));
+        assertFalse(error.getMessage().contains("131058"));
+    }
+
+    @Test void mapsMetaThrottlingToTooManyRequests() throws Exception {
+        var template = WhatsappTemplateParser.approved(mapper.readTree(catalog("APPROVED", "Hola"))).getFirst();
+        status = 400;
+        response = "{\"error\":{\"message\":\"Rate limit hit\",\"code\":130429}}";
+        var error = assertThrows(BusinessException.class, () -> client.sendTemplate(config, "51999888777", template, List.of()));
+        assertEquals("CRM_WHATSAPP_LIMITE_DE_ENVIOS", error.getCode());
+        assertEquals(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, error.getStatus());
     }
 
     @Test void rejectsRepeatedPaginationCursorsAndMalformedResponses() {

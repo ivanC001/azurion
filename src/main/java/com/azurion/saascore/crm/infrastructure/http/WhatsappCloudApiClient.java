@@ -338,10 +338,20 @@ public class WhatsappCloudApiClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             JsonNode responseJson = parseResponse(response.body());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new BusinessException(
-                        "CRM_WHATSAPP_META_ERROR",
-                        metaError(responseJson, "Meta rechazo el mensaje") + " (HTTP " + response.statusCode() + ")"
-                );
+                String detail = metaError(responseJson, "Meta rechazo el mensaje")
+                        + " (HTTP " + response.statusCode() + ")";
+                BusinessException accionable = WhatsappMetaErrors.accionable(responseJson);
+                if (accionable != null) {
+                    // El detalle de Meta se queda en el log; al usuario le llega el texto propio.
+                    log.warn(
+                            "Meta rechazo un envio accionable phoneNumberId={} code={} detail={}",
+                            config.getPhoneNumberId(),
+                            accionable.getCode(),
+                            detail
+                    );
+                    throw accionable;
+                }
+                throw new BusinessException("CRM_WHATSAPP_META_ERROR", detail);
             }
             String messageId = responseJson.path("messages").path(0).path("id").asText(null);
             if (!hasText(messageId)) {
