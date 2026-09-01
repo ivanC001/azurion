@@ -19,6 +19,7 @@ import com.azurion.saascore.crm.application.dto.UpdateWhatsappAutoReplyConfigReq
 import com.azurion.saascore.crm.application.dto.WhatsappAutoReplyConfigResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappConnectionStatusResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappVerifyTokenResponse;
+import com.azurion.saascore.crm.application.dto.WhatsappReengagementGuideResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappQuickReplyResponse;
 import com.azurion.saascore.crm.application.services.WhatsappAutoReplyConfigurationService;
@@ -26,6 +27,7 @@ import com.azurion.saascore.crm.application.services.WhatsappConfigurationServic
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.application.services.WhatsappQuickReplyService;
 import com.azurion.saascore.crm.application.services.WhatsappOptOutService;
+import com.azurion.saascore.crm.application.services.WhatsappReengagementGuideService;
 import com.azurion.saascore.crm.application.services.WhatsappReengagementService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
@@ -56,6 +58,7 @@ public class WhatsappCrmController {
     private final WhatsappQuickReplyService whatsappQuickReplyService;
     private final WhatsappReengagementService reengagementService;
     private final WhatsappOptOutService optOutService;
+    private final WhatsappReengagementGuideService reengagementGuideService;
 
     @GetMapping("/whatsapp/estado")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
@@ -284,6 +287,15 @@ public class WhatsappCrmController {
         return ApiResponse.ok(
                 whatsappIntegrationService.sendTemplate(prospectoId, request),
                 "Plantilla enviada a WhatsApp"
+        );
+    }
+
+    @GetMapping("/whatsapp/reenganches/guia")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
+    public ApiResponse<WhatsappReengagementGuideResponse> reengagementGuide() {
+        return ApiResponse.ok(
+                reengagementGuideService.guide(),
+                "Guia de configuracion del reenganche de WhatsApp"
         );
     }
 
