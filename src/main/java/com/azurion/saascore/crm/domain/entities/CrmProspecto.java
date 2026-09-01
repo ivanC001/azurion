@@ -136,6 +136,12 @@ public class CrmProspecto extends BaseEntity {
     @Column(name = "responsable_id", nullable = false, length = 80)
     private String responsableId;
 
+    @Column(name = "whatsapp_optout_en")
+    private OffsetDateTime whatsappOptoutEn;
+
+    @Column(name = "whatsapp_optout_motivo", length = 200)
+    private String whatsappOptoutMotivo;
+
     @Column(name = "observacion", length = 1000)
     private String observacion;
 

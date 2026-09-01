@@ -4,11 +4,14 @@ import com.azurion.saascore.crm.application.dto.AssignWhatsappConversationReques
 import com.azurion.saascore.crm.application.dto.SaveWhatsappQuickReplyRequest;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
+import com.azurion.saascore.crm.application.dto.CrmWhatsappReengagementResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappTemplateResponse;
 import com.azurion.saascore.crm.application.dto.SaveWhatsappConversationNoteRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappQuoteResponse;
+import com.azurion.saascore.crm.application.dto.ScheduleQuoteReengagementRequest;
+import com.azurion.saascore.crm.application.dto.ScheduleWhatsappReengagementRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappTemplateRequest;
 import com.azurion.saascore.crm.application.dto.UpdateWhatsappConversationNoteRequest;
 import com.azurion.saascore.crm.application.dto.UpdateWhatsappConversationStatusRequest;
@@ -22,6 +25,8 @@ import com.azurion.saascore.crm.application.services.WhatsappAutoReplyConfigurat
 import com.azurion.saascore.crm.application.services.WhatsappConfigurationService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.application.services.WhatsappQuickReplyService;
+import com.azurion.saascore.crm.application.services.WhatsappOptOutService;
+import com.azurion.saascore.crm.application.services.WhatsappReengagementService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.shared.api.ApiResponse;
@@ -49,6 +54,8 @@ public class WhatsappCrmController {
     private final WhatsappConfigurationService whatsappConfigurationService;
     private final WhatsappAutoReplyConfigurationService whatsappAutoReplyConfigurationService;
     private final WhatsappQuickReplyService whatsappQuickReplyService;
+    private final WhatsappReengagementService reengagementService;
+    private final WhatsappOptOutService optOutService;
 
     @GetMapping("/whatsapp/estado")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
@@ -278,6 +285,61 @@ public class WhatsappCrmController {
                 whatsappIntegrationService.sendTemplate(prospectoId, request),
                 "Plantilla enviada a WhatsApp"
         );
+    }
+
+    @PostMapping("/prospectos/{prospectoId}/whatsapp/reenganches")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<CrmWhatsappReengagementResponse> scheduleReengagement(
+            @PathVariable Long prospectoId,
+            @Valid @RequestBody ScheduleWhatsappReengagementRequest request) {
+        return ApiResponse.ok(
+                reengagementService.schedule(prospectoId, request),
+                "Reenganche de WhatsApp programado"
+        );
+    }
+
+    @PostMapping("/prospectos/{prospectoId}/whatsapp/reenganches/cotizacion")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<CrmWhatsappReengagementResponse> scheduleQuoteReengagement(
+            @PathVariable Long prospectoId,
+            @Valid @RequestBody ScheduleQuoteReengagementRequest request) {
+        return ApiResponse.ok(
+                reengagementService.scheduleFromQuote(prospectoId, request),
+                "Reenganche de WhatsApp programado desde la cotizacion"
+        );
+    }
+
+    @GetMapping("/prospectos/{prospectoId}/whatsapp/reenganches")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
+    public ApiResponse<List<CrmWhatsappReengagementResponse>> listReengagements(
+            @PathVariable Long prospectoId) {
+        return ApiResponse.ok(
+                reengagementService.listForProspecto(prospectoId),
+                "Reenganches de WhatsApp del prospecto"
+        );
+    }
+
+    @DeleteMapping("/prospectos/{prospectoId}/whatsapp/reenganches")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<Integer> cancelReengagements(@PathVariable Long prospectoId) {
+        return ApiResponse.ok(
+                reengagementService.cancelForProspecto(prospectoId, "Cancelado desde el CRM"),
+                "Reenganches pendientes cancelados"
+        );
+    }
+
+    @PostMapping("/prospectos/{prospectoId}/whatsapp/baja")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<Void> optOut(@PathVariable Long prospectoId) {
+        optOutService.optOut(prospectoId, "Baja registrada desde el CRM");
+        return ApiResponse.ok(null, "El prospecto no recibira mas mensajes de WhatsApp");
+    }
+
+    @DeleteMapping("/prospectos/{prospectoId}/whatsapp/baja")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<Void> optIn(@PathVariable Long prospectoId) {
+        optOutService.optIn(prospectoId);
+        return ApiResponse.ok(null, "El prospecto vuelve a recibir mensajes de WhatsApp");
     }
 
     @GetMapping("/prospectos/{prospectoId}/whatsapp/cotizaciones")

@@ -127,6 +127,14 @@ azurion:
   crm:
     public-ingress:
       signature-tolerance-seconds: ${CRM_INGRESS_SIGNATURE_TOLERANCE_SECONDS:300}
+    reengagement:
+      enabled: ${CRM_REENGAGEMENT_ENABLED:true}
+      initial-delay-millis: ${CRM_REENGAGEMENT_INITIAL_DELAY_MS:20000}
+      poll-delay-millis: ${CRM_REENGAGEMENT_POLL_DELAY_MS:60000}
+      cleanup-cron: ${CRM_REENGAGEMENT_CLEANUP_CRON:0 45 3 * * *}
+      business-hour-start: ${CRM_REENGAGEMENT_HOUR_START:9}
+      business-hour-end: ${CRM_REENGAGEMENT_HOUR_END:20}
+      business-days: ${CRM_REENGAGEMENT_DAYS:1,2,3,4,5,6}
   storage:
     public-files:
       root-dir: ${AZURION_PUBLIC_FILES_DIR:${user.dir}/storage/public-files}

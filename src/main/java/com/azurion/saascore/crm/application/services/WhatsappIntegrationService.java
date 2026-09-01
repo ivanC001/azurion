@@ -1,5 +1,6 @@
 package com.azurion.saascore.crm.application.services;
 
+import com.azurion.multitenancy.TenantContext;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappInternalNoteResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
@@ -23,6 +24,7 @@ import com.azurion.saascore.crm.domain.repositories.CrmProspectoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappConversationRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappConversationNoteRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmWhatsappMessageRepository;
+import com.azurion.saascore.crm.domain.repositories.CrmWhatsappReengagementOutboxRepository;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.SendResult;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
@@ -92,6 +94,8 @@ public class WhatsappIntegrationService {
     private final ObjectMapper objectMapper;
     private final CrmLeadAssignmentService leadAssignmentService;
     private final WhatsappAutoReplyEnqueueService autoReplyEnqueueService;
+    private final WhatsappOptOutService optOutService;
+    private final CrmWhatsappReengagementOutboxRepository reengagementOutboxRepository;
     private final TransactionTemplate transactionTemplate;
 
     @Transactional
@@ -424,14 +428,7 @@ public class WhatsappIntegrationService {
         CrmCanalTokenConfig config = requireActiveConfig();
         String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
 
-        List<WhatsappTemplate> templates = cloudApiClient.listApprovedTemplates(config);
-        WhatsappTemplate matched = templates.stream()
-                .filter(t -> t.name().equals(request.nombre()) && t.languageCode().equals(request.idioma()))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(
-                        "CRM_WHATSAPP_PLANTILLA_NO_ENCONTRADA",
-                        "La plantilla solicitada no existe o no esta aprobada"
-                ));
+        WhatsappTemplate matched = requireSendableTemplate(request.nombre(), request.idioma());
 
         List<String> params = matched.validateParameters(request.parametros());
         String renderedBody = matched.render(params);
@@ -474,6 +471,23 @@ public class WhatsappIntegrationService {
             createWhatsappActivity(prospecto, renderedBody, saved.getMensajeEn(), false, actor);
             return toResponse(saved);
         }));
+    }
+
+    /**
+     * Resuelve una plantilla aprobada y enviable del WABA del tenant.
+     *
+     * <p>Lo usa tanto el envio inmediato como la programacion de reenganches: conviene
+     * fallar al programar y no una semana despues, cuando ya no hay nadie mirando.
+     */
+    public WhatsappTemplate requireSendableTemplate(String nombre, String idioma) {
+        return cloudApiClient.listApprovedTemplates(requireActiveConfig()).stream()
+                .filter(template -> template.name().equals(nombre)
+                        && template.languageCode().equals(idioma))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "CRM_WHATSAPP_PLANTILLA_NO_ENCONTRADA",
+                        "La plantilla solicitada no existe o no esta aprobada"
+                ));
     }
 
     private void assertCustomerServiceWindowOpen(Long prospectoId) {
@@ -669,6 +683,17 @@ public class WhatsappIntegrationService {
         CrmWhatsappMessage saved = messageRepository.save(message);
         updateConversation(prospecto, saved, true);
         createWhatsappActivity(prospecto, body, messageTime, true, PUBLIC_WHATSAPP_OWNER);
+        // Una respuesta del cliente reabre la ventana: los reenganches que quedaban
+        // programados ya no hacen falta y gastarian una plantilla al pedo.
+        reengagementOutboxRepository.cancelPendingForProspecto(
+                TenantContext.getTenantId(),
+                prospecto.getId(),
+                "El cliente respondio y la ventana de 24 horas se reabrio",
+                LocalDateTime.now()
+        );
+        if (optOutService.applyIfRequested(prospecto, body)) {
+            log.info("El prospecto {} pidio la baja de WhatsApp", prospecto.getId());
+        }
         autoReplyEnqueueService.enqueueIfEnabled(saved);
         counters.processed++;
     }

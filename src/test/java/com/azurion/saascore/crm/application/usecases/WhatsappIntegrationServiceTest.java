@@ -94,6 +94,11 @@ class WhatsappIntegrationServiceTest {
     @Mock
     private WhatsappAutoReplyEnqueueService autoReplyEnqueueService;
     @Mock
+    private com.azurion.saascore.crm.application.services.WhatsappOptOutService optOutService;
+    @Mock
+    private com.azurion.saascore.crm.domain.repositories.CrmWhatsappReengagementOutboxRepository
+            reengagementOutboxRepository;
+    @Mock
     private TransactionTemplate transactionTemplate;
     @Mock
     private UsuarioTenantRepository usuarioTenantRepository;
@@ -119,6 +124,8 @@ class WhatsappIntegrationServiceTest {
                 new ObjectMapper(),
                 leadAssignmentService,
                 autoReplyEnqueueService,
+                optOutService,
+                reengagementOutboxRepository,
                 transactionTemplate
         );
         org.mockito.Mockito.lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
