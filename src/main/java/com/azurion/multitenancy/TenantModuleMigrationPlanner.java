@@ -129,7 +129,11 @@ public class TenantModuleMigrationPlanner {
             "V92__commercial_currency_and_quote_snapshot.sql",
             "V93__crm_opportunity_latest_quote_currency.sql",
             "V94__crm_whatsapp_automation_and_quick_replies.sql",
-            "V95__crm_monthly_goals.sql"
+            "V95__crm_monthly_goals.sql",
+            "V96__whatsapp_message_template_snapshot.sql",
+            "V97__repair_usuario_sucursal_scope.sql",
+            "V98__cotizaciones_productos_schema_alignment.sql",
+            "V99__sucursal_ubigeo_optional_outside_peru.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -233,7 +237,9 @@ public class TenantModuleMigrationPlanner {
                 "V82__warehouse_principal_consistency.sql",
                 "V83__inventory_operation_idempotency.sql",
                 "V84__critical_transaction_idempotency.sql",
-                "V85__professional_tax_and_margin_model.sql"
+                "V85__professional_tax_and_margin_model.sql",
+                "V98__cotizaciones_productos_schema_alignment.sql",
+                "V99__sucursal_ubigeo_optional_outside_peru.sql"
         ));
         mapping.put("COMPRAS", List.of(
                 "V17__compras_lotes_origen_inventario.sql",
@@ -257,7 +263,9 @@ public class TenantModuleMigrationPlanner {
                 "V27__preserve_existing_product_tax_behavior.sql",
                 "V84__critical_transaction_idempotency.sql",
                 "V85__professional_tax_and_margin_model.sql",
-                "V86__reconcile_erp_tax_permissions.sql"
+                "V86__reconcile_erp_tax_permissions.sql",
+                "V98__cotizaciones_productos_schema_alignment.sql",
+                "V99__sucursal_ubigeo_optional_outside_peru.sql"
         ));
         mapping.put("CAJA", List.of(
                 "V5__caja_core.sql",
@@ -267,7 +275,8 @@ public class TenantModuleMigrationPlanner {
                 "V26__arquitectura_tributaria_pos.sql",
                 "V77__caja_turnos_refactoring.sql",
                 "V84__critical_transaction_idempotency.sql",
-                "V86__reconcile_erp_tax_permissions.sql"
+                "V86__reconcile_erp_tax_permissions.sql",
+                "V99__sucursal_ubigeo_optional_outside_peru.sql"
         ));
         mapping.put("FACTURACION", List.of(
                 "V2_3__facturacion_documental_core.sql",
@@ -292,7 +301,9 @@ public class TenantModuleMigrationPlanner {
                 "V44__crm_quote_permissions.sql",
                 "V63__cotizacion_email_send_guard.sql",
                 "V88__cotizacion_detalle_catalog_snapshot.sql",
-                "V92__commercial_currency_and_quote_snapshot.sql"
+                "V92__commercial_currency_and_quote_snapshot.sql",
+                "V98__cotizaciones_productos_schema_alignment.sql",
+                "V99__sucursal_ubigeo_optional_outside_peru.sql"
         ));
         mapping.put("CRM", List.of(
                 "V18__clientes_datos_fiscales_credito.sql",
@@ -347,7 +358,10 @@ public class TenantModuleMigrationPlanner {
                 "V92__commercial_currency_and_quote_snapshot.sql",
                 "V93__crm_opportunity_latest_quote_currency.sql",
                 "V94__crm_whatsapp_automation_and_quick_replies.sql",
-                "V95__crm_monthly_goals.sql"
+                "V95__crm_monthly_goals.sql",
+                "V96__whatsapp_message_template_snapshot.sql",
+                "V97__repair_usuario_sucursal_scope.sql",
+                "V99__sucursal_ubigeo_optional_outside_peru.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

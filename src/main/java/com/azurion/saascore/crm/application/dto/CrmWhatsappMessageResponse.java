@@ -19,6 +19,8 @@ public record CrmWhatsappMessageResponse(
         String enviadoPorNombre,
         String errorCodigo,
         String errorDetalle,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String plantillaNombre,
+        String plantillaIdioma
 ) {
 }

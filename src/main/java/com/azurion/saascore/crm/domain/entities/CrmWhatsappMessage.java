@@ -63,6 +63,22 @@ public class CrmWhatsappMessage extends BaseEntity {
     @Column(name = "error_detalle", length = 500)
     private String errorDetalle;
 
+    @Column(name = "plantilla_nombre", length = 512)
+    private String plantillaNombre;
+
+    @Column(name = "plantilla_idioma", length = 35)
+    private String plantillaIdioma;
+
+    @Column(name = "plantilla_parametros_json", columnDefinition = "TEXT")
+    private String plantillaParametrosJson;
+
+    public String getPlantillaNombre() { return plantillaNombre; }
+    public void setPlantillaNombre(String value) { plantillaNombre = value; }
+    public String getPlantillaIdioma() { return plantillaIdioma; }
+    public void setPlantillaIdioma(String value) { plantillaIdioma = value; }
+    public String getPlantillaParametrosJson() { return plantillaParametrosJson; }
+    public void setPlantillaParametrosJson(String value) { plantillaParametrosJson = value; }
+
     public CrmProspecto getProspecto() {
         return prospecto;
     }

@@ -16,6 +16,37 @@ public class UsuarioSucursalScopeService {
     private final EntityManager entityManager;
     private final SucursalRepository sucursalRepository;
 
+    /**
+     * Alcance inicial de un usuario recien creado.
+     *
+     * Si no se indican sucursales se le asignan todas las activas. Dejarlo sin
+     * ninguna no significa "sin permisos" sino "inoperativo": validarSucursal
+     * rechaza cualquier operacion sobre una sucursal no asignada, y ningun rol
+     * de tenant se salta ese control. Un tenant recien creado quedaba asi con
+     * todos sus usuarios incapaces de cotizar o vender.
+     */
+    public void assignInitialScope(Long usuarioId, List<Long> requestedSucursalIds) {
+        boolean hasExplicitScope = requestedSucursalIds != null
+                && requestedSucursalIds.stream().anyMatch(id -> id != null && id > 0);
+
+        if (hasExplicitScope) {
+            sync(usuarioId, requestedSucursalIds);
+            return;
+        }
+
+        sync(usuarioId, activeSucursalIds());
+    }
+
+    /**
+     * @return ids de las sucursales activas del tenant
+     */
+    public List<Long> activeSucursalIds() {
+        return sucursalRepository.findAll().stream()
+                .filter(sucursal -> sucursal.isActivo() && sucursal.getId() != null)
+                .map(sucursal -> sucursal.getId())
+                .toList();
+    }
+
     public void sync(Long usuarioId, List<Long> rawSucursalIds) {
         if (rawSucursalIds == null) {
             return;

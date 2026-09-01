@@ -35,7 +35,7 @@ import com.azurion.saascore.cotizaciones.application.usecases.UpdateCotizacionEs
 import com.azurion.saascore.cotizaciones.domain.repositories.CotizacionRepository;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient;
 import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.SendResult;
-import com.azurion.saascore.crm.infrastructure.http.WhatsappCloudApiClient.TemplateInfo;
+import com.azurion.saascore.crm.domain.WhatsappTemplate;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionPdfResponse;
 import com.azurion.saascore.cotizaciones.application.dto.UpdateCotizacionEstadoRequest;
 import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
@@ -408,21 +408,19 @@ class WhatsappIntegrationServiceTest {
         prospecto.setTelefono("51999888777");
         prospecto.setEstado("NUEVO");
         prospecto.setNivelInteres("FRIO");
-        TemplateInfo template = new TemplateInfo(
-                "retomar_contacto",
-                "es_PE",
-                "UTILITY",
-                "Hola {{1}}, retomamos tu consulta sobre {{2}}.",
-                2
-        );
+        WhatsappTemplate template = template("Hola {{1}}, retomamos tu consulta sobre {{2}}.");
+        CrmWhatsappConversation conversation = new CrmWhatsappConversation();
+        conversation.setProspecto(prospecto);
+        conversation.setUltimoEntranteEn(OffsetDateTime.now().minusHours(25));
+        var lastInbound = conversation.getUltimoEntranteEn();
+        when(conversationRepository.findByProspecto_Id(44L)).thenReturn(Optional.of(conversation));
         when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
         when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
         when(cloudApiClient.listApprovedTemplates(config)).thenReturn(List.of(template));
         when(cloudApiClient.sendTemplate(
                 config,
                 "51999888777",
-                "retomar_contacto",
-                "es_PE",
+                template,
                 List.of("Luis", "Python")
         )).thenReturn(new SendResult(
                 "wamid.template-1",
@@ -447,6 +445,12 @@ class WhatsappIntegrationServiceTest {
         assertEquals("template", response.tipoMensaje());
         assertEquals("Hola Luis, retomamos tu consulta sobre Python.", response.contenido());
         assertEquals("wamid.template-1", response.metaMessageId());
+        assertEquals("retomar_contacto", response.plantillaNombre());
+        assertEquals("es_PE", response.plantillaIdioma());
+        assertEquals(lastInbound, conversation.getUltimoEntranteEn());
+        ArgumentCaptor<CrmWhatsappMessage> saved = ArgumentCaptor.forClass(CrmWhatsappMessage.class);
+        verify(messageRepository).save(saved.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(saved.getValue().getPlantillaParametrosJson().contains("Python"));
         verify(actividadRepository).save(any());
     }
 
@@ -455,13 +459,8 @@ class WhatsappIntegrationServiceTest {
         CrmProspecto prospecto = new CrmProspecto();
         prospecto.setId(44L);
         prospecto.setTelefono("51999888777");
-        TemplateInfo template = new TemplateInfo(
-                "retomar_contacto",
-                "es_PE",
-                "UTILITY",
-                "Hola {{1}}, tu solicitud {{2}} sigue disponible.",
-                2
-        );
+        WhatsappTemplate template = template("Hola {{1}}, tu solicitud {{2}} sigue disponible.");
+        mockOpenCustomerServiceWindow(prospecto);
         when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
         when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
         when(cloudApiClient.listApprovedTemplates(config)).thenReturn(List.of(template));
@@ -475,7 +474,114 @@ class WhatsappIntegrationServiceTest {
         );
 
         assertEquals("CRM_WHATSAPP_PARAMETROS_PLANTILLA_INVALIDOS", exception.getCode());
-        verify(cloudApiClient, never()).sendTemplate(any(), any(), any(), any(), any());
+        verify(cloudApiClient, never()).sendTemplate(any(), any(), any(), any());
+    }
+
+    private WhatsappTemplate template(String body) {
+        return new WhatsappTemplate("template-1", "retomar_contacto", "es_PE", "APPROVED", "UTILITY",
+                List.of(new WhatsappTemplate.Component("BODY", body, List.of("1", "2"))), null);
+    }
+
+    @Test
+    void rejectsTemplatesWithoutConversationBeforeContactingMeta() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        var error = assertThrows(BusinessException.class, () -> service.sendTemplate(44L,
+                new SendWhatsappTemplateRequest("retomar_contacto", "es_PE", List.of("Ana", "Python"))));
+        assertEquals("CRM_WHATSAPP_CONVERSACION_NO_ENCONTRADA", error.getCode());
+        verify(cloudApiClient, never()).listApprovedTemplates(any());
+    }
+
+    @Test
+    void revalidatesApprovalAndLanguageAndDoesNotPersistRejectedSends() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setTelefono("51999888777");
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        mockOpenCustomerServiceWindow(prospecto);
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(cloudApiClient.listApprovedTemplates(config)).thenReturn(List.of(template("Hola {{1}} {{2}}")), List.of());
+        var languageError = assertThrows(BusinessException.class, () -> service.sendTemplate(44L,
+                new SendWhatsappTemplateRequest("retomar_contacto", "en_US", List.of("Ana", "Python"))));
+        var approvalError = assertThrows(BusinessException.class, () -> service.sendTemplate(44L,
+                new SendWhatsappTemplateRequest("retomar_contacto", "es_PE", List.of("Ana", "Python"))));
+        assertEquals("CRM_WHATSAPP_PLANTILLA_NO_ENCONTRADA", languageError.getCode());
+        assertEquals("CRM_WHATSAPP_PLANTILLA_NO_ENCONTRADA", approvalError.getCode());
+        verify(cloudApiClient, never()).sendTemplate(any(), any(), any(), any());
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    void refusesBlankVariablesBeforeSendingToMeta() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        prospecto.setTelefono("51999888777");
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        mockOpenCustomerServiceWindow(prospecto);
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(cloudApiClient.listApprovedTemplates(config)).thenReturn(List.of(template("Hola {{1}} {{2}}")));
+        var error = assertThrows(BusinessException.class, () -> service.sendTemplate(44L,
+                new SendWhatsappTemplateRequest("retomar_contacto", "es_PE", List.of("Ana", " "))));
+        assertEquals("CRM_WHATSAPP_PARAMETRO_VACIO", error.getCode());
+        verify(cloudApiClient, never()).sendTemplate(any(), any(), any(), any());
+        verify(messageRepository, never()).save(any());
+    }
+
+    @Test
+    void refusesFreeTextBeforeTheFirstCustomerReply() {
+        CrmProspecto prospecto = new CrmProspecto();
+        prospecto.setId(44L);
+        var conversation = new CrmWhatsappConversation();
+        conversation.setProspecto(prospecto);
+        when(prospectoRepository.findById(44L)).thenReturn(Optional.of(prospecto));
+        when(conversationRepository.findByProspecto_Id(44L)).thenReturn(Optional.of(conversation));
+        var error = assertThrows(BusinessException.class,
+                () -> service.sendMessage(44L, new SendWhatsappMessageRequest("Hola", false)));
+        assertEquals("CRM_WHATSAPP_VENTANA_ATENCION_CERRADA", error.getCode());
+        verify(cloudApiClient, never()).sendText(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void keepsTemplateSnapshotAndDeliveryOrderWhenWebhooksArriveLate() throws Exception {
+        var message = new CrmWhatsappMessage();
+        message.setEstado("ENVIADO");
+        message.setPlantillaNombre("retomar_contacto");
+        message.setPlantillaIdioma("es_PE");
+        message.setPlantillaParametrosJson("[{\"valor\":\"Ana\"}]");
+        when(messageRepository.findByMetaMessageId("wamid.template-1")).thenReturn(Optional.of(message));
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(secretEncryptionService.decrypt("encrypted-app-secret")).thenReturn(APP_SECRET);
+        for (String status : List.of("delivered", "read", "sent")) {
+            String payload = statusWebhook(status);
+            service.processWebhook(payload, signature(payload));
+        }
+        assertEquals("LEIDO", message.getEstado());
+        assertEquals("retomar_contacto", message.getPlantillaNombre());
+        assertEquals("[{\"valor\":\"Ana\"}]", message.getPlantillaParametrosJson());
+        verify(conversationRepository, never()).save(any());
+    }
+
+    @Test
+    void recordsMetaDeliveryFailures() throws Exception {
+        var message = new CrmWhatsappMessage();
+        message.setEstado("ENVIADO");
+        when(messageRepository.findByMetaMessageId("wamid.template-1")).thenReturn(Optional.of(message));
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(secretEncryptionService.decrypt("encrypted-app-secret")).thenReturn(APP_SECRET);
+        String payload = statusWebhook("failed");
+        service.processWebhook(payload, signature(payload));
+        assertEquals("FALLIDO", message.getEstado());
+        assertEquals("131049", message.getErrorCodigo());
+        assertEquals("Meta delivery restriction", message.getErrorDetalle());
+    }
+
+    private String statusWebhook(String status) {
+        return """
+                {"object":"whatsapp_business_account","entry":[{"changes":[{"field":"messages","value":{
+                "metadata":{"phone_number_id":"1234567890"},"statuses":[{"id":"wamid.template-1","status":"%s",
+                "errors":[{"code":131049,"error_data":{"details":"Meta delivery restriction"}}]}]}}]}]}
+                """.formatted(status);
     }
 
     private void mockOpenCustomerServiceWindow(CrmProspecto prospecto) {

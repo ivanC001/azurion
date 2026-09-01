@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.azurion.saascore.empresas.application.dto.UpdateCurrentEmpresaProfileRequest;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
+import com.azurion.saascore.sucursales.application.services.DefaultSucursalLocationSync;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.shared.exception.BusinessException;
@@ -31,6 +32,9 @@ class UpdateCurrentEmpresaProfileUseCaseTest {
 
     @Mock
     private FacturadorTenantProvisioningService facturadorTenantProvisioningService;
+
+    @Mock
+    private DefaultSucursalLocationSync defaultSucursalLocationSync;
 
     @InjectMocks
     private UpdateCurrentEmpresaProfileUseCase useCase;

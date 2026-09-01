@@ -62,6 +62,9 @@ import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.util.List;
 import java.util.Optional;
 import java.math.BigDecimal;
+import com.azurion.saascore.cotizaciones.application.dto.CotizacionDetalleRequest;
+import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
+import com.azurion.saascore.crm.application.dto.GenerarCotizacionDesdeOportunidadRequest;
 import java.time.OffsetDateTime;
 import java.time.LocalDate;
 import org.junit.jupiter.api.AfterEach;
@@ -235,6 +238,54 @@ class CrmUseCaseServiceTest {
         assertEquals(1, responsables.size());
         assertEquals("4", responsables.getFirst().id());
         assertEquals("Rosa Maria Perez Soto", responsables.getFirst().nombre());
+    }
+
+    @Test
+    void generarCotizacionActualizaValorEstimadoYMonedaDeLaOportunidad() {
+        CrmOportunidad oportunidad = new CrmOportunidad();
+        oportunidad.setId(31L);
+        oportunidad.setResponsableId("7");
+        oportunidad.setEstado("ABIERTA");
+        oportunidad.setMoneda("PEN");
+        oportunidad.setMontoEstimado(new BigDecimal("1100.00"));
+
+        when(authorizationService.currentUsuarioId()).thenReturn(7L);
+        when(oportunidadRepository.findById(31L)).thenReturn(Optional.of(oportunidad));
+        when(empresaRepository.findByTenantId(any())).thenReturn(Optional.empty());
+        when(createCotizacionUseCase.execute(any()))
+                .thenReturn(cotizacionGenerada(new BigDecimal("152000.00")));
+        when(oportunidadRepository.save(any(CrmOportunidad.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.generarCotizacion(31L, new GenerarCotizacionDesdeOportunidadRequest(
+                null,
+                "7",
+                "Vendedor Demo",
+                5L,
+                null,
+                null,
+                "PEN",
+                null,
+                List.of(new CotizacionDetalleRequest(null, null, null, "Toyota Hilux",
+                        BigDecimal.ONE, new BigDecimal("152000.00"), BigDecimal.ZERO))
+        ));
+
+        assertEquals(new BigDecimal("152000.00"), oportunidad.getMontoEstimado());
+        assertEquals("PEN", oportunidad.getMoneda());
+    }
+
+    private CotizacionResponse cotizacionGenerada(BigDecimal total) {
+        return new CotizacionResponse(
+                40L, null, null, null, "7", "Vendedor Demo",
+                null, null, null, null, null,
+                5L, "PRINCIPAL", "Sucursal Principal",
+                LocalDate.now(), null,
+                "PEN", "PEN", BigDecimal.ONE, OffsetDateTime.now(),
+                total, total, total, total,
+                "BORRADOR", null, null, 31L,
+                null, null, null, null, null, null, null,
+                null, null, List.of()
+        );
     }
 
     @AfterEach

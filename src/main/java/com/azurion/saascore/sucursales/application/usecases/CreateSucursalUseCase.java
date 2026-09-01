@@ -8,8 +8,8 @@ import com.azurion.saascore.sucursales.application.dto.CreateSucursalRequest;
 import com.azurion.saascore.sucursales.application.dto.SucursalResponse;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
-import com.azurion.saascore.ubigeos.domain.entities.Ubigeo;
-import com.azurion.saascore.ubigeos.domain.repositories.UbigeoRepository;
+import com.azurion.saascore.sucursales.application.services.SucursalLocationResolver;
+import com.azurion.saascore.sucursales.application.services.SucursalLocationResolver.SucursalLocation;
 import com.azurion.shared.exception.BusinessException;
 import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.math.BigDecimal;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CreateSucursalUseCase {
 
     private final SucursalRepository sucursalRepository;
-    private final UbigeoRepository ubigeoRepository;
+    private final SucursalLocationResolver locationResolver;
     private final OperationalCodeGenerator codeGenerator;
     private final CreateAlmacenUseCase createAlmacenUseCase;
     private final BusinessOperationLockService operationLockService;
@@ -39,9 +39,12 @@ public class CreateSucursalUseCase {
             throw new BusinessException("SUCURSAL_DUPLICADA", "Ya existe una sucursal con ese codigo");
         }
 
-        String ubigeoCodigo = sanitizeUbigeo(request.ubigeoCodigo());
-        Ubigeo ubigeo = ubigeoRepository.findByCodigo(ubigeoCodigo)
-                .orElseThrow(() -> new BusinessException("UBIGEO_NO_ENCONTRADO", "No existe ubigeo SUNAT: " + ubigeoCodigo));
+        SucursalLocation location = locationResolver.resolve(
+                request.ubigeoCodigo(),
+                request.departamento(),
+                request.provincia(),
+                request.distrito()
+        );
 
         BigDecimal igvPorcentaje = request.igvPorcentaje();
         if (igvPorcentaje.compareTo(BigDecimal.ZERO) < 0 || igvPorcentaje.compareTo(new BigDecimal("100.00")) > 0) {
@@ -52,10 +55,10 @@ public class CreateSucursalUseCase {
         sucursal.setCodigo(codigo);
         sucursal.setNombre(request.nombre().trim());
         sucursal.setDireccion(trim(request.direccion()));
-        sucursal.setUbigeoCodigo(ubigeo.getCodigo());
-        sucursal.setDepartamento(ubigeo.getDepartamento());
-        sucursal.setProvincia(ubigeo.getProvincia());
-        sucursal.setDistrito(ubigeo.getDistrito());
+        sucursal.setUbigeoCodigo(location.ubigeoCodigo());
+        sucursal.setDepartamento(location.departamento());
+        sucursal.setProvincia(location.provincia());
+        sucursal.setDistrito(location.distrito());
         sucursal.setIgvPorcentaje(igvPorcentaje);
         applyTaxConfiguration(sucursal, igvPorcentaje);
         sucursal.setActivo(true);
@@ -93,13 +96,6 @@ public class CreateSucursalUseCase {
         );
     }
 
-    private String sanitizeUbigeo(String value) {
-        String digits = value == null ? "" : value.replaceAll("\\D+", "");
-        if (digits.length() < 6) {
-            throw new BusinessException("UBIGEO_INVALIDO", "El ubigeo debe tener 6 digitos");
-        }
-        return digits.substring(0, 6);
-    }
 
     private String trim(String value) {
         if (value == null || value.trim().isBlank()) {

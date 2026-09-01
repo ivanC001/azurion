@@ -155,7 +155,7 @@ public final class CrmMapper {
                 negociacion.getId(),
                 negociacion.getOportunidad().getId(),
                 cotizacion == null ? null : cotizacion.getId(),
-                cotizacion == null ? null : "COT-" + String.format("%04d", cotizacion.getId()),
+                cotizacion == null ? null : "COT-" + String.format("%06d", cotizacion.getId()),
                 negociacion.getEstado(),
                 negociacion.getSolicitudCliente(),
                 negociacion.getPrecioOriginal(),

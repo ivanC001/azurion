@@ -13,7 +13,8 @@ import com.azurion.saascore.sucursales.application.dto.SucursalResponse;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
 import com.azurion.saascore.ubigeos.domain.entities.Ubigeo;
-import com.azurion.saascore.ubigeos.domain.repositories.UbigeoRepository;
+import com.azurion.saascore.sucursales.application.services.SucursalLocationResolver;
+import com.azurion.saascore.sucursales.application.services.SucursalLocationResolver.SucursalLocation;
 import com.azurion.shared.persistence.BusinessOperationLockService;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -30,7 +31,7 @@ class CreateSucursalUseCaseTest {
     @Mock
     private SucursalRepository sucursalRepository;
     @Mock
-    private UbigeoRepository ubigeoRepository;
+    private SucursalLocationResolver locationResolver;
     @Mock
     private OperationalCodeGenerator codeGenerator;
     @Mock
@@ -44,7 +45,7 @@ class CreateSucursalUseCaseTest {
     void setUp() {
         useCase = new CreateSucursalUseCase(
                 sucursalRepository,
-                ubigeoRepository,
+                locationResolver,
                 codeGenerator,
                 createAlmacenUseCase,
                 operationLockService
@@ -53,13 +54,9 @@ class CreateSucursalUseCaseTest {
 
     @Test
     void generaCodigoYPuedeCrearElAlmacenPrincipalEnLaMismaOperacion() {
-        Ubigeo ubigeo = new Ubigeo();
-        ubigeo.setCodigo("150101");
-        ubigeo.setDepartamento("LIMA");
-        ubigeo.setProvincia("LIMA");
-        ubigeo.setDistrito("LIMA");
         when(codeGenerator.nextSucursalCode()).thenReturn("SUC-001");
-        when(ubigeoRepository.findByCodigo("150101")).thenReturn(Optional.of(ubigeo));
+        when(locationResolver.resolve("150101", null, null, null))
+                .thenReturn(new SucursalLocation("150101", "LIMA", "LIMA", "LIMA"));
         when(sucursalRepository.save(any(Sucursal.class))).thenAnswer(invocation -> {
             Sucursal sucursal = invocation.getArgument(0);
             sucursal.setId(10L);
@@ -71,6 +68,9 @@ class CreateSucursalUseCaseTest {
                 "Sucursal Norte",
                 "Av. Norte 100",
                 "150101",
+                null,
+                null,
+                null,
                 new BigDecimal("18.00"),
                 true
         ));

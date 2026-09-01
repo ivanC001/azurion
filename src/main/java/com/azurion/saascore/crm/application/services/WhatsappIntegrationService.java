@@ -11,6 +11,7 @@ import com.azurion.saascore.crm.application.dto.SendWhatsappTemplateRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappUnreadSummaryResponse;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
+import com.azurion.saascore.crm.domain.WhatsappTemplate;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.entities.CrmProspecto;
 import com.azurion.saascore.crm.domain.entities.CrmWhatsappConversation;
@@ -398,7 +399,6 @@ public class WhatsappIntegrationService {
         }));
     }
 
-    @Transactional(readOnly = true)
     public List<CrmWhatsappTemplateResponse> listApprovedTemplates() {
         CrmCanalTokenConfig config = requireActiveConfig();
         return cloudApiClient.listApprovedTemplates(config).stream()
@@ -407,18 +407,25 @@ public class WhatsappIntegrationService {
                         t.languageCode(),
                         t.category(),
                         t.bodyText(),
-                        t.parameterCount()
+                        t.parameterCount(),
+                        t.id(),
+                        t.status(),
+                        t.available(),
+                        t.unavailableReason(),
+                        t.components().stream().map(c -> new CrmWhatsappTemplateResponse.Componente(
+                                c.type(), c.text(), c.parameters())).toList()
                 ))
                 .toList();
     }
 
     public CrmWhatsappMessageResponse sendTemplate(Long prospectoId, SendWhatsappTemplateRequest request) {
         CrmProspecto prospecto = requireProspecto(prospectoId);
+        requireConversation(prospectoId);
         CrmCanalTokenConfig config = requireActiveConfig();
         String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
 
-        List<WhatsappCloudApiClient.TemplateInfo> templates = cloudApiClient.listApprovedTemplates(config);
-        WhatsappCloudApiClient.TemplateInfo matched = templates.stream()
+        List<WhatsappTemplate> templates = cloudApiClient.listApprovedTemplates(config);
+        WhatsappTemplate matched = templates.stream()
                 .filter(t -> t.name().equals(request.nombre()) && t.languageCode().equals(request.idioma()))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(
@@ -426,23 +433,23 @@ public class WhatsappIntegrationService {
                         "La plantilla solicitada no existe o no esta aprobada"
                 ));
 
-        List<String> params = request.parametros() == null ? List.of() : request.parametros();
-        if (params.size() != matched.parameterCount()) {
-            throw new BusinessException(
-                    "CRM_WHATSAPP_PARAMETROS_PLANTILLA_INVALIDOS",
-                    "La plantilla requiere " + matched.parameterCount() + " parametros, pero se recibieron " + params.size()
-            );
+        List<String> params = matched.validateParameters(request.parametros());
+        String renderedBody = matched.render(params);
+        var parameterSnapshot = objectMapper.createArrayNode();
+        List<WhatsappTemplate.Variable> variables = matched.variables();
+        for (int index = 0; index < variables.size(); index++) {
+            var variable = variables.get(index);
+            parameterSnapshot.addObject().put("componente", variable.component())
+                    .put("variable", variable.name()).put("valor", params.get(index));
         }
 
         SendResult sendResult = cloudApiClient.sendTemplate(
                 config,
                 recipient,
-                request.nombre(),
-                request.idioma(),
+                matched,
                 params
         );
 
-        String renderedBody = renderTemplateBody(matched.bodyText(), params);
         String actor = currentUser();
 
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
@@ -453,6 +460,9 @@ public class WhatsappIntegrationService {
             message.setRemitente(config.getPhoneNumberId());
             message.setDestinatario(sendResult.whatsappId());
             message.setTipoMensaje("template");
+            message.setPlantillaNombre(matched.name());
+            message.setPlantillaIdioma(matched.languageCode());
+            message.setPlantillaParametrosJson(parameterSnapshot.toString());
             message.setContenido(renderedBody);
             message.setEstado("ENVIADO");
             message.setMensajeEn(OffsetDateTime.now(ZoneOffset.UTC));
@@ -467,28 +477,13 @@ public class WhatsappIntegrationService {
     }
 
     private void assertCustomerServiceWindowOpen(Long prospectoId) {
-        conversationRepository.findByProspecto_Id(prospectoId).ifPresent(conversation -> {
-            if (conversation.getUltimoEntranteEn() != null) {
-                OffsetDateTime windowEnd = conversation.getUltimoEntranteEn().plusHours(CUSTOMER_SERVICE_WINDOW_HOURS);
-                if (OffsetDateTime.now(ZoneOffset.UTC).isAfter(windowEnd)) {
-                    throw new BusinessException(
-                            "CRM_WHATSAPP_VENTANA_ATENCION_CERRADA",
-                            "La ventana de atencion de 24 horas de WhatsApp ha expirado. Debes enviar una plantilla aprobada para retomar el contacto."
-                    );
-                }
-            }
-        });
-    }
-
-    private String renderTemplateBody(String bodyText, List<String> parameters) {
-        if (bodyText == null) {
-            return "";
+        OffsetDateTime lastInbound = conversationRepository.findByProspecto_Id(prospectoId)
+                .map(CrmWhatsappConversation::getUltimoEntranteEn).orElse(null);
+        if (lastInbound == null || !OffsetDateTime.now(ZoneOffset.UTC)
+                .isBefore(lastInbound.plusHours(CUSTOMER_SERVICE_WINDOW_HOURS))) {
+            throw new BusinessException("CRM_WHATSAPP_VENTANA_ATENCION_CERRADA",
+                    "La ventana de atencion de 24 horas esta cerrada. Envia una plantilla aprobada y espera la respuesta del cliente.");
         }
-        String rendered = bodyText;
-        for (int i = 0; i < parameters.size(); i++) {
-            rendered = rendered.replace("{{" + (i + 1) + "}}", parameters.get(i));
-        }
-        return rendered;
     }
 
     @Transactional(readOnly = true)
@@ -502,6 +497,7 @@ public class WhatsappIntegrationService {
             Long quoteId,
             SendWhatsappQuoteRequest request) {
         CrmProspecto prospecto = requireProspecto(prospectoId);
+        assertCustomerServiceWindowOpen(prospectoId);
         Cotizacion quote = cotizacionRepository.findByIdAndCrmProspectoId(quoteId, prospectoId)
                 .orElseThrow(() -> new BusinessException(
                         "CRM_WHATSAPP_COTIZACION_NO_ENCONTRADA",
@@ -683,7 +679,25 @@ public class WhatsappIntegrationService {
             return;
         }
         messageRepository.findByMetaMessageId(metaMessageId).ifPresent(message -> {
-            message.setEstado(normalizeStatus(text(statusNode, "status")));
+            String nextStatus = normalizeStatus(text(statusNode, "status"));
+            List<String> statusOrder = List.of("ENVIADO", "FALLIDO", "ENTREGADO", "LEIDO", "ELIMINADO");
+            if (statusOrder.indexOf(nextStatus) < 0
+                    || statusOrder.indexOf(nextStatus) < statusOrder.indexOf(message.getEstado())) {
+                return;
+            }
+            message.setEstado(nextStatus);
+            if ("FALLIDO".equals(nextStatus)) {
+                JsonNode error = statusNode.path("errors").path(0);
+                message.setErrorCodigo(truncate(error.path("code").asText(null), 80));
+                String detail = firstNonBlank(error.path("error_data").path("details").asText(null),
+                        error.path("message").asText(null), error.path("title").asText(null),
+                        "Meta no pudo entregar el mensaje");
+                message.setErrorDetalle(truncate(detail.replaceAll(
+                        "(?i)(access[_ -]?token|secret|authorization)[=: ]+\\S+", "$1=***"), 500));
+            } else {
+                message.setErrorCodigo(null);
+                message.setErrorDetalle(null);
+            }
             message.setRawPayload(statusNode.toString());
             messageRepository.save(message);
             counters.statuses++;
@@ -827,7 +841,10 @@ public class WhatsappIntegrationService {
         conversation.setUltimaDireccion(message.getDireccion());
         conversation.setUltimoMensajeEn(message.getMensajeEn());
         if (inbound) {
-            conversation.setUltimoEntranteEn(message.getMensajeEn());
+            if (conversation.getUltimoEntranteEn() == null
+                    || message.getMensajeEn().isAfter(conversation.getUltimoEntranteEn())) {
+                conversation.setUltimoEntranteEn(message.getMensajeEn());
+            }
             conversation.setNoLeidos(safeUnreadCount(conversation) + 1);
         }
         conversationRepository.save(conversation);
@@ -979,7 +996,9 @@ public class WhatsappIntegrationService {
                 message.getEnviadoPorNombre(),
                 message.getErrorCodigo(),
                 message.getErrorDetalle(),
-                message.getCreatedAt()
+                message.getCreatedAt(),
+                message.getPlantillaNombre(),
+                message.getPlantillaIdioma()
         );
     }
 

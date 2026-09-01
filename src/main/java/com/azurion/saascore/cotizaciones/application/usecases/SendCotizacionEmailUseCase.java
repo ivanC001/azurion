@@ -122,13 +122,13 @@ public class SendCotizacionEmailUseCase {
     }
 
     private String subject(Cotizacion cotizacion) {
-        return "Cotizacion COT-" + String.format("%03d", cotizacion.getId());
+        return "Cotizacion COT-" + String.format("%06d", cotizacion.getId());
     }
 
     private String body(Cotizacion cotizacion, CotizacionClienteData cliente) {
         String nombre = hasText(cliente.nombre()) ? cliente.nombre().trim() : "cliente";
         return "Hola " + nombre + ",\n\n"
-                + "Adjuntamos la cotizacion COT-" + String.format("%03d", cotizacion.getId())
+                + "Adjuntamos la cotizacion COT-" + String.format("%06d", cotizacion.getId())
                 + " por un total de " + CurrencyCatalog.symbol(cotizacion.getMoneda()) + " "
                 + money(cotizacion.getTotal()) + " " + cotizacion.getMoneda() + ".\n\n"
                 + "Quedamos atentos a tus comentarios.\n";

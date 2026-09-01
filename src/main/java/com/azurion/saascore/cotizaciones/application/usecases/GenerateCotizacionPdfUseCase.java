@@ -9,7 +9,10 @@ import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.cotizaciones.domain.entities.CotizacionDetalle;
 import com.azurion.saascore.empresas.application.usecases.GetCurrentEmpresaUseCase;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
+import com.azurion.saascore.modulos.application.services.ModuleAccessService;
+import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.shared.exception.BusinessException;
+import com.azurion.shared.money.CurrencyCatalog;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -18,6 +21,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -44,10 +48,13 @@ public class GenerateCotizacionPdfUseCase {
     private static final float PAGE_LEFT = 48;
     private static final float PAGE_RIGHT = 547;
     private static final float PAGE_WIDTH = PAGE_RIGHT - PAGE_LEFT;
+    private static final String ERP_MODULE = "ERP";
+    private static final String SEEDED_ADDRESS_PLACEHOLDER = "Generado por migracion";
 
     private final GetCotizacionUseCase getCotizacionUseCase;
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
     private final CotizacionClienteDataResolver clienteDataResolver;
+    private final ModuleAccessService moduleAccessService;
     private final ObjectMapper objectMapper;
 
     @Value("${azurion.storage.public-files.root-dir:${user.dir}/storage/public-files}")
@@ -56,6 +63,7 @@ public class GenerateCotizacionPdfUseCase {
     public CotizacionPdfResponse execute(Long id) {
         Cotizacion cotizacion = getCotizacionUseCase.find(id);
         Empresa empresa = getCurrentEmpresaUseCase.resolveCurrentEmpresa();
+        EmisorInfo emisor = resolveEmisor(empresa, cotizacion);
         CotizacionClienteData cliente = clienteDataResolver.resolveForEmission(cotizacion);
         List<CotizacionDetalle> catalogDetails = cotizacion.getDetalles().stream()
                 .filter(this::hasCatalogSnapshot)
@@ -68,12 +76,12 @@ public class GenerateCotizacionPdfUseCase {
             Fonts fonts = new Fonts();
 
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
-                drawHeader(document, content, fonts, empresa, cotizacion);
+                drawHeader(document, content, fonts, empresa, cotizacion, emisor);
                 drawClientBox(content, fonts, cliente);
                 drawIntroduction(content, fonts, cliente);
                 float afterTable = drawDetailsTable(content, fonts, cotizacion);
                 float totalsY = drawTotals(content, fonts, cotizacion, afterTable);
-                drawCommercialConditions(content, fonts, cotizacion, Math.max(70, totalsY - 112));
+                drawCommercialConditions(content, fonts, cotizacion, emisor, Math.max(70, totalsY - 112));
                 drawFooter(content, fonts, empresa, cotizacion, 1, totalPages);
             }
 
@@ -95,7 +103,7 @@ public class GenerateCotizacionPdfUseCase {
 
             document.save(output);
             return new CotizacionPdfResponse(
-                    "cotizacion-" + cotizacion.getId() + ".pdf",
+                    pdfFileName(cotizacion, empresa),
                     "application/pdf",
                     Base64.getEncoder().encodeToString(output.toByteArray())
             );
@@ -104,8 +112,27 @@ public class GenerateCotizacionPdfUseCase {
         }
     }
 
-    private void drawHeader(PDDocument document, PDPageContentStream content, Fonts fonts, Empresa empresa, Cotizacion cotizacion)
-            throws IOException {
+    /**
+     * Las sucursales solo se gestionan con el modulo ERP: sin el, la cotizacion queda
+     * ligada a la sede sembrada por migracion, asi que se emite con los datos de la
+     * informacion general de la empresa en lugar de esa sede placeholder.
+     */
+    private EmisorInfo resolveEmisor(Empresa empresa, Cotizacion cotizacion) {
+        String empresaNombre = defaultText(empresa.getNombreComercial(), defaultText(empresa.getRazonSocial(), "Empresa"));
+        String empresaDireccion = defaultText(empresa.getDireccionFiscal(), "Sin direccion registrada");
+        Sucursal sucursal = cotizacion.getSucursal();
+        if (sucursal == null || !moduleAccessService.hasCurrentTenantModule(ERP_MODULE)) {
+            return new EmisorInfo("EMPRESA", empresaNombre, empresaDireccion);
+        }
+        String direccion = defaultText(sucursal.getDireccion(), "");
+        if (direccion.isBlank() || SEEDED_ADDRESS_PLACEHOLDER.equalsIgnoreCase(direccion)) {
+            direccion = empresaDireccion;
+        }
+        return new EmisorInfo("SUCURSAL", defaultText(sucursal.getNombre(), empresaNombre), direccion);
+    }
+
+    private void drawHeader(PDDocument document, PDPageContentStream content, Fonts fonts, Empresa empresa, Cotizacion cotizacion,
+                            EmisorInfo emisor) throws IOException {
         drawLogo(document, content, empresa.getLogoPanelUrl(), 52, 754, 68, 48);
         writeScaled(content, fonts.bold, 17, 11, 132, 787, empresa.getRazonSocial(), 190, 5, 48, 91);
         write(content, fonts.bold, 9, 132, 770, "RUC: " + empresa.getRuc(), 180, 30, 64, 105);
@@ -115,10 +142,10 @@ public class GenerateCotizacionPdfUseCase {
         write(content, fonts.bold, 21, 387, 778, "COTIZACION", 148, 255, 255, 255);
         write(content, fonts.bold, 11, 407, 748, quoteCode(cotizacion), 108, 255, 255, 255);
 
-        write(content, fonts.bold, 8, PAGE_LEFT, 731, "SUCURSAL", 70, 0, 96, 190);
-        write(content, fonts.regular, 9, 108, 731, cotizacion.getSucursal().getNombre(), 205);
+        write(content, fonts.bold, 8, PAGE_LEFT, 731, emisor.etiqueta(), 70, 0, 96, 190);
+        write(content, fonts.regular, 9, 108, 731, emisor.nombre(), 205);
         write(content, fonts.bold, 8, PAGE_LEFT, 714, "DIRECCION", 70, 0, 96, 190);
-        write(content, fonts.regular, 9, 108, 714, defaultText(cotizacion.getSucursal().getDireccion(), "Sin direccion registrada"), 205);
+        write(content, fonts.regular, 9, 108, 714, emisor.direccion(), 205);
 
         drawLine(content, 320, 696, 320, 736, 203, 213, 225, 0.8f);
         write(content, fonts.bold, 8, 342, 727, "FECHA DE EMISION", 108, 0, 96, 190);
@@ -242,7 +269,7 @@ public class GenerateCotizacionPdfUseCase {
         return boxY;
     }
 
-    private void drawCommercialConditions(PDPageContentStream content, Fonts fonts, Cotizacion cotizacion, float y)
+    private void drawCommercialConditions(PDPageContentStream content, Fonts fonts, Cotizacion cotizacion, EmisorInfo emisor, float y)
             throws IOException {
         float height = 96;
         strokeRect(content, PAGE_LEFT, y, PAGE_WIDTH, height, 191, 205, 222);
@@ -259,8 +286,8 @@ public class GenerateCotizacionPdfUseCase {
 
         write(content, fonts.bold, 8, 62, y + 29, "ASESOR", 65);
         write(content, fonts.regular, 8, 128, y + 29, cotizacion.getUsuarioNombre(), 175);
-        write(content, fonts.bold, 8, 320, y + 29, "SUCURSAL", 62);
-        write(content, fonts.regular, 8, 386, y + 29, cotizacion.getSucursal().getNombre(), 145);
+        write(content, fonts.bold, 8, 320, y + 29, emisor.etiqueta(), 62);
+        write(content, fonts.regular, 8, 386, y + 29, emisor.nombre(), 145);
 
         write(content, fonts.bold, 8, 62, y + 10, "OBSERVACION", 75);
         write(content, fonts.regular, 8, 142, y + 10,
@@ -593,6 +620,19 @@ public class GenerateCotizacionPdfUseCase {
         return String.format(Locale.ROOT, "COT-%06d", cotizacion.getId());
     }
 
+    private String pdfFileName(Cotizacion cotizacion, Empresa empresa) {
+        String empresaNombre = defaultText(empresa.getNombreComercial(), defaultText(empresa.getRazonSocial(), "Empresa"));
+        String base = "Cotizacion " + quoteCode(cotizacion) + " - " + empresaNombre;
+        String sanitized = safe(base)
+                .replaceAll("[\\\\/:*?\"<>|]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (sanitized.length() > 120) {
+            sanitized = sanitized.substring(0, 120).trim();
+        }
+        return sanitized + ".pdf";
+    }
+
     private String validationCode(Cotizacion cotizacion) {
         long datePart = cotizacion.getFechaEmision() == null ? 0 : cotizacion.getFechaEmision().toEpochDay();
         return String.format(Locale.ROOT, "AZ-%06d-%X", cotizacion.getId(), datePart + cotizacion.getId()).toUpperCase(Locale.ROOT);
@@ -614,8 +654,16 @@ public class GenerateCotizacionPdfUseCase {
     }
 
     private String currencyLabel(Cotizacion cotizacion) {
-        String currency = defaultText(cotizacion.getMoneda(), "PEN").toUpperCase(Locale.ROOT);
-        return "PEN".equals(currency) ? "PEN - Soles" : currency;
+        String currency = quoteCurrency(cotizacion);
+        try {
+            String name = safe(CurrencyCatalog.displayName(currency)).trim();
+            if (name.isBlank()) {
+                return currency;
+            }
+            return currency + " - " + name.substring(0, 1).toUpperCase(Locale.ROOT) + name.substring(1);
+        } catch (IllegalArgumentException exception) {
+            return currency;
+        }
     }
 
     private String statusLabel(Cotizacion cotizacion) {
@@ -627,13 +675,18 @@ public class GenerateCotizacionPdfUseCase {
     }
 
     private String money(Cotizacion cotizacion, BigDecimal value) {
-        String currency = defaultText(cotizacion.getMoneda(), "PEN").toUpperCase(Locale.ROOT);
-        String prefix = switch (currency) {
-            case "USD" -> "$";
-            case "EUR" -> "EUR";
-            default -> "S/";
-        };
-        return prefix + " " + (value == null ? BigDecimal.ZERO : value).setScale(2).toPlainString();
+        return currencyPrefix(cotizacion) + " " + (value == null ? BigDecimal.ZERO : value).setScale(2).toPlainString();
+    }
+
+    private String quoteCurrency(Cotizacion cotizacion) {
+        return defaultText(cotizacion.getMoneda(), "PEN").toUpperCase(Locale.ROOT);
+    }
+
+    /** El simbolo debe sobrevivir al saneado ASCII del PDF; si no, se muestra el codigo ISO. */
+    private String currencyPrefix(Cotizacion cotizacion) {
+        String currency = quoteCurrency(cotizacion);
+        String symbol = safe(CurrencyCatalog.symbol(currency)).trim();
+        return symbol.isBlank() ? currency : symbol;
     }
 
     private String number(BigDecimal value) {
@@ -644,8 +697,15 @@ public class GenerateCotizacionPdfUseCase {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
+    /** Translitera acentos antes del filtro ASCII para no mutilar nombres (Jose, no Jos). */
     private String safe(String value) {
-        return value == null ? "" : value.replaceAll("[\\r\\n]+", " ").replaceAll("[^\\x20-\\x7E]", "");
+        if (value == null) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .replaceAll("[\\r\\n]+", " ")
+                .replaceAll("[^\\x20-\\x7E]", "");
     }
 
     private record Fonts(PDType1Font regular, PDType1Font bold) {
@@ -658,5 +718,8 @@ public class GenerateCotizacionPdfUseCase {
     }
 
     private record CommercialAttribute(String label, String value) {
+    }
+
+    private record EmisorInfo(String etiqueta, String nombre, String direccion) {
     }
 }

@@ -3,8 +3,11 @@ package com.azurion.saascore.crm.application.services;
 import com.azurion.saascore.auth.application.services.AuthorizationService;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadRecursoRequest;
 import com.azurion.saascore.crm.application.dto.CrmOportunidadRecursoResponse;
+import com.azurion.saascore.crm.application.support.CrmCurrencyConverter;
+import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidad;
 import com.azurion.saascore.crm.domain.entities.CrmOportunidadRecurso;
+import com.azurion.saascore.crm.domain.repositories.CrmCatalogoItemRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRecursoRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmOportunidadRepository;
 import com.azurion.saascore.crm.infrastructure.storage.CrmPrivateFileStorageService;
@@ -14,6 +17,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -43,6 +47,8 @@ public class CrmOpportunityResourceService {
 
     private final CrmOportunidadRepository oportunidadRepository;
     private final CrmOportunidadRecursoRepository recursoRepository;
+    private final CrmCatalogoItemRepository catalogoItemRepository;
+    private final CrmCurrencyConverter currencyConverter;
     private final CrmPrivateFileStorageService fileStorageService;
     private final AuthorizationService authorizationService;
     private final ObjectMapper objectMapper;
@@ -98,7 +104,11 @@ public class CrmOpportunityResourceService {
             deleteAfterRollback(stored.relativePath());
         }
         try {
-            return toResponse(recursoRepository.save(resource));
+            CrmOportunidadRecurso saved = recursoRepository.save(resource);
+            if ("REQUISITO".equals(type)) {
+                syncEstimatedValueFromRequirements(opportunity);
+            }
+            return toResponse(saved);
         } catch (RuntimeException ex) {
             if (stored != null) {
                 fileStorageService.deleteQuietly(stored.relativePath());
@@ -131,6 +141,9 @@ public class CrmOpportunityResourceService {
         }
         try {
             CrmOportunidadRecurso saved = recursoRepository.save(resource);
+            if ("REQUISITO".equals(type)) {
+                syncEstimatedValueFromRequirements(saved.getOportunidad());
+            }
             if (stored != null && oldPath != null) {
                 deleteAfterCommit(oldPath);
             }
@@ -148,6 +161,9 @@ public class CrmOpportunityResourceService {
         CrmOportunidadRecurso resource = findResource(opportunityId, resourceId);
         ensureCanWrite(resource.getOportunidad());
         recursoRepository.delete(resource);
+        if ("REQUISITO".equals(resource.getTipo())) {
+            syncEstimatedValueFromRequirements(resource.getOportunidad());
+        }
         deleteAfterCommit(resource.getArchivoPath());
     }
 
@@ -163,6 +179,74 @@ public class CrmOpportunityResourceService {
                 resource.getArchivoMimeType(),
                 fileStorageService.read(resource.getArchivoPath())
         );
+    }
+
+    /**
+     * El valor estimado de la oportunidad sigue a sus requerimientos: cada alta,
+     * edicion o baja lo recalcula en la moneda de la oportunidad. Si ya no queda
+     * ningun requerimiento se conserva el ultimo estimado en lugar de pisarlo con cero.
+     */
+    private void syncEstimatedValueFromRequirements(CrmOportunidad opportunity) {
+        List<CrmOportunidadRecurso> requisitos = recursoRepository
+                .findByOportunidadIdOrderByCreatedAtDescIdDesc(opportunity.getId()).stream()
+                .filter(resource -> "REQUISITO".equals(resource.getTipo()))
+                .toList();
+        if (requisitos.isEmpty()) {
+            return;
+        }
+        String targetCurrency = opportunityCurrency(opportunity);
+        BigDecimal total = BigDecimal.ZERO;
+        for (CrmOportunidadRecurso requisito : requisitos) {
+            Map<String, Object> data = readData(requisito.getDataJson());
+            BigDecimal amount = decimalOrZero(data.get("cantidad"))
+                    .multiply(decimalOrZero(data.get("precioUnitario")));
+            total = total.add(currencyConverter.convert(amount, requirementCurrency(data), targetCurrency));
+        }
+        opportunity.setMontoEstimado(total.setScale(2, RoundingMode.HALF_UP));
+        opportunity.setFechaUltimaActualizacion(OffsetDateTime.now());
+        oportunidadRepository.save(opportunity);
+    }
+
+    private String opportunityCurrency(CrmOportunidad opportunity) {
+        try {
+            return currencyConverter.normalizeCurrency(opportunity.getMoneda());
+        } catch (BusinessException ignored) {
+            return currencyConverter.currentTenantBaseCurrency();
+        }
+    }
+
+    /** Los precios de un requerimiento se registran en la moneda de su item de catalogo. */
+    private String requirementCurrency(Map<String, Object> data) {
+        Long catalogoItemId = longOrNull(data.get("catalogoItemId"));
+        if (catalogoItemId == null) {
+            return currencyConverter.currentTenantBaseCurrency();
+        }
+        return catalogoItemRepository.findById(catalogoItemId)
+                .map(CrmCatalogoItem::getMoneda)
+                .filter(value -> value != null && !value.isBlank())
+                .orElseGet(currencyConverter::currentTenantBaseCurrency);
+    }
+
+    private BigDecimal decimalOrZero(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private Long longOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value).trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private CrmOportunidad findOpportunity(Long id) {

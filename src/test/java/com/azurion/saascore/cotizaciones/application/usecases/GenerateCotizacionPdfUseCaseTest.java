@@ -10,6 +10,7 @@ import com.azurion.saascore.cotizaciones.domain.entities.Cotizacion;
 import com.azurion.saascore.cotizaciones.domain.entities.CotizacionDetalle;
 import com.azurion.saascore.empresas.application.usecases.GetCurrentEmpresaUseCase;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
+import com.azurion.saascore.modulos.application.services.ModuleAccessService;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -33,6 +34,8 @@ class GenerateCotizacionPdfUseCaseTest {
     private GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
     @Mock
     private CotizacionClienteDataResolver clienteDataResolver;
+    @Mock
+    private ModuleAccessService moduleAccessService;
 
     private GenerateCotizacionPdfUseCase useCase;
 
@@ -42,6 +45,7 @@ class GenerateCotizacionPdfUseCaseTest {
                 getCotizacionUseCase,
                 getCurrentEmpresaUseCase,
                 clienteDataResolver,
+                moduleAccessService,
                 new ObjectMapper()
         );
     }
@@ -67,6 +71,7 @@ class GenerateCotizacionPdfUseCaseTest {
         CotizacionPdfResponse response = useCase.execute(91L);
         byte[] pdfBytes = Base64.getDecoder().decode(response.base64());
 
+        assertThat(response.fileName()).isEqualTo("Cotizacion COT-000091 - AZURION DEMO SAC.pdf");
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
             String text = new PDFTextStripper().getText(document);
             assertThat(document.getNumberOfPages()).isEqualTo(2);
@@ -82,6 +87,107 @@ class GenerateCotizacionPdfUseCaseTest {
                     "MODALIDAD",
                     "Virtual"
             );
+        }
+    }
+
+    @Test
+    void emitsWithCompanyGeneralInfoWhenTenantHasNoErpModule() throws Exception {
+        Cotizacion quote = quoteWithCatalogSnapshot();
+        quote.getSucursal().setDireccion("Generado por migracion");
+        Empresa empresa = new Empresa();
+        empresa.setRazonSocial("INTERAMERICANA SAC");
+        empresa.setNombreComercial("Interamericana");
+        empresa.setDireccionFiscal("Av. Republica 1234, Lima");
+        empresa.setRuc("20000000001");
+
+        when(moduleAccessService.hasCurrentTenantModule("ERP")).thenReturn(false);
+        when(getCotizacionUseCase.find(91L)).thenReturn(quote);
+        when(getCurrentEmpresaUseCase.resolveCurrentEmpresa()).thenReturn(empresa);
+        when(clienteDataResolver.resolveForEmission(quote)).thenReturn(clienteData());
+
+        String text = pdfText(useCase.execute(91L));
+
+        assertThat(text).contains("EMPRESA", "Interamericana", "Av. Republica 1234, Lima");
+        assertThat(text).doesNotContain("Sucursal Principal", "Generado por migracion");
+    }
+
+    @Test
+    void emitsWithSucursalDataWhenTenantHasErpModule() throws Exception {
+        Cotizacion quote = quoteWithCatalogSnapshot();
+        Empresa empresa = new Empresa();
+        empresa.setRazonSocial("AZURION DEMO SAC");
+        empresa.setDireccionFiscal("Av. Republica 1234, Lima");
+        empresa.setRuc("20000000001");
+
+        when(moduleAccessService.hasCurrentTenantModule("ERP")).thenReturn(true);
+        when(getCotizacionUseCase.find(91L)).thenReturn(quote);
+        when(getCurrentEmpresaUseCase.resolveCurrentEmpresa()).thenReturn(empresa);
+        when(clienteDataResolver.resolveForEmission(quote)).thenReturn(clienteData());
+
+        String text = pdfText(useCase.execute(91L));
+
+        assertThat(text).contains("SUCURSAL", "Sucursal Principal", "Av. Demo 456");
+    }
+
+    @Test
+    void replacesSeededSucursalAddressWithFiscalAddressWhenErpIsActive() throws Exception {
+        Cotizacion quote = quoteWithCatalogSnapshot();
+        quote.getSucursal().setDireccion("Generado por migracion");
+        Empresa empresa = new Empresa();
+        empresa.setRazonSocial("AZURION DEMO SAC");
+        empresa.setDireccionFiscal("Av. Republica 1234, Lima");
+        empresa.setRuc("20000000001");
+
+        when(moduleAccessService.hasCurrentTenantModule("ERP")).thenReturn(true);
+        when(getCotizacionUseCase.find(91L)).thenReturn(quote);
+        when(getCurrentEmpresaUseCase.resolveCurrentEmpresa()).thenReturn(empresa);
+        when(clienteDataResolver.resolveForEmission(quote)).thenReturn(clienteData());
+
+        String text = pdfText(useCase.execute(91L));
+
+        assertThat(text).contains("Sucursal Principal", "Av. Republica 1234, Lima");
+        assertThat(text).doesNotContain("Generado por migracion");
+    }
+
+    @Test
+    void rendersAmountsWithTheQuoteCurrencyAndTransliteratesAccents() throws Exception {
+        Cotizacion quote = quoteWithCatalogSnapshot();
+        Empresa empresa = new Empresa();
+        empresa.setRazonSocial("AZURION DEMO SAC");
+        empresa.setRuc("20000000001");
+
+        when(getCotizacionUseCase.find(91L)).thenReturn(quote);
+        when(getCurrentEmpresaUseCase.resolveCurrentEmpresa()).thenReturn(empresa);
+        when(clienteDataResolver.resolveForEmission(quote)).thenReturn(new CotizacionClienteData(
+                "José Ramírez Peña",
+                "DNI",
+                "70001008",
+                "jose@cliente.test",
+                "+51999999999",
+                "Pueblo Libre, Lima"
+        ));
+
+        String text = pdfText(useCase.execute(91L));
+
+        assertThat(text).contains("US$ 600.00", "USD - Dolar", "Jose Ramirez Pena");
+        assertThat(text).doesNotContain("S/ 600.00");
+    }
+
+    private CotizacionClienteData clienteData() {
+        return new CotizacionClienteData(
+                "Empresa Cliente SAC",
+                "RUC",
+                "20123456789",
+                "compras@cliente.test",
+                "+51999999999",
+                "Av. Principal 123"
+        );
+    }
+
+    private String pdfText(CotizacionPdfResponse response) throws Exception {
+        byte[] pdfBytes = Base64.getDecoder().decode(response.base64());
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
+            return new PDFTextStripper().getText(document);
         }
     }
 

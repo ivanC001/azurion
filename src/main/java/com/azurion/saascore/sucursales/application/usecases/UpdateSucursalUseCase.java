@@ -4,8 +4,8 @@ import com.azurion.saascore.sucursales.application.dto.SucursalResponse;
 import com.azurion.saascore.sucursales.application.dto.UpdateSucursalRequest;
 import com.azurion.saascore.sucursales.domain.entities.Sucursal;
 import com.azurion.saascore.sucursales.domain.repositories.SucursalRepository;
-import com.azurion.saascore.ubigeos.domain.entities.Ubigeo;
-import com.azurion.saascore.ubigeos.domain.repositories.UbigeoRepository;
+import com.azurion.saascore.sucursales.application.services.SucursalLocationResolver;
+import com.azurion.saascore.sucursales.application.services.SucursalLocationResolver.SucursalLocation;
 import com.azurion.shared.exception.BusinessException;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UpdateSucursalUseCase {
 
     private final SucursalRepository sucursalRepository;
-    private final UbigeoRepository ubigeoRepository;
+    private final SucursalLocationResolver locationResolver;
 
     @Transactional
     public SucursalResponse execute(Long id, UpdateSucursalRequest request) {
@@ -28,18 +28,21 @@ public class UpdateSucursalUseCase {
             throw new BusinessException("SUCURSAL_DUPLICADA", "Ya existe una sucursal con ese codigo");
         }
 
-        String ubigeoCodigo = sanitizeUbigeo(request.ubigeoCodigo());
-        Ubigeo ubigeo = ubigeoRepository.findByCodigo(ubigeoCodigo)
-                .orElseThrow(() -> new BusinessException("UBIGEO_NO_ENCONTRADO", "No existe ubigeo SUNAT: " + ubigeoCodigo));
+        SucursalLocation location = locationResolver.resolve(
+                request.ubigeoCodigo(),
+                request.departamento(),
+                request.provincia(),
+                request.distrito()
+        );
         validateIgv(request.igvPorcentaje());
 
         sucursal.setCodigo(codigo);
         sucursal.setNombre(request.nombre().trim());
         sucursal.setDireccion(trim(request.direccion()));
-        sucursal.setUbigeoCodigo(ubigeo.getCodigo());
-        sucursal.setDepartamento(ubigeo.getDepartamento());
-        sucursal.setProvincia(ubigeo.getProvincia());
-        sucursal.setDistrito(ubigeo.getDistrito());
+        sucursal.setUbigeoCodigo(location.ubigeoCodigo());
+        sucursal.setDepartamento(location.departamento());
+        sucursal.setProvincia(location.provincia());
+        sucursal.setDistrito(location.distrito());
         sucursal.setIgvPorcentaje(request.igvPorcentaje());
         if (sucursal.getTipoAfectacionDefaultId() == null
                 && sucursal.getTributoDefaultId() == null
@@ -55,13 +58,6 @@ public class UpdateSucursalUseCase {
         }
     }
 
-    private String sanitizeUbigeo(String value) {
-        String digits = value == null ? "" : value.replaceAll("\\D+", "");
-        if (digits.length() < 6) {
-            throw new BusinessException("UBIGEO_INVALIDO", "El ubigeo debe tener 6 digitos");
-        }
-        return digits.substring(0, 6);
-    }
 
     private String trim(String value) {
         return value == null || value.trim().isBlank() ? null : value.trim();

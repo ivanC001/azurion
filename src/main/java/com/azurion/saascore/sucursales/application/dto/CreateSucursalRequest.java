@@ -9,7 +9,12 @@ public record CreateSucursalRequest(
         @Size(max = 50) String codigo,
         @NotBlank String nombre,
         String direccion,
-        @NotBlank String ubigeoCodigo,
+        /** Codigo SUNAT. Obligatorio solo para tenants de Peru. */
+        String ubigeoCodigo,
+        /** Ubicacion libre para tenants de otro pais; si falta se hereda de la empresa. */
+        String departamento,
+        String provincia,
+        String distrito,
         @NotNull BigDecimal igvPorcentaje,
         Boolean crearAlmacenPrincipal
 ) {

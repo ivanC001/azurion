@@ -4,6 +4,7 @@ import com.azurion.saascore.empresas.application.dto.EmpresaResponse;
 import com.azurion.saascore.empresas.application.dto.UpdateCurrentEmpresaProfileRequest;
 import com.azurion.saascore.empresas.application.mappers.EmpresaMapper;
 import com.azurion.saascore.empresas.domain.entities.Empresa;
+import com.azurion.saascore.sucursales.application.services.DefaultSucursalLocationSync;
 import com.azurion.saascore.empresas.domain.repositories.EmpresaRepository;
 import com.azurion.saascore.facturacion.application.services.FacturadorTenantProvisioningService;
 import com.azurion.shared.exception.BusinessException;
@@ -21,6 +22,7 @@ public class UpdateCurrentEmpresaProfileUseCase {
     private final EmpresaRepository empresaRepository;
     private final GetCurrentEmpresaUseCase getCurrentEmpresaUseCase;
     private final FacturadorTenantProvisioningService facturadorTenantProvisioningService;
+    private final DefaultSucursalLocationSync defaultSucursalLocationSync;
 
     @Transactional
     public EmpresaResponse execute(UpdateCurrentEmpresaProfileRequest request) {
@@ -68,6 +70,9 @@ public class UpdateCurrentEmpresaProfileUseCase {
         empresa.setMonedaCodigo(upper(request.monedaCodigo()));
         empresa.setMonedaSimbolo(required(request.monedaSimbolo()));
         Empresa saved = empresaRepository.save(empresa);
+        // Fuera de Peru la sede base nace con una direccion peruana fija que
+        // sembraron las migraciones; al completar el perfil se traslada aqui.
+        defaultSucursalLocationSync.syncFromEmpresa(saved);
         facturadorTenantProvisioningService.enqueueProfileSynchronization(saved);
         return EmpresaMapper.toResponse(saved);
     }

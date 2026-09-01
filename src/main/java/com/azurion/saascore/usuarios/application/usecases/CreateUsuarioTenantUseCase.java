@@ -50,7 +50,7 @@ public class CreateUsuarioTenantUseCase {
         assignRoles(usuario, request.rolCodigos());
 
         UsuarioTenant saved = usuarioTenantRepository.save(usuario);
-        usuarioSucursalScopeService.sync(saved.getId(), request.sucursalIds());
+        usuarioSucursalScopeService.assignInitialScope(saved.getId(), request.sucursalIds());
         return UsuariosMapper.toResponse(saved, usuarioSucursalScopeService.findByUsuarioId(saved.getId()));
     }
 

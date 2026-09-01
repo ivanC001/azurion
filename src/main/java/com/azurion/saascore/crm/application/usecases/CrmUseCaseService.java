@@ -1078,7 +1078,10 @@ public class CrmUseCaseService {
                 oportunidad.getId(),
                 request.detalles()
         ));
+        // La ultima cotizacion define el valor y la moneda vigentes de la oportunidad.
         oportunidad.setMoneda(monedaCotizacion);
+        oportunidad.setMontoEstimado(cotizacion.total());
+        oportunidad.setFechaUltimaActualizacion(OffsetDateTime.now());
         oportunidadRepository.save(oportunidad);
         appendHistory(oportunidad, oportunidad.getEtapaPipeline(), oportunidad.getEtapaPipeline(), "Cotizacion creada desde CRM. Pendiente de envio al cliente");
         return cotizacion;

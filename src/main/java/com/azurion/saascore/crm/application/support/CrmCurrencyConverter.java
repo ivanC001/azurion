@@ -94,6 +94,25 @@ public class CrmCurrencyConverter {
     }
 
     /**
+     * Convierte entre monedas comerciales pasando por la moneda base. Igual que
+     * toTenantBase, una moneda destino sin tasa activa devuelve cero antes que
+     * falsear el importe.
+     */
+    public BigDecimal convert(BigDecimal amount, String sourceCurrency, String targetCurrency) {
+        BigDecimal base = toTenantBase(amount, sourceCurrency);
+        String baseCurrency = currentTenantBaseCurrency().toUpperCase(Locale.ROOT);
+        String target = trim(targetCurrency);
+        if (target == null || baseCurrency.equalsIgnoreCase(target)) {
+            return base;
+        }
+        BigDecimal rate = activeRate(target);
+        if (rate == null) {
+            return BigDecimal.ZERO.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        }
+        return base.divide(rate, AMOUNT_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
      * Un importe en moneda sin tasa activa aporta cero al consolidado, en lugar
      * de sumarse como si fuese moneda base y falsear el total.
      */
@@ -104,19 +123,26 @@ public class CrmCurrencyConverter {
         if (currency == null || baseCurrency.equalsIgnoreCase(currency)) {
             return normalizedAmount;
         }
+        BigDecimal rate = activeRate(currency);
+        if (rate == null) {
+            return BigDecimal.ZERO.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+        }
+        return normalizedAmount.multiply(rate).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal activeRate(String currency) {
         CrmCurrencyConfig config = currencyConfigRepository.findByMoneda(currency.toUpperCase(Locale.ROOT))
                 .orElse(null);
         if (config == null || !config.isActivo()
                 || config.getTipoCambioBase() == null
                 || config.getTipoCambioBase().compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+            return null;
         }
         BigDecimal margin = config.getMargenConversionPorcentaje() == null
                 ? BigDecimal.ZERO
                 : config.getMargenConversionPorcentaje();
-        BigDecimal rate = config.getTipoCambioBase().multiply(
+        return config.getTipoCambioBase().multiply(
                 BigDecimal.ONE.add(margin.divide(BigDecimal.valueOf(100), RATE_SCALE, RoundingMode.HALF_UP))
         );
-        return normalizedAmount.multiply(rate).setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
     }
 }
