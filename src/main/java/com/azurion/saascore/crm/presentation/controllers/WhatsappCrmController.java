@@ -4,7 +4,10 @@ import com.azurion.saascore.crm.application.dto.AssignWhatsappConversationReques
 import com.azurion.saascore.crm.application.dto.SaveWhatsappQuickReplyRequest;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappConversationResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappMessageResponse;
+import com.azurion.saascore.crm.application.dto.CreateWhatsappTemplateRequest;
+import com.azurion.saascore.crm.application.dto.CrmWhatsappFailedSendResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappReengagementResponse;
+import com.azurion.saascore.crm.application.dto.CrmWhatsappTemplateDraftResponse;
 import com.azurion.saascore.crm.application.dto.CrmWhatsappTemplateResponse;
 import com.azurion.saascore.crm.application.dto.SaveWhatsappConversationNoteRequest;
 import com.azurion.saascore.crm.application.dto.SendWhatsappMessageRequest;
@@ -27,8 +30,10 @@ import com.azurion.saascore.crm.application.services.WhatsappConfigurationServic
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.application.services.WhatsappQuickReplyService;
 import com.azurion.saascore.crm.application.services.WhatsappOptOutService;
+import com.azurion.saascore.crm.application.services.WhatsappDeliveryFailureService;
 import com.azurion.saascore.crm.application.services.WhatsappReengagementGuideService;
 import com.azurion.saascore.crm.application.services.WhatsappReengagementService;
+import com.azurion.saascore.crm.application.services.WhatsappTemplateAuthoringService;
 import com.azurion.saascore.modulos.application.services.RequireModule;
 import com.azurion.saascore.cotizaciones.application.dto.CotizacionResponse;
 import com.azurion.shared.api.ApiResponse;
@@ -59,6 +64,8 @@ public class WhatsappCrmController {
     private final WhatsappReengagementService reengagementService;
     private final WhatsappOptOutService optOutService;
     private final WhatsappReengagementGuideService reengagementGuideService;
+    private final WhatsappTemplateAuthoringService templateAuthoringService;
+    private final WhatsappDeliveryFailureService deliveryFailureService;
 
     @GetMapping("/whatsapp/estado")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ','CRM_CONFIG_MANAGE')")
@@ -279,6 +286,14 @@ public class WhatsappCrmController {
         );
     }
 
+    @PostMapping("/whatsapp/plantillas")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
+    public ApiResponse<CrmWhatsappTemplateDraftResponse> createTemplate(
+            @Valid @RequestBody CreateWhatsappTemplateRequest request) {
+        CrmWhatsappTemplateDraftResponse created = templateAuthoringService.create(request);
+        return ApiResponse.ok(created, created.mensaje());
+    }
+
     @PostMapping("/prospectos/{prospectoId}/whatsapp/plantillas")
     @PreAuthorize("hasAnyAuthority('CRM_LEADS_WRITE','CRM_ACTIVITIES_WRITE')")
     public ApiResponse<CrmWhatsappMessageResponse> sendTemplate(
@@ -287,6 +302,15 @@ public class WhatsappCrmController {
         return ApiResponse.ok(
                 whatsappIntegrationService.sendTemplate(prospectoId, request),
                 "Plantilla enviada a WhatsApp"
+        );
+    }
+
+    @GetMapping("/whatsapp/envios-fallidos")
+    @PreAuthorize("hasAnyAuthority('CRM_LEADS_READ','CRM_ACTIVITIES_READ')")
+    public ApiResponse<List<CrmWhatsappFailedSendResponse>> listFailedSends() {
+        return ApiResponse.ok(
+                deliveryFailureService.recentFailures(),
+                "Ultimos envios de WhatsApp que Meta no pudo entregar"
         );
     }
 

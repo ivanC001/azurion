@@ -32,4 +32,17 @@ public interface CrmWhatsappMessageRepository extends JpaRepository<CrmWhatsappM
     );
 
     List<CrmWhatsappMessage> findAllByProspecto_IdAndDireccionAndLeidoEnIsNull(Long prospectoId, String direccion);
+
+    /**
+     * Ultimos envios que Meta no pudo entregar. Alimenta el registro de fallos de la
+     * pantalla de configuracion: el motivo llega por webhook segundos despues del
+     * envio, asi que sin este listado hay que abrir conversacion por conversacion
+     * para enterarse de por que no salio un mensaje.
+     */
+    @EntityGraph(attributePaths = "prospecto")
+    List<CrmWhatsappMessage> findAllByDireccionAndEstadoOrderByMensajeEnDescIdDesc(
+            String direccion,
+            String estado,
+            Pageable pageable
+    );
 }

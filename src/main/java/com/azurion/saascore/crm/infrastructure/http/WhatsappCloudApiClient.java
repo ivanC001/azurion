@@ -3,6 +3,7 @@ package com.azurion.saascore.crm.infrastructure.http;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.domain.entities.CrmCanalTokenConfig;
 import com.azurion.saascore.crm.domain.WhatsappTemplate;
+import com.azurion.saascore.crm.domain.WhatsappTemplateDraft;
 import com.azurion.shared.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -175,6 +176,128 @@ public class WhatsappCloudApiClient {
                     "No se pudo conectar con Meta para consultar las plantillas"
             );
         }
+    }
+
+    /**
+     * Manda un borrador a revision de Meta y devuelve lo que respondio.
+     *
+     * <p>La plantilla no queda utilizable al instante: Meta la revisa y recien cuando
+     * pasa a APPROVED aparece en el catalogo.
+     */
+    public CreatedTemplate createTemplate(CrmCanalTokenConfig config, WhatsappTemplateDraft draft) {
+        WhatsappTemplateDraft validated = draft.validated();
+        String accessToken = secretEncryptionService.decrypt(config.getAccessToken());
+        if (!hasText(accessToken) || !hasText(config.getWabaId())) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_CONFIG_INCOMPLETA",
+                    "Configura el Access token y el WABA ID para crear plantillas de WhatsApp"
+            );
+        }
+        String wabaId = validatePathSegment(config.getWabaId(), "WABA ID");
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(graphBaseUrl + "/" + graphApiVersion + "/" + wabaId
+                            + "/message_templates"))
+                    .timeout(readTimeout)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            objectMapper.writeValueAsString(templatePayload(validated))))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode body = parseResponse(response.body());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                // Aca el texto de Meta si sirve: dice que regla del borrador no paso.
+                throw new BusinessException(
+                        "CRM_WHATSAPP_PLANTILLA_RECHAZADA",
+                        "Meta no acepto la plantilla: "
+                                + metaError(body, "revisa el contenido y volve a intentar")
+                );
+            }
+            return new CreatedTemplate(
+                    body.path("id").asText(null),
+                    firstNonBlank(body.path("status").asText(null), "PENDING"),
+                    firstNonBlank(body.path("category").asText(null), validated.category()),
+                    validated.name(),
+                    validated.languageCode()
+            );
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(
+                    "CRM_WHATSAPP_ENVIO_INTERRUMPIDO",
+                    "La creacion de la plantilla fue interrumpida"
+            );
+        } catch (Exception exception) {
+            log.warn(
+                    "No se pudo crear la plantilla WhatsApp wabaId={} errorType={} detail={}",
+                    config.getWabaId(),
+                    exception.getClass().getSimpleName(),
+                    safeDetail(exception)
+            );
+            throw new BusinessException(
+                    "CRM_WHATSAPP_NO_DISPONIBLE",
+                    "No se pudo conectar con Meta para crear la plantilla"
+            );
+        }
+    }
+
+    private ObjectNode templatePayload(WhatsappTemplateDraft draft) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("name", draft.name());
+        payload.put("language", draft.languageCode());
+        payload.put("category", draft.category());
+        var components = payload.putArray("components");
+
+        if (draft.header() != null) {
+            ObjectNode header = components.addObject();
+            header.put("type", "HEADER");
+            header.put("format", "TEXT");
+            header.put("text", draft.header().text());
+            if (!draft.header().examples().isEmpty()) {
+                var example = header.putObject("example").putArray("header_text");
+                draft.header().examples().forEach(example::add);
+            }
+        }
+
+        ObjectNode body = components.addObject();
+        body.put("type", "BODY");
+        body.put("text", draft.body().text());
+        if (!draft.body().examples().isEmpty()) {
+            // body_text es un arreglo de arreglos: una fila de ejemplo por plantilla.
+            var row = body.putObject("example").putArray("body_text").addArray();
+            draft.body().examples().forEach(row::add);
+        }
+
+        if (hasText(draft.footer())) {
+            components.addObject().put("type", "FOOTER").put("text", draft.footer());
+        }
+
+        if (!draft.buttons().isEmpty()) {
+            var buttons = components.addObject().put("type", "BUTTONS").putArray("buttons");
+            for (WhatsappTemplateDraft.Button button : draft.buttons()) {
+                ObjectNode node = buttons.addObject();
+                node.put("type", button.type());
+                node.put("text", button.text());
+                if ("URL".equals(button.type())) {
+                    node.put("url", button.url());
+                }
+                if ("PHONE_NUMBER".equals(button.type())) {
+                    node.put("phone_number", button.phoneNumber());
+                }
+            }
+        }
+        return payload;
+    }
+
+    public record CreatedTemplate(
+            String id,
+            String status,
+            String category,
+            String name,
+            String languageCode) {
     }
 
     public SendResult sendTemplate(
@@ -669,6 +792,10 @@ public class WhatsappCloudApiClient {
             base = base.substring(0, base.length() - 1);
         }
         return base;
+    }
+
+    private String firstNonBlank(String value, String fallback) {
+        return hasText(value) ? value : fallback;
     }
 
     private boolean hasText(String value) {
