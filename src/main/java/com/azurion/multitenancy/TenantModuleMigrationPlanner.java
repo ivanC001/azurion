@@ -134,7 +134,8 @@ public class TenantModuleMigrationPlanner {
             "V97__repair_usuario_sucursal_scope.sql",
             "V98__cotizaciones_productos_schema_alignment.sql",
             "V99__sucursal_ubigeo_optional_outside_peru.sql",
-            "V100__crm_prospecto_whatsapp_optout.sql"
+            "V100__crm_prospecto_whatsapp_optout.sql",
+            "V101__crm_prospecto_meta_user_id.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -363,7 +364,8 @@ public class TenantModuleMigrationPlanner {
                 "V96__whatsapp_message_template_snapshot.sql",
                 "V97__repair_usuario_sucursal_scope.sql",
                 "V99__sucursal_ubigeo_optional_outside_peru.sql",
-                "V100__crm_prospecto_whatsapp_optout.sql"
+                "V100__crm_prospecto_whatsapp_optout.sql",
+                "V101__crm_prospecto_meta_user_id.sql"
         ));
         mapping.put("REPORTES", List.of());
         return mapping;

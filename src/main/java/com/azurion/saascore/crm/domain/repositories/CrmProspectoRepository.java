@@ -85,6 +85,8 @@ public interface CrmProspectoRepository extends JpaRepository<CrmProspecto, Long
             @Param("paisCodigo") String paisCodigo
     );
 
+    Optional<CrmProspecto> findFirstByMetaUserIdOrderByIdDesc(String metaUserId);
+
     Optional<CrmProspecto> findFirstByCorreoIgnoreCaseOrderByIdDesc(String correo);
 
     @Query("""

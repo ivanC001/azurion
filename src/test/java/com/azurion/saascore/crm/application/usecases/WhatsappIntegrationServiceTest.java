@@ -2,6 +2,7 @@ package com.azurion.saascore.crm.application.usecases;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -201,6 +202,65 @@ class WhatsappIntegrationServiceTest {
         verify(conversationRepository).save(conversationCaptor.capture());
         assertEquals(1, conversationCaptor.getValue().getNoLeidos());
         assertEquals("Quiero informacion del producto", conversationCaptor.getValue().getUltimoMensaje());
+    }
+
+    @Test
+    void createsWhatsappLeadFromUsernameIdentityWebhook() throws Exception {
+        // Payload real de una cuenta migrada a WhatsApp usernames: no trae "from" en el
+        // mensaje ni "wa_id" en el contacto, solo el user id opaco y el username.
+        String payload = """
+                {
+                  "object": "whatsapp_business_account",
+                  "entry": [{
+                    "id": "1571693283837591",
+                    "changes": [{
+                      "field": "messages",
+                      "value": {
+                        "messaging_product": "whatsapp",
+                        "metadata": {"display_phone_number": "5215568823238", "phone_number_id": "1234567890"},
+                        "contacts": [{"profile": {"name": "Ivan", "username": "Ivan_calb"},
+                                      "user_id": "PE.920886250645840"}],
+                        "messages": [{
+                          "from_user_id": "PE.920886250645840",
+                          "id": "wamid.username-1",
+                          "timestamp": "1760000000",
+                          "type": "text",
+                          "text": {"body": "holaa"}
+                        }]
+                      }
+                    }]
+                  }]
+                }
+                """;
+        when(configRepository.findByCanal("WHATSAPP")).thenReturn(Optional.of(config));
+        when(secretEncryptionService.decrypt("encrypted-app-secret")).thenReturn(APP_SECRET);
+        when(messageRepository.existsByMetaMessageId("wamid.username-1")).thenReturn(false);
+        when(prospectoRepository.findFirstByMetaUserIdOrderByIdDesc("PE.920886250645840"))
+                .thenReturn(Optional.empty());
+        when(prospectoRepository.save(any(CrmProspecto.class))).thenAnswer(invocation -> {
+            CrmProspecto prospecto = invocation.getArgument(0);
+            prospecto.setId(11L);
+            return prospecto;
+        });
+        when(messageRepository.save(any(CrmWhatsappMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WhatsappWebhookResult result = service.processWebhook(payload, signature(payload));
+
+        assertEquals(1, result.mensajesProcesados());
+        assertNotNull(config.getLastInboundMessageAt());
+        ArgumentCaptor<CrmProspecto> prospectCaptor = ArgumentCaptor.forClass(CrmProspecto.class);
+        verify(prospectoRepository).save(prospectCaptor.capture());
+        CrmProspecto created = prospectCaptor.getValue();
+        assertEquals("Ivan", created.getNombre());
+        assertEquals("PE.920886250645840", created.getMetaUserId());
+        assertEquals("Ivan_calb", created.getWhatsappUsername());
+        assertNull(created.getTelefono());
+        assertEquals("WHATSAPP", created.getOrigen());
+        // El telefono no se busca porque el webhook no lo manda.
+        verify(prospectoRepository, never()).findFirstByTelefonoNormalizado(any());
+        ArgumentCaptor<CrmWhatsappMessage> messageCaptor = ArgumentCaptor.forClass(CrmWhatsappMessage.class);
+        verify(messageRepository).save(messageCaptor.capture());
+        assertEquals("PE.920886250645840", messageCaptor.getValue().getRemitente());
     }
 
     @Test

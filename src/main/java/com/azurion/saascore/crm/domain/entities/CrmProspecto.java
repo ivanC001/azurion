@@ -43,6 +43,14 @@ public class CrmProspecto extends BaseEntity {
     @Column(name = "correo", length = 180)
     private String correo;
 
+    // Identidad opaca de Meta ("PE.920886250645840") para las cuentas migradas a
+    // WhatsApp usernames, donde el webhook ya no trae el telefono del remitente.
+    @Column(name = "meta_user_id", length = 80)
+    private String metaUserId;
+
+    @Column(name = "whatsapp_username", length = 120)
+    private String whatsappUsername;
+
     @Column(name = "direccion", length = 500)
     private String direccion;
 

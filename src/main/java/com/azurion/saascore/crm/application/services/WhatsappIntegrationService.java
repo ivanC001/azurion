@@ -128,9 +128,9 @@ public class WhatsappIntegrationService {
                 }
                 JsonNode value = change.path("value");
                 validatePhoneNumberId(config, value.path("metadata").path("phone_number_id").asText(null));
-                Map<String, String> contactNames = extractContactNames(value.path("contacts"));
+                Map<String, ContactProfile> contacts = extractContacts(value.path("contacts"));
                 for (JsonNode message : value.path("messages")) {
-                    processInboundMessage(config, message, contactNames, counters);
+                    processInboundMessage(config, message, contacts, counters);
                 }
                 for (JsonNode status : value.path("statuses")) {
                     processStatus(status, counters);
@@ -342,7 +342,7 @@ public class WhatsappIntegrationService {
         CrmProspecto prospecto = requireProspecto(prospectoId);
         assertCustomerServiceWindowOpen(prospectoId);
         CrmCanalTokenConfig config = requireActiveConfig();
-        String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+        String recipient = resolveRecipient(prospecto);
         String body = request.mensaje().trim();
         SendResult sendResult = cloudApiClient.sendText(config, recipient, body, Boolean.TRUE.equals(request.previewUrl()));
         String actor = currentUser();
@@ -372,7 +372,7 @@ public class WhatsappIntegrationService {
         CrmProspecto prospecto = requireProspecto(prospectoId);
         assertCustomerServiceWindowOpen(prospectoId);
         CrmCanalTokenConfig config = requireActiveConfig();
-        String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+        String recipient = resolveRecipient(prospecto);
         String normalizedBody = truncate(body, 4096);
         SendResult sendResult = cloudApiClient.sendText(config, recipient, normalizedBody, false);
 
@@ -426,7 +426,7 @@ public class WhatsappIntegrationService {
         CrmProspecto prospecto = requireProspecto(prospectoId);
         requireConversation(prospectoId);
         CrmCanalTokenConfig config = requireActiveConfig();
-        String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+        String recipient = resolveRecipient(prospecto);
 
         WhatsappTemplate matched = requireSendableTemplate(request.nombre(), request.idioma());
 
@@ -523,7 +523,7 @@ public class WhatsappIntegrationService {
         boolean deliveryConfirmed = false;
         try {
             CrmCanalTokenConfig config = requireActiveConfig();
-            String recipient = normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+            String recipient = resolveRecipient(prospecto);
             String caption = trimToNull(request.mensaje());
             if (caption == null) {
                 caption = "Hola " + firstNonBlank(prospecto.getNombre(), "")
@@ -651,7 +651,7 @@ public class WhatsappIntegrationService {
 
     private void processInboundMessage(CrmCanalTokenConfig config,
                                        JsonNode messageNode,
-                                       Map<String, String> contactNames,
+                                       Map<String, ContactProfile> contacts,
                                        Counters counters) {
         String metaMessageId = text(messageNode, "id");
         if (!hasText(metaMessageId)) {
@@ -662,12 +662,18 @@ public class WhatsappIntegrationService {
             return;
         }
 
-        String sender = normalizePhone(text(messageNode, "from"), null);
+        InboundIdentity identity = resolveInboundIdentity(messageNode, contacts);
+        String sender = identity.reference();
         String type = firstNonBlank(text(messageNode, "type"), "unknown");
         String body = extractMessageBody(messageNode, type);
         OffsetDateTime messageTime = parseTimestamp(text(messageNode, "timestamp"));
-        String contactName = firstNonBlank(contactNames.get(sender), sender);
-        CrmProspecto prospecto = findOrCreateProspecto(sender, contactName, body, type, metaMessageId, messageTime);
+        ContactProfile profile = contacts.get(sender);
+        String contactName = firstNonBlank(
+                profile == null ? null : profile.name(),
+                identity.username(),
+                sender
+        );
+        CrmProspecto prospecto = findOrCreateProspecto(identity, contactName, body, type, metaMessageId, messageTime);
 
         CrmWhatsappMessage message = new CrmWhatsappMessage();
         message.setProspecto(prospecto);
@@ -729,19 +735,22 @@ public class WhatsappIntegrationService {
         });
     }
 
-    private CrmProspecto findOrCreateProspecto(String sender,
+    private CrmProspecto findOrCreateProspecto(InboundIdentity identity,
                                                String contactName,
                                                String body,
                                                String type,
                                                String metaMessageId,
                                                OffsetDateTime messageTime) {
-        CrmProspecto prospecto = prospectoRepository.findFirstByTelefonoNormalizado(sender).orElseGet(CrmProspecto::new);
+        String sender = identity.reference();
+        CrmProspecto prospecto = locateProspecto(identity).orElseGet(CrmProspecto::new);
         boolean isNew = prospecto.getId() == null;
         if (isNew) {
             prospecto.setTipoPersona("SIN_DEFINIR");
             prospecto.setNombre(truncate(firstNonBlank(contactName, sender), 180));
-            prospecto.setTelefono(sender);
-            prospecto.setPaisCodigo(phoneNormalizationService.countryCodeForPhone(sender));
+            if (identity.hasPhone()) {
+                prospecto.setTelefono(identity.phone());
+                prospecto.setPaisCodigo(phoneNormalizationService.countryCodeForPhone(identity.phone()));
+            }
             prospecto.setOrigen("WHATSAPP");
             prospecto.setCanalIngreso("WHATSAPP");
             prospecto.setCampania("WhatsApp");
@@ -765,10 +774,76 @@ public class WhatsappIntegrationService {
             prospecto.setNombre(truncate(contactName, 180));
         }
 
+        // Un contacto puede llegar primero por telefono y despues por user id (o al
+        // reves) segun como Meta vaya migrando la cuenta: completamos lo que falte
+        // para no terminar con dos prospectos para la misma persona.
+        if (identity.hasMetaUserId() && !hasText(prospecto.getMetaUserId())) {
+            prospecto.setMetaUserId(identity.metaUserId());
+        }
+        if (identity.hasPhone() && !hasText(prospecto.getTelefono())) {
+            prospecto.setTelefono(identity.phone());
+            if (!hasText(prospecto.getPaisCodigo())) {
+                prospecto.setPaisCodigo(phoneNormalizationService.countryCodeForPhone(identity.phone()));
+            }
+        }
+        if (hasText(identity.username())) {
+            prospecto.setWhatsappUsername(truncate(identity.username(), 120));
+        }
+
         prospecto.setMensaje(truncate(body, 1500));
         prospecto.setFechaInteres(messageTime.toLocalDate());
         prospecto.setObservacion(truncate(body, 1000));
         return prospectoRepository.save(prospecto);
+    }
+
+    private Optional<CrmProspecto> locateProspecto(InboundIdentity identity) {
+        if (identity.hasMetaUserId()) {
+            Optional<CrmProspecto> byUserId =
+                    prospectoRepository.findFirstByMetaUserIdOrderByIdDesc(identity.metaUserId());
+            if (byUserId.isPresent()) {
+                return byUserId;
+            }
+        }
+        if (identity.hasPhone()) {
+            return prospectoRepository.findFirstByTelefonoNormalizado(identity.phone());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Resuelve quien escribio. Las cuentas migradas a WhatsApp usernames ya no mandan
+     * "from" ni "wa_id": el remitente llega como "from_user_id" (identificador opaco
+     * de Meta, sin telefono) acompanado de "profile.username".
+     */
+    private InboundIdentity resolveInboundIdentity(JsonNode messageNode,
+                                                   Map<String, ContactProfile> contacts) {
+        String from = text(messageNode, "from");
+        String metaUserId = truncate(text(messageNode, "from_user_id"), 80);
+        String phone = hasText(from) ? normalizePhone(from, null) : null;
+        if (!hasText(phone) && !hasText(metaUserId)) {
+            throw new BusinessException(
+                    "CRM_WHATSAPP_REMITENTE_DESCONOCIDO",
+                    "El webhook de WhatsApp no identifica al remitente"
+            );
+        }
+        ContactProfile profile = contacts.get(hasText(phone) ? phone : metaUserId);
+        return new InboundIdentity(phone, metaUserId, profile == null ? null : profile.username());
+    }
+
+    private record InboundIdentity(String phone, String metaUserId, String username) {
+
+        boolean hasPhone() {
+            return phone != null && !phone.isBlank();
+        }
+
+        boolean hasMetaUserId() {
+            return metaUserId != null && !metaUserId.isBlank();
+        }
+
+        /** Clave con la que se busca al contacto y se guarda como remitente del mensaje. */
+        String reference() {
+            return hasPhone() ? phone : metaUserId;
+        }
     }
 
     private void createWhatsappActivity(CrmProspecto prospecto,
@@ -847,15 +922,32 @@ public class WhatsappIntegrationService {
         };
     }
 
-    private Map<String, String> extractContactNames(JsonNode contacts) {
-        Map<String, String> names = new HashMap<>();
+    /**
+     * Indexa los contactos por telefono y por user id: Meta manda "wa_id" en las
+     * cuentas clasicas y "user_id" en las migradas a WhatsApp usernames, y en estas
+     * ultimas el nombre visible puede venir solo como "profile.username".
+     */
+    private Map<String, ContactProfile> extractContacts(JsonNode contacts) {
+        Map<String, ContactProfile> profiles = new HashMap<>();
         for (JsonNode contact : contacts) {
+            JsonNode profileNode = contact.path("profile");
+            ContactProfile profile = new ContactProfile(
+                    text(profileNode, "name"),
+                    text(profileNode, "username")
+            );
             String whatsappId = digits(text(contact, "wa_id"));
             if (hasText(whatsappId)) {
-                names.put(whatsappId, contact.path("profile").path("name").asText(whatsappId));
+                profiles.put(whatsappId, profile);
+            }
+            String metaUserId = text(contact, "user_id");
+            if (hasText(metaUserId)) {
+                profiles.put(metaUserId, profile);
             }
         }
-        return names;
+        return profiles;
+    }
+
+    private record ContactProfile(String name, String username) {
     }
 
     private void validatePhoneNumberId(CrmCanalTokenConfig config, String payloadPhoneNumberId) {
@@ -1097,6 +1189,24 @@ public class WhatsappIntegrationService {
             case "deleted" -> "ELIMINADO";
             default -> truncate(value == null ? "DESCONOCIDO" : value.toUpperCase(), 30);
         };
+    }
+
+    /**
+     * Devuelve el destinatario que entiende la Cloud API. Las cuentas migradas a
+     * WhatsApp usernames no exponen el telefono del contacto, asi que el unico dato
+     * direccionable es el user id opaco que Meta manda en el webhook.
+     */
+    private String resolveRecipient(CrmProspecto prospecto) {
+        if (hasText(prospecto.getTelefono())) {
+            return normalizePhone(prospecto.getTelefono(), prospecto.getPaisCodigo());
+        }
+        if (hasText(prospecto.getMetaUserId())) {
+            return prospecto.getMetaUserId();
+        }
+        throw new BusinessException(
+                "CRM_WHATSAPP_TELEFONO_INVALIDO",
+                "El prospecto debe tener un telefono con codigo de pais para usar WhatsApp"
+        );
     }
 
     private String normalizePhone(String value, String paisCodigo) {
