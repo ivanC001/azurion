@@ -95,6 +95,26 @@ class WhatsappCloudApiClientTest {
         assertEquals("wamid.test-only", result.metaMessageId());
     }
 
+    @Test void sendsBusinessScopedUserIdInTheRecipientFieldInsteadOfTo() throws Exception {
+        // Meta descarta el prefijo de pais si el BSUID viaja en "to" y lo trata como
+        // telefono, asi que el mensaje se acepta pero termina en error 131026.
+        response = "{\"messages\":[{\"id\":\"wamid.bsuid\"}]}";
+        var result = client.sendText(config, "PE.920886250645840", "hola desde el CRM", false);
+        JsonNode payload = mapper.readTree(bodies.getFirst());
+        assertEquals("PE.920886250645840", payload.path("recipient").asText());
+        assertFalse(payload.has("to"));
+        assertEquals("individual", payload.path("recipient_type").asText());
+        assertEquals("wamid.bsuid", result.metaMessageId());
+    }
+
+    @Test void keepsPhoneRecipientsInTheToField() throws Exception {
+        response = "{\"messages\":[{\"id\":\"wamid.phone\"}]}";
+        client.sendText(config, "51999888777", "hola", false);
+        JsonNode payload = mapper.readTree(bodies.getFirst());
+        assertEquals("51999888777", payload.path("to").asText());
+        assertFalse(payload.has("recipient"));
+    }
+
     @Test void supportsNamedTextParametersAndHeaderComponents() throws Exception {
         response = "{\"messages\":[{\"id\":\"wamid.named\"}]}";
         var template = WhatsappTemplateParser.approved(mapper.readTree("""

@@ -32,6 +32,9 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class WhatsappCloudApiClient {
 
+    private static final java.util.regex.Pattern BSUID_PATTERN =
+            java.util.regex.Pattern.compile("^[A-Za-z]{2}\\.[A-Za-z0-9]{1,128}$");
+
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WhatsappCloudApiClient.class);
 
     private final ObjectMapper objectMapper;
@@ -70,8 +73,7 @@ public class WhatsappCloudApiClient {
         String phoneNumberId = validatePathSegment(config.getPhoneNumberId(), "Phone number ID");
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("messaging_product", "whatsapp");
-        payload.put("recipient_type", "individual");
-        payload.put("to", recipient);
+        applyRecipient(payload, recipient);
         payload.put("type", "text");
         ObjectNode text = payload.putObject("text");
         text.put("preview_url", previewUrl);
@@ -316,8 +318,7 @@ public class WhatsappCloudApiClient {
         String phoneNumberId = validatePathSegment(config.getPhoneNumberId(), "Phone number ID");
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("messaging_product", "whatsapp");
-        payload.put("recipient_type", "individual");
-        payload.put("to", recipient);
+        applyRecipient(payload, recipient);
         payload.put("type", "template");
         ObjectNode template = payload.putObject("template");
         template.put("name", definition.name());
@@ -432,8 +433,7 @@ public class WhatsappCloudApiClient {
         String phoneNumberId = validatePathSegment(config.getPhoneNumberId(), "Phone number ID");
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("messaging_product", "whatsapp");
-        payload.put("recipient_type", "individual");
-        payload.put("to", recipient);
+        applyRecipient(payload, recipient);
         payload.put("type", "document");
         ObjectNode document = payload.putObject("document");
         document.put("id", mediaId);
@@ -776,6 +776,25 @@ public class WhatsappCloudApiClient {
             throw new IllegalArgumentException("WHATSAPP_GRAPH_API_VERSION debe tener formato v25.0");
         }
         return version;
+    }
+
+    /**
+     * Meta direcciona por telefono en "to" y por business-scoped user id en "recipient".
+     * Un BSUID llega como el codigo ISO de pais, un punto y hasta 128 alfanumericos
+     * ("PE.920886250645840"). Si se manda en "to", Meta descarta el prefijo, lo trata
+     * como telefono y el mensaje termina como no entregable (error 131026).
+     */
+    private void applyRecipient(ObjectNode payload, String recipient) {
+        payload.put("recipient_type", "individual");
+        if (isBusinessScopedUserId(recipient)) {
+            payload.put("recipient", recipient);
+            return;
+        }
+        payload.put("to", recipient);
+    }
+
+    private boolean isBusinessScopedUserId(String value) {
+        return value != null && BSUID_PATTERN.matcher(value).matches();
     }
 
     private String validatePathSegment(String value, String field) {
