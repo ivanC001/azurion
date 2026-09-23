@@ -9,6 +9,7 @@ public record CreateUsuarioTenantRequest(
         @NotBlank @Size(min = 3, max = 120) String username,
         @NotBlank @Size(min = 8, max = 120) String password,
         @NotBlank @Size(max = 160) String nombres,
+        @Size(max = 160) String apellidos,
         @Email @Size(max = 180) String email,
         List<String> rolCodigos,
         List<Long> sucursalIds

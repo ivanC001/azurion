@@ -7,6 +7,7 @@ import java.util.List;
 
 public record UpdateUsuarioTenantRequest(
         @NotBlank @Size(max = 160) String nombres,
+        @Size(max = 160) String apellidos,
         @Email @Size(max = 180) String email,
         Boolean activo,
         List<Long> sucursalIds

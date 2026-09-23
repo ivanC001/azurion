@@ -812,9 +812,39 @@ public class WhatsappIntegrationService {
             case "location" -> "Ubicacion: "
                     + message.path("location").path("latitude").asText("") + ","
                     + message.path("location").path("longitude").asText("");
+            case "reaction" -> {
+                String emoji = message.path("reaction").path("emoji").asText(null);
+                yield hasText(emoji) ? "Reacciono con " + emoji : null;
+            }
+            case "contacts" -> {
+                String contactName = message.path("contacts").path(0)
+                        .path("name").path("formatted_name").asText(null);
+                yield hasText(contactName) ? "Contacto compartido: " + contactName : null;
+            }
             default -> null;
         };
-        return truncate(firstNonBlank(body, "[Mensaje " + type + "]"), 4096);
+        return truncate(firstNonBlank(body, messageTypePlaceholder(type)), 4096);
+    }
+
+    /**
+     * Marcador legible cuando el mensaje no trae texto extraible: el tipo crudo
+     * de Meta ("unsupported", "sticker") no le dice nada al vendedor.
+     */
+    private String messageTypePlaceholder(String type) {
+        return switch (type) {
+            case "image" -> "[Imagen recibida]";
+            case "audio" -> "[Nota de voz]";
+            case "video" -> "[Video recibido]";
+            case "document" -> "[Documento recibido]";
+            case "sticker" -> "[Sticker]";
+            case "contacts" -> "[Contacto compartido]";
+            case "location" -> "[Ubicacion compartida]";
+            case "reaction" -> "[Reaccion a un mensaje]";
+            case "order" -> "[Pedido desde el catalogo]";
+            case "unsupported", "unknown" ->
+                    "[Contenido no soportado: revisalo en el telefono del negocio]";
+            default -> "[Mensaje " + type + "]";
+        };
     }
 
     private Map<String, String> extractContactNames(JsonNode contacts) {

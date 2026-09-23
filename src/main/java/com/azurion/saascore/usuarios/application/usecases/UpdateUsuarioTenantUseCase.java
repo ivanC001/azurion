@@ -26,6 +26,11 @@ public class UpdateUsuarioTenantUseCase {
                 .orElseThrow(() -> new BusinessException("USUARIO_NO_ENCONTRADO", "Usuario no encontrado"));
 
         usuario.setNombres(request.nombres().trim());
+        // Null significa "sin cambio": los llamadores que solo alternan el estado
+        // activo no envian apellidos y no deben pisar el valor guardado.
+        if (request.apellidos() != null) {
+            usuario.setApellidos(request.apellidos().isBlank() ? null : request.apellidos().trim());
+        }
         usuario.setEmail(request.email() == null ? null : request.email().trim());
         if (request.activo() != null) {
             if (request.activo() && !usuario.isActivo()) {

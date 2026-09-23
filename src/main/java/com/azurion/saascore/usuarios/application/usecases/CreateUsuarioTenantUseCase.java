@@ -44,6 +44,7 @@ public class CreateUsuarioTenantUseCase {
         usuario.setUsername(username);
         usuario.setPasswordHash(passwordEncoder.encode(request.password()));
         usuario.setNombres(request.nombres().trim());
+        usuario.setApellidos(blankToNull(request.apellidos()));
         usuario.setEmail(request.email() == null ? null : request.email().trim());
         usuario.setActivo(true);
 
@@ -69,6 +70,10 @@ public class CreateUsuarioTenantUseCase {
             usuarioRol.setRol(rol);
             usuario.getUsuarioRoles().add(usuarioRol);
         }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private LinkedHashSet<String> normalizeRoleCodes(List<String> roleCodes) {
