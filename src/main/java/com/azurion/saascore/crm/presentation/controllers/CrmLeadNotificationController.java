@@ -2,6 +2,7 @@ package com.azurion.saascore.crm.presentation.controllers;
 
 import com.azurion.saascore.crm.application.dto.CrmLeadNotificationConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmLeadNotificationDispatchResponse;
+import com.azurion.saascore.crm.application.dto.CrmLeadNotificationTestResponse;
 import com.azurion.saascore.crm.application.dto.UpdateCrmLeadNotificationConfigRequest;
 import com.azurion.saascore.crm.application.services.CrmLeadNotificationConfigService;
 import com.azurion.shared.api.ApiResponse;
@@ -10,6 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,5 +44,11 @@ public class CrmLeadNotificationController {
     @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
     public ApiResponse<List<CrmLeadNotificationDispatchResponse>> history() {
         return ApiResponse.ok(notificationConfigService.history(), "Historial de avisos enviados");
+    }
+
+    @PostMapping("/notificaciones/leads/prueba")
+    @PreAuthorize("hasAuthority('CRM_CONFIG_MANAGE')")
+    public ApiResponse<CrmLeadNotificationTestResponse> sendTest() {
+        return ApiResponse.ok(notificationConfigService.sendTest(), "Prueba de avisos");
     }
 }

@@ -3,15 +3,22 @@ package com.azurion.saascore.crm.application.services;
 import com.azurion.multitenancy.TenantContext;
 import com.azurion.saascore.crm.application.dto.CrmLeadNotificationConfigResponse;
 import com.azurion.saascore.crm.application.dto.CrmLeadNotificationDispatchResponse;
+import com.azurion.saascore.crm.application.dto.CrmLeadNotificationTestResponse;
 import com.azurion.saascore.crm.application.dto.UpdateCrmLeadNotificationConfigRequest;
 import com.azurion.saascore.crm.domain.entities.CrmLeadNotificationConfig;
 import com.azurion.saascore.crm.domain.repositories.CrmLeadNotificationConfigRepository;
 import com.azurion.saascore.crm.domain.repositories.CrmLeadNotificationDispatchRepository;
+import com.azurion.saascore.auth.application.services.AuthorizationService;
+import com.azurion.saascore.settings.email.application.services.EmailSenderService;
 import com.azurion.saascore.settings.email.application.services.TenantEmailConfigService;
+import com.azurion.saascore.usuarios.domain.entities.UsuarioTenant;
+import com.azurion.saascore.usuarios.domain.repositories.UsuarioTenantRepository;
 import com.azurion.shared.exception.BusinessException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +39,9 @@ public class CrmLeadNotificationConfigService {
     private final CrmLeadNotificationConfigRepository configRepository;
     private final CrmLeadNotificationDispatchRepository dispatchRepository;
     private final TenantEmailConfigService emailConfigService;
+    private final EmailSenderService emailSenderService;
+    private final AuthorizationService authorizationService;
+    private final UsuarioTenantRepository usuarioTenantRepository;
 
     @Transactional(readOnly = true)
     public CrmLeadNotificationConfigResponse getConfiguration() {
@@ -122,6 +132,82 @@ public class CrmLeadNotificationConfigService {
                 .toList();
     }
 
+
+    /**
+     * Envia un aviso de ejemplo con la configuracion actual.
+     *
+     * Es la forma de comprobar el circuito completo antes de que entre un lead real:
+     * valida el SMTP del tenant, los destinatarios resueltos y como se ve el correo.
+     * Si el SMTP nunca se habia probado, un envio exitoso lo deja verificado.
+     */
+    public CrmLeadNotificationTestResponse sendTest() {
+        CrmLeadNotificationConfig config = getOrCreateForTest();
+        List<String> destinatarios = resolveTestRecipients(config);
+        if (destinatarios.isEmpty()) {
+            return new CrmLeadNotificationTestResponse(
+                    false,
+                    List.of(),
+                    "No hay a quien avisar: activa el aviso al asesor asignado (y ten un correo en tu perfil) o agrega un correo de copia.");
+        }
+        try {
+            for (String destinatario : destinatarios) {
+                emailSenderService.sendEmail(
+                        TenantContext.getTenantId(),
+                        destinatario,
+                        "Prueba de avisos CRM",
+                        testBody(),
+                        List.of());
+            }
+            return new CrmLeadNotificationTestResponse(
+                    true,
+                    destinatarios,
+                    "Aviso de prueba enviado. Revisa la bandeja de entrada.");
+        } catch (RuntimeException exception) {
+            return new CrmLeadNotificationTestResponse(
+                    false,
+                    destinatarios,
+                    firstNonBlank(exception.getMessage(), "No se pudo enviar el aviso de prueba."));
+        }
+    }
+
+    private CrmLeadNotificationConfig getOrCreateForTest() {
+        return configRepository.findFirstByOrderByIdAsc().orElseGet(CrmLeadNotificationConfig::new);
+    }
+
+    /** Mismos destinatarios que un aviso real, con el usuario actual como asesor. */
+    private List<String> resolveTestRecipients(CrmLeadNotificationConfig config) {
+        Set<String> destinatarios = new LinkedHashSet<>();
+        if (config.isNotificarResponsable()) {
+            Long usuarioId = authorizationService.currentUsuarioId();
+            if (usuarioId != null) {
+                usuarioTenantRepository.findById(usuarioId)
+                        .map(UsuarioTenant::getEmail)
+                        .filter(email -> email != null && !email.isBlank())
+                        .map(email -> email.trim().toLowerCase(Locale.ROOT))
+                        .ifPresent(destinatarios::add);
+            }
+        }
+        destinatarios.addAll(parseEmails(config.getCorreosCopia()));
+        return List.copyOf(destinatarios);
+    }
+
+    private String testBody() {
+        return """
+                Este es un aviso de prueba del CRM de Azurion.
+
+                Contacto: Cliente de ejemplo
+                Telefono: 900 000 000
+                Correo: cliente@ejemplo.test
+                Canal: WHATSAPP
+                Interes: Producto de ejemplo
+
+                Si recibiste este correo, los avisos de leads nuevos llegaran igual a tu bandeja.
+                """;
+    }
+
+    private String firstNonBlank(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
     private CrmLeadNotificationConfigResponse toResponse(CrmLeadNotificationConfig config) {
         boolean emailReady = emailConfigService.isCurrentTenantEmailActive();
         return new CrmLeadNotificationConfigResponse(
