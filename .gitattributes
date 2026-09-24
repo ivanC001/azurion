@@ -1,2 +1,16 @@
+# El repo siempre guarda LF: asi el VPS (Linux) y los equipos Windows no generan
+# diffs fantasma por finales de linea.
+* text=auto eol=lf
+
+# El wrapper de Maven necesita cada uno su final de linea nativo.
 /mvnw text eol=lf
 *.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.java diff=java
+*.md diff=markdown
+
+# Binarios.
+*.jar binary
+*.png binary
+*.jpg binary
