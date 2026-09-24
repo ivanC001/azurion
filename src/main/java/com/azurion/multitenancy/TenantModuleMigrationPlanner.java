@@ -135,7 +135,8 @@ public class TenantModuleMigrationPlanner {
             "V98__cotizaciones_productos_schema_alignment.sql",
             "V99__sucursal_ubigeo_optional_outside_peru.sql",
             "V100__crm_prospecto_whatsapp_optout.sql",
-            "V101__crm_prospecto_meta_user_id.sql"
+            "V101__crm_prospecto_meta_user_id.sql",
+            "V102__clientes_documento_multipais.sql"
     );
 
     private static final Map<String, List<String>> MODULE_MIGRATIONS = buildModuleMigrations();
@@ -252,7 +253,8 @@ public class TenantModuleMigrationPlanner {
                 "V2_1__clientes_core.sql",
                 "V18__clientes_datos_fiscales_credito.sql",
                 "V19__cliente_abonos.sql",
-                "V84__critical_transaction_idempotency.sql"
+                "V84__critical_transaction_idempotency.sql",
+                "V102__clientes_documento_multipais.sql"
         ));
         mapping.put("VENTAS", List.of(
                 "V2__productos_comerciales_core.sql",

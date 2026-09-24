@@ -41,6 +41,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -658,6 +659,10 @@ public class RegistrarVentaCajaUseCase {
     private String inferCustomerDocumentType(String providedType, String documentNumber) {
         if ("1".equals(providedType) || "6".equals(providedType)) {
             return providedType;
+        }
+        // Clientes fuera de Peru (CURP, RFC, CC, ...) solo emiten ticket: se respeta el tipo recibido.
+        if (!providedType.isBlank() && !"0".equals(providedType)) {
+            return providedType.toUpperCase(Locale.ROOT);
         }
         if (documentNumber.length() == 11) {
             return "6";

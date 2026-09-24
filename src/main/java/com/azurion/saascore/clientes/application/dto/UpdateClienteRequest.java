@@ -9,8 +9,8 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 public record UpdateClienteRequest(
-        @NotBlank @Pattern(regexp = "^(1|6)$", message = "tipoDocumento must be 1 (DNI) or 6 (RUC)") String tipoDocumento,
-        @NotBlank @Pattern(regexp = "^[0-9]{8,11}$") String numeroDocumento,
+        @NotBlank @Pattern(regexp = "^[A-Za-z0-9_]{1,30}$", message = "tipoDocumento invalido") String tipoDocumento,
+        @NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9.\\-/]{2,29}$", message = "numeroDocumento invalido") String numeroDocumento,
         @NotBlank String nombre,
         @Email String email,
         @Size(max = 500) String direccion,

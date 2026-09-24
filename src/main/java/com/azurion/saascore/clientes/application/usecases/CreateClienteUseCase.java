@@ -17,6 +17,7 @@ public class CreateClienteUseCase {
     private final ClienteRepository clienteRepository;
 
     public ClienteResponse execute(CreateClienteRequest request) {
+        ClienteDocumentoRules.validate(request.tipoDocumento(), request.numeroDocumento());
         validateFiscalData(request.tipoDocumento(), request.direccion());
         clienteRepository.findByTipoDocumentoAndNumeroDocumento(request.tipoDocumento(), request.numeroDocumento())
                 .ifPresent(existing -> {

@@ -20,6 +20,7 @@ public class UpdateClienteUseCase {
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("CLIENTE_NO_ENCONTRADO", "Cliente no encontrado"));
 
+        ClienteDocumentoRules.validate(request.tipoDocumento(), request.numeroDocumento());
         boolean duplicate = clienteRepository.existsByTipoDocumentoAndNumeroDocumentoAndIdNot(
                 request.tipoDocumento(),
                 request.numeroDocumento(),

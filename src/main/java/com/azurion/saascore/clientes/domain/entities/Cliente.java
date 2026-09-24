@@ -14,10 +14,10 @@ import lombok.Setter;
 @Table(name = "clientes")
 public class Cliente extends BaseEntity {
 
-    @Column(name = "tipo_documento", nullable = false, length = 2)
+    @Column(name = "tipo_documento", nullable = false, length = 30)
     private String tipoDocumento;
 
-    @Column(name = "numero_documento", nullable = false, length = 20)
+    @Column(name = "numero_documento", nullable = false, length = 30)
     private String numeroDocumento;
 
     @Column(name = "nombre", nullable = false, length = 255)

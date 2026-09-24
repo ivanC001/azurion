@@ -1400,8 +1400,13 @@ public class CrmUseCaseService {
             return findCliente(prospecto.getClienteId());
         }
         ensureProspectClassified(prospecto);
-        String tipoDocumento = normalizeClienteTipoDocumento(required(prospecto.getTipoDocumento(), "El prospecto necesita tipo de documento para convertirse en cliente"));
-        String numeroDocumento = required(prospecto.getNumeroDocumento(), "El prospecto necesita numero de documento para convertirse en cliente");
+        String tipoDocumento = normalizeClienteTipoDocumento(
+                required(prospecto.getTipoDocumento(), "El prospecto necesita tipo de documento para convertirse en cliente"),
+                prospecto.getPaisCodigo()
+        );
+        String numeroDocumento = required(prospecto.getNumeroDocumento(), "El prospecto necesita numero de documento para convertirse en cliente")
+                .replaceAll("\\s+", "")
+                .toUpperCase(Locale.ROOT);
         String nombre = "JURIDICA".equals(prospecto.getTipoPersona())
                 ? firstNonBlank(prospecto.getRazonSocial(), prospecto.getNombreComercial(), prospecto.getNombre())
                 : prospecto.getNombre();
@@ -1436,13 +1441,18 @@ public class CrmUseCaseService {
         prospectoRepository.save(prospecto);
     }
 
-    private String normalizeClienteTipoDocumento(String value) {
+    private String normalizeClienteTipoDocumento(String value, String paisCodigo) {
         String normalized = value.trim().toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case "1", "DNI" -> "1";
-            case "6", "RUC" -> "6";
-            default -> throw new BusinessException("TIPO_DOCUMENTO_CLIENTE_INVALIDO", "El tipo de documento del prospecto debe ser DNI/RUC o 1/6 para crear el cliente");
-        };
+        boolean peru = paisCodigo == null || paisCodigo.isBlank() || "PE".equalsIgnoreCase(paisCodigo.trim());
+        // Solo en Peru DNI/RUC equivalen a los codigos SUNAT; en otros paises se guarda el tipo tal cual.
+        if (peru) {
+            return switch (normalized) {
+                case "1", "DNI" -> "1";
+                case "6", "RUC" -> "6";
+                default -> normalized;
+            };
+        }
+        return normalized;
     }
 
     private List<CrmActividad> oportunidadActivities(CrmOportunidad oportunidad) {
