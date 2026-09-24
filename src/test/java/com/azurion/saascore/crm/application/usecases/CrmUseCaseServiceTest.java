@@ -31,6 +31,7 @@ import com.azurion.saascore.crm.application.services.LandingLeadValidationServic
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
+import com.azurion.saascore.crm.application.services.CrmLeadNotificationEnqueueService;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.domain.entities.CrmEtapaPipeline;
 import com.azurion.saascore.crm.domain.entities.CrmCatalogoItem;
@@ -139,6 +140,9 @@ class CrmUseCaseServiceTest {
     CrmLeadAssignmentService leadAssignmentService;
 
     @Mock
+    CrmLeadNotificationEnqueueService leadNotificationEnqueueService;
+
+    @Mock
     CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
 
     @Mock
@@ -200,6 +204,7 @@ class CrmUseCaseServiceTest {
                 landingLeadValidationService,
                 prospectoInteresRepository,
                 leadAssignmentService,
+                leadNotificationEnqueueService,
                 publicLeadSubmissionRepository,
                 ingressLockService,
                 phoneNormalizationService,

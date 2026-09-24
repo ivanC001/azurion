@@ -17,6 +17,7 @@ import com.azurion.saascore.crm.application.dto.SendWhatsappTemplateRequest;
 import com.azurion.saascore.crm.application.dto.WhatsappWebhookResult;
 import com.azurion.saascore.crm.application.services.CrmSecretEncryptionService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
+import com.azurion.saascore.crm.application.services.CrmLeadNotificationEnqueueService;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.WhatsappIntegrationService;
 import com.azurion.saascore.crm.application.services.WhatsappAutoReplyEnqueueService;
@@ -93,6 +94,8 @@ class WhatsappIntegrationServiceTest {
     @Mock
     private CrmLeadAssignmentService leadAssignmentService;
     @Mock
+    private CrmLeadNotificationEnqueueService leadNotificationEnqueueService;
+    @Mock
     private WhatsappAutoReplyEnqueueService autoReplyEnqueueService;
     @Mock
     private com.azurion.saascore.crm.application.services.WhatsappOptOutService optOutService;
@@ -125,6 +128,7 @@ class WhatsappIntegrationServiceTest {
                 new ObjectMapper(),
                 leadAssignmentService,
                 autoReplyEnqueueService,
+                leadNotificationEnqueueService,
                 optOutService,
                 reengagementOutboxRepository,
                 transactionTemplate

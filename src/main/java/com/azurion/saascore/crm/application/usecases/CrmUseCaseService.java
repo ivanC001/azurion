@@ -58,6 +58,7 @@ import com.azurion.saascore.crm.application.support.CrmAccessPolicy;
 import com.azurion.saascore.crm.application.support.CrmCurrencyConverter;
 import com.azurion.saascore.crm.application.services.CrmPhoneNormalizationService;
 import com.azurion.saascore.crm.application.services.CrmLeadAssignmentService;
+import com.azurion.saascore.crm.application.services.CrmLeadNotificationEnqueueService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService;
 import com.azurion.saascore.crm.application.services.LandingLeadValidationService.LandingLeadContext;
 import com.azurion.saascore.crm.domain.entities.CrmActividad;
@@ -185,6 +186,7 @@ public class CrmUseCaseService {
     private final LandingLeadValidationService landingLeadValidationService;
     private final CrmProspectoInteresRepository prospectoInteresRepository;
     private final CrmLeadAssignmentService leadAssignmentService;
+    private final CrmLeadNotificationEnqueueService leadNotificationEnqueueService;
     private final CrmPublicLeadSubmissionRepository publicLeadSubmissionRepository;
     private final BusinessOperationLockService ingressLockService;
     private final CrmPhoneNormalizationService phoneNormalizationService;
@@ -359,6 +361,16 @@ public class CrmUseCaseService {
         boolean nuevoInteres = upsertPublicLeadInterest(saved, catalogoItem, request, leadContext);
         if (leadContext.crearActividadInicial() && (isNew || nuevoInteres)) {
             createInitialPublicLeadActivity(saved, catalogoItem, request);
+        }
+        // Un lead que vuelve con otro interes tambien merece aviso: es una senal
+        // de compra, no un duplicado.
+        if (isNew || nuevoInteres) {
+            leadNotificationEnqueueService.enqueue(
+                    saved,
+                    isNew
+                            ? CrmLeadNotificationEnqueueService.TIPO_LEAD_NUEVO
+                            : CrmLeadNotificationEnqueueService.TIPO_MENSAJE_NUEVO,
+                    (isNew ? "Nuevo lead CRM: " : "Nuevo interes de ") + firstNonBlank(saved.getNombre(), "contacto sin nombre"));
         }
         CrmPublicLeadSubmission submission = new CrmPublicLeadSubmission();
         submission.setReceiptId(generatePublicLeadReceipt());

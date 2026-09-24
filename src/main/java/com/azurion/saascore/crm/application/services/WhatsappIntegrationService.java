@@ -94,6 +94,7 @@ public class WhatsappIntegrationService {
     private final ObjectMapper objectMapper;
     private final CrmLeadAssignmentService leadAssignmentService;
     private final WhatsappAutoReplyEnqueueService autoReplyEnqueueService;
+    private final CrmLeadNotificationEnqueueService leadNotificationEnqueueService;
     private final WhatsappOptOutService optOutService;
     private final CrmWhatsappReengagementOutboxRepository reengagementOutboxRepository;
     private final TransactionTemplate transactionTemplate;
@@ -673,7 +674,8 @@ public class WhatsappIntegrationService {
                 identity.username(),
                 sender
         );
-        CrmProspecto prospecto = findOrCreateProspecto(identity, contactName, body, type, metaMessageId, messageTime);
+        InboundProspecto inbound = findOrCreateProspecto(identity, contactName, body, type, metaMessageId, messageTime);
+        CrmProspecto prospecto = inbound.prospecto();
 
         CrmWhatsappMessage message = new CrmWhatsappMessage();
         message.setProspecto(prospecto);
@@ -701,6 +703,13 @@ public class WhatsappIntegrationService {
             log.info("El prospecto {} pidio la baja de WhatsApp", prospecto.getId());
         }
         autoReplyEnqueueService.enqueueIfEnabled(saved);
+        leadNotificationEnqueueService.enqueue(
+                prospecto,
+                inbound.isNew()
+                        ? CrmLeadNotificationEnqueueService.TIPO_LEAD_NUEVO
+                        : CrmLeadNotificationEnqueueService.TIPO_MENSAJE_NUEVO,
+                (inbound.isNew() ? "Nuevo lead por WhatsApp: " : "Mensaje nuevo de ")
+                        + firstNonBlank(prospecto.getNombre(), sender));
         counters.processed++;
     }
 
@@ -735,7 +744,7 @@ public class WhatsappIntegrationService {
         });
     }
 
-    private CrmProspecto findOrCreateProspecto(InboundIdentity identity,
+    private InboundProspecto findOrCreateProspecto(InboundIdentity identity,
                                                String contactName,
                                                String body,
                                                String type,
@@ -793,7 +802,7 @@ public class WhatsappIntegrationService {
         prospecto.setMensaje(truncate(body, 1500));
         prospecto.setFechaInteres(messageTime.toLocalDate());
         prospecto.setObservacion(truncate(body, 1000));
-        return prospectoRepository.save(prospecto);
+        return new InboundProspecto(prospectoRepository.save(prospecto), isNew);
     }
 
     private Optional<CrmProspecto> locateProspecto(InboundIdentity identity) {
@@ -828,6 +837,10 @@ public class WhatsappIntegrationService {
         }
         ContactProfile profile = contacts.get(hasText(phone) ? phone : metaUserId);
         return new InboundIdentity(phone, metaUserId, profile == null ? null : profile.username());
+    }
+
+    /** Prospecto del mensaje entrante y si se acaba de crear (define el tipo de aviso). */
+    private record InboundProspecto(CrmProspecto prospecto, boolean isNew) {
     }
 
     private record InboundIdentity(String phone, String metaUserId, String username) {
