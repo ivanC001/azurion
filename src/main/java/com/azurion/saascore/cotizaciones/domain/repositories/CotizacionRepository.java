@@ -178,7 +178,14 @@ public interface CotizacionRepository extends JpaRepository<Cotizacion, Long> {
                     select opportunity.id
                       from CrmOportunidad opportunity
                      where opportunity.id = quote.crmOportunidadId
-                       and opportunity.prospecto.id = :prospectoId
+                       and (
+                            opportunity.prospecto.id = :prospectoId
+                            or opportunity.cliente.id = (
+                                select prospect.clienteId
+                                  from CrmProspecto prospect
+                                 where prospect.id = :prospectoId
+                            )
+                       )
              )
              order by quote.fechaEmision desc, quote.id desc
             """)
@@ -193,7 +200,14 @@ public interface CotizacionRepository extends JpaRepository<Cotizacion, Long> {
                     select opportunity.id
                       from CrmOportunidad opportunity
                      where opportunity.id = quote.crmOportunidadId
-                       and opportunity.prospecto.id = :prospectoId
+                       and (
+                            opportunity.prospecto.id = :prospectoId
+                            or opportunity.cliente.id = (
+                                select prospect.clienteId
+                                  from CrmProspecto prospect
+                                 where prospect.id = :prospectoId
+                            )
+                       )
              )
             """)
     Optional<Cotizacion> findByIdAndCrmProspectoId(
